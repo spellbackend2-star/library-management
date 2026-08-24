@@ -36,6 +36,12 @@ class AuthController extends Controller
             ], 404);
         }
 
+        if ($user->staff && !$user->staff->is_active) {
+            return response()->json([
+                'message' => 'Staff account is inactive'
+            ], 403);
+        }
+
         $tokenRequest = $serverRequest->withParsedBody([
             'grant_type' => 'password',
             'client_id' => $tenant->passport_client_id,

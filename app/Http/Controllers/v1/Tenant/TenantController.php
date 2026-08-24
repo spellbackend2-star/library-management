@@ -36,10 +36,10 @@ class TenantController extends Controller
 
                 // Create tenant owner
                \App\Models\User::create([
-                    'name' => $validate['owner'],
-                    'email' => $validate['email'],
-                    'password' => bcrypt($validate['password']),
-                ]);
+                   'name' => $validate['owner'],
+                   'email' => $validate['email'],
+                   'password' => bcrypt($validate['password']),
+               ]);
 
                 // Create Passport client INSIDE tenant context
                 $repo = app(ClientRepository::class);

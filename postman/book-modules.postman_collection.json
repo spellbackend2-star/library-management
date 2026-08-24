@@ -1,0 +1,361 @@
+{
+  "info": {
+    "name": "Library Management - Book Modules",
+    "description": "Postman collection for Categories, Books, Book Editions, Book Authors, Book Categories, and Copies modules",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://127.0.0.1:8000" },
+    { "key": "subdomain", "value": "kathmandu" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Setup",
+      "item": [
+        {
+          "name": "Login as Owner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{base_url}}/api/login", "host": ["{{base_url}}"], "path": ["api", "login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"john@library.com\",\n  \"password\": \"password123\"\n}" },
+            "event": [
+              { "listen": "test", "script": { "exec": ["pm.collectionVariables.set('token', pm.response.json().data.access_token);"] } }
+            ]
+          }
+        },
+        {
+          "name": "Setup Owner Role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/staff/setup-owner", "host": ["{{base_url}}"], "path": ["api", "staff", "setup-owner"] },
+            "body": { "mode": "raw", "raw": "{}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "List Categories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/categories", "host": ["{{base_url}}"], "path": ["api", "categories"] }
+          }
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/categories", "host": ["{{base_url}}"], "path": ["api", "categories"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Science Fiction\",\n  \"description\": \"Sci-fi books and novels\"\n}" }
+          }
+        },
+        {
+          "name": "Show Category",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/categories/1", "host": ["{{base_url}}"], "path": ["api", "categories", "1"] }
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/categories/1", "host": ["{{base_url}}"], "path": ["api", "categories", "1"] },
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Science Fiction & Fantasy\",\n  \"description\": \"Updated description\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/categories/1", "host": ["{{base_url}}"], "path": ["api", "categories", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Books",
+      "item": [
+        {
+          "name": "List Books",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/books", "host": ["{{base_url}}"], "path": ["api", "books"] }
+          }
+        },
+        {
+          "name": "Create Book",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/books", "host": ["{{base_url}}"], "path": ["api", "books"] },
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"1984\",\n  \"subtitle\": \"A Novel\",\n  \"language\": \"English\",\n  \"description\": \"Dystopian social science fiction novel\",\n  \"cover_image_url\": \"https://example.com/1984.jpg\"\n}" }
+          }
+        },
+        {
+          "name": "Show Book",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/books/1", "host": ["{{base_url}}"], "path": ["api", "books", "1"] }
+          }
+        },
+        {
+          "name": "Update Book",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/books/1", "host": ["{{base_url}}"], "path": ["api", "books", "1"] },
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"1984\",\n  \"subtitle\": \"Updated Subtitle\",\n  \"language\": \"English\",\n  \"description\": \"Updated description\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Book",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/books/1", "host": ["{{base_url}}"], "path": ["api", "books", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Book Editions",
+      "item": [
+        {
+          "name": "List Book Editions",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-editions", "host": ["{{base_url}}"], "path": ["api", "book-editions"] }
+          }
+        },
+        {
+          "name": "Create Book Edition",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/book-editions", "host": ["{{base_url}}"], "path": ["api", "book-editions"] },
+            "body": { "mode": "raw", "raw": "{\n  \"book_id\": 1,\n  \"publisher_id\": 1,\n  \"isbn\": \"978-0451524935\",\n  \"edition_number\": \"1st\",\n  \"publication_year\": 1961,\n  \"format\": \"physical\"\n}" }
+          }
+        },
+        {
+          "name": "Show Book Edition",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-editions/1", "host": ["{{base_url}}"], "path": ["api", "book-editions", "1"] }
+          }
+        },
+        {
+          "name": "Update Book Edition",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/book-editions/1", "host": ["{{base_url}}"], "path": ["api", "book-editions", "1"] },
+            "body": { "mode": "raw", "raw": "{\n  \"publisher_id\": 2,\n  \"edition_number\": \"2nd\",\n  \"publication_year\": 1965\n}" }
+          }
+        },
+        {
+          "name": "Delete Book Edition",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-editions/1", "host": ["{{base_url}}"], "path": ["api", "book-editions", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Book Authors",
+      "item": [
+        {
+          "name": "List Book Authors",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-authors", "host": ["{{base_url}}"], "path": ["api", "book-authors"] }
+          }
+        },
+        {
+          "name": "Create Book Author",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/book-authors", "host": ["{{base_url}}"], "path": ["api", "book-authors"] },
+            "body": { "mode": "raw", "raw": "{\n  \"book_id\": 1,\n  \"author_id\": 1,\n  \"author_role\": \"author\"\n}" }
+          }
+        },
+        {
+          "name": "Show Book Author",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-authors/1", "host": ["{{base_url}}"], "path": ["api", "book-authors", "1"] }
+          }
+        },
+        {
+          "name": "Update Book Author",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/book-authors/1", "host": ["{{base_url}}"], "path": ["api", "book-authors", "1"] },
+            "body": { "mode": "raw", "raw": "{\n  \"author_role\": \"co-author\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Book Author",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-authors/1", "host": ["{{base_url}}"], "path": ["api", "book-authors", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Book Categories",
+      "item": [
+        {
+          "name": "List Book Categories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-categories", "host": ["{{base_url}}"], "path": ["api", "book-categories"] }
+          }
+        },
+        {
+          "name": "Create Book Category",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/book-categories", "host": ["{{base_url}}"], "path": ["api", "book-categories"] },
+            "body": { "mode": "raw", "raw": "{\n  \"book_id\": 1,\n  \"category_id\": 1\n}" }
+          }
+        },
+        {
+          "name": "Show Book Category",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-categories/1", "host": ["{{base_url}}"], "path": ["api", "book-categories", "1"] }
+          }
+        },
+        {
+          "name": "Update Book Category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/book-categories/1", "host": ["{{base_url}}"], "path": ["api", "book-categories", "1"] },
+            "body": { "mode": "raw", "raw": "{\n  \"category_id\": 2\n}" }
+          }
+        },
+        {
+          "name": "Delete Book Category",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/book-categories/1", "host": ["{{base_url}}"], "path": ["api", "book-categories", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Copies",
+      "item": [
+        {
+          "name": "List Copies",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/copies", "host": ["{{base_url}}"], "path": ["api", "copies"] }
+          }
+        },
+        {
+          "name": "Create Copy",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/copies", "host": ["{{base_url}}"], "path": ["api", "copies"] },
+            "body": { "mode": "raw", "raw": "{\n  \"book_id\": 1,\n  \"barcode\": \"COPY-001-1984\",\n  \"shelf_location\": \"A-12-03\",\n  \"condition\": \"good\",\n  \"status\": \"available\",\n  \"acquisition_date\": \"2026-01-15\"\n}" }
+          }
+        },
+        {
+          "name": "Show Copy",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/copies/1", "host": ["{{base_url}}"], "path": ["api", "copies", "1"] }
+          }
+        },
+        {
+          "name": "Update Copy",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/api/copies/1", "host": ["{{base_url}}"], "path": ["api", "copies", "1"] },
+            "body": { "mode": "raw", "raw": "{\n  \"shelf_location\": \"B-05-12\",\n  \"condition\": \"good\",\n  \"status\": \"on_loan\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Copy",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{base_url}}/api/copies/1", "host": ["{{base_url}}"], "path": ["api", "copies", "1"] }
+          }
+        }
+      ]
+    }
+  ]
+}

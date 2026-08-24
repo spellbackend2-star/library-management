@@ -8,12 +8,14 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('central')->group(function () {
 
     // Create tenant
-    Route::post('/tenants', [TenantController::class, 'store']);
+    Route::post('/tenants', [TenantController::class, 'register']);
 
     // Create owner inside tenant
-   Route::post('/tenants/register', [TenantController::class, 'register']);
+    Route::post('/tenants/register', [TenantController::class, 'register']);
     Route::post('/tenants/{tenant}/login', [
-       AuthController::class,
+        AuthController::class,
         'login'
     ]);
+
+   
 });

@@ -28,7 +28,7 @@ class MemberController extends Controller
             $request->validated()
         );
 
-        return new MemberResource($member->load('membershipType'));
+        return new MemberResource($member->load('package'));
     }
 
     public function show(int $member): MemberResource

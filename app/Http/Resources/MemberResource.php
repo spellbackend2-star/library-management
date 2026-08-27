@@ -12,12 +12,11 @@ class MemberResource extends JsonResource
         return [
             'id' => $this->id,
 
-            'membership_type' => $this->whenLoaded(
-                'membershipType',
-                fn () => [
-                    'id' => $this->membershipType->id,
-                    'name' => $this->membershipType->name,
-                ]
+            'package_id' => $this->package_id,
+
+            'package' => $this->whenLoaded(
+                'package',
+                fn () => new PackageResource($this->package)
             ),
 
             'first_name' => $this->first_name,

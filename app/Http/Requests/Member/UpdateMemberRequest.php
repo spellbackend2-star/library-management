@@ -17,10 +17,10 @@ class UpdateMemberRequest extends FormRequest
         $memberId = $this->route('member');
 
         return [
-            'membership_type_id' => [
+            'package_id' => [
                 'sometimes',
                 'integer',
-                'exists:membership_types,id',
+                'exists:packages,id',
             ],
 
             'first_name' => [

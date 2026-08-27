@@ -11,6 +11,7 @@ use App\Repositories\Eloquent\CategoryRepository;
 use App\Repositories\Eloquent\CopyRepository;
 use App\Repositories\Eloquent\MembershipTypeRepository;
 use App\Repositories\Eloquent\MemberRepository;
+use App\Repositories\Eloquent\PackageRepository;
 use App\Repositories\Eloquent\PublisherRepository;
 use App\Repositories\Eloquent\StaffRepository;
 use App\Repositories\Interface\AuthorInterface;
@@ -22,6 +23,7 @@ use App\Repositories\Interface\CategoryInterface;
 use App\Repositories\Interface\CopyInterface;
 use App\Repositories\Interface\MemberInterface;
 use App\Repositories\Interface\MembershipTypeInterface;
+use App\Repositories\Interface\PackageInterface;
 use App\Repositories\Interface\PublisherInterface;
 use App\Repositories\Interface\StaffInterface;
 use Illuminate\Support\ServiceProvider;
@@ -77,6 +79,10 @@ class AppServiceProvider extends ServiceProvider
          $this->app->bind(
             CopyInterface::class,
             CopyRepository::class
+        );
+          $this->app->bind(
+            PackageInterface::class,
+             PackageRepository::class
         );
 
     }

@@ -9,12 +9,12 @@ class MemberRepository implements MemberInterface
 {
     public function all()
     {
-        return Member::with('membershipType')->latest()->get();
+        return Member::with('package')->latest()->get();
     }
 
     public function find(int $id): ?Member
     {
-        return Member::with('membershipType')->find($id);
+        return Member::with('package')->find($id);
     }
 
     public function create(array $data): Member
@@ -28,7 +28,7 @@ class MemberRepository implements MemberInterface
 
         $member->update($data);
 
-        return $member->fresh('membershipType');
+        return $member->fresh('package');
     }
 
     public function delete(int $id): bool

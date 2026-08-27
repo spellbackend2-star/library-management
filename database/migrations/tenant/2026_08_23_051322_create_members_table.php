@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,33 +12,59 @@ return new class extends Migration
         Schema::create('members', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('membership_type_id')
-                ->constrained('membership_types')
+            // Package
+            $table->foreignId('package_id')
+                ->constrained('packages')
                 ->restrictOnDelete();
 
+            // Personal Information
             $table->string('first_name', 100);
             $table->string('last_name', 100);
+            $table->string('email', 255)
+                ->unique();
 
-            $table->string('email', 255)->unique();
-            $table->string('phone', 30)->nullable();
-            $table->string('address', 255)->nullable();
+            $table->string('phone', 30)
+                ->nullable();
 
-            $table->date('date_of_birth')->nullable();
+            $table->string('address', 255)
+                ->nullable();
 
+            $table->date('date_of_birth')
+                ->nullable();
+
+            // Membership
             $table->date('membership_start')
                 ->useCurrent();
 
-            $table->date('membership_expiry')->nullable();
+            $table->date('membership_expiry')
+                ->nullable();
 
             $table->string('status', 20)
                 ->default('active');
 
-            $table->timestamp('created_at')
-                ->useCurrent();
+            $table->timestamps();
 
-            $table->timestamp('updated_at')
-                ->useCurrent();
+            // Indexes
+            $table->index('package_id');
+            $table->index('membership_expiry');
         });
+
+        // Status CHECK constraint
+        DB::statement("
+            ALTER TABLE members
+            ADD CONSTRAINT members_status_check
+            CHECK (status IN ('active', 'suspended', 'expired', 'cancelled'))
+        ");
+
+        // Membership expiry CHECK constraint
+        DB::statement("
+            ALTER TABLE members
+            ADD CONSTRAINT members_expiry_check
+            CHECK (
+                membership_expiry IS NULL
+                OR membership_expiry >= membership_start
+            )
+        ");
     }
 
     public function down(): void

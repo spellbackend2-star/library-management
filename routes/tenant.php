@@ -11,7 +11,7 @@ use App\Http\Controllers\v1\Tenant\BookEditionController;
 use App\Http\Controllers\v1\Tenant\CategoryController;
 use App\Http\Controllers\v1\Tenant\CopyController;
 use App\Http\Controllers\v1\Tenant\MemberController;
-use App\Http\Controllers\v1\Tenant\MembershipTypeController;
+use App\Http\Controllers\v1\Tenant\PackageController;
 use App\Http\Controllers\v1\Tenant\PublisherController;
 use App\Http\Controllers\v1\Tenant\StaffController;
 use Illuminate\Support\Facades\Route;
@@ -40,8 +40,8 @@ Route::middleware([
     Route::middleware('auth:api')->group(function () {
 
         Route::apiResource(
-            'membership-types',
-            MembershipTypeController::class
+            'packages',
+           PackageController::class
         );
 
         Route::apiResource(
@@ -83,6 +83,11 @@ Route::middleware([
         Route::apiResource(
             'publishers',
             PublisherController::class
+        );
+
+        Route::apiResource(
+            'packages',
+            PackageController::class
         );
 
         Route::apiResource(

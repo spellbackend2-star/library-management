@@ -2,13 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Package;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'membership_type_id',
+    'package_id',
     'first_name',
     'last_name',
     'email',
@@ -27,9 +28,9 @@ class Member extends Model
         'membership_expiry' => 'date',
     ];
 
-    public function membershipType(): BelongsTo
+    public function package(): BelongsTo
     {
-        return $this->belongsTo(MembershipType::class);
+        return $this->belongsTo(Package::class);
     }
 
     // public function borrows(): HasMany

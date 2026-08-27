@@ -14,10 +14,10 @@ class StoreMemberRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'membership_type_id' => [
+            'package_id' => [
                 'required',
                 'integer',
-                'exists:membership_types,id',
+                'exists:packages,id',
             ],
 
             'first_name' => [

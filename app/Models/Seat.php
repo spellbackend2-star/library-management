@@ -41,4 +41,9 @@ class Seat extends Model
     {
         return $this->hasMany(SeatBooking::class);
     }
+
+    public function bookingSeats(): HasMany
+    {
+        return $this->hasMany(BookingSeat::class);
+    }
 }

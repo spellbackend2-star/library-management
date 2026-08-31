@@ -8,11 +8,20 @@ use App\Http\Controllers\v1\Tenant\BookAuthorController;
 use App\Http\Controllers\v1\Tenant\BookCategoryController;
 use App\Http\Controllers\v1\Tenant\BookController;
 use App\Http\Controllers\v1\Tenant\BookEditionController;
+use App\Http\Controllers\v1\Tenant\BookingController;
+use App\Http\Controllers\v1\Tenant\BorrowController;
 use App\Http\Controllers\v1\Tenant\CategoryController;
 use App\Http\Controllers\v1\Tenant\CopyController;
+use App\Http\Controllers\v1\Tenant\FloorController;
+use App\Http\Controllers\v1\Tenant\LockerAssigmentsController;
+use App\Http\Controllers\v1\Tenant\LockerController;
 use App\Http\Controllers\v1\Tenant\MemberController;
 use App\Http\Controllers\v1\Tenant\PackageController;
 use App\Http\Controllers\v1\Tenant\PublisherController;
+use App\Http\Controllers\v1\Tenant\RoomController;
+use App\Http\Controllers\v1\Tenant\SeatBookingController;
+use App\Http\Controllers\v1\Tenant\SeatCategoryController;
+use App\Http\Controllers\v1\Tenant\SeatController;
 use App\Http\Controllers\v1\Tenant\StaffController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
@@ -40,14 +49,10 @@ Route::middleware([
     Route::middleware('auth:api')->group(function () {
 
         Route::apiResource(
-            'packages',
-           PackageController::class
-        );
-
-        Route::apiResource(
             'members',
             MemberController::class
         );
+
         // Setup tenant owner
         Route::patch(
             'staff/setup-owner',
@@ -123,6 +128,51 @@ Route::middleware([
         Route::apiResource(
             'copies',
             CopyController::class
+        );
+
+        Route::apiResource(
+            'borrows',
+            BorrowController::class
+        );
+
+        Route::apiResource(
+            'bookings',
+            BookingController::class
+        );
+
+        Route::apiResource(
+            'floors',
+            FloorController::class
+        );
+
+        Route::apiResource(
+            'rooms',
+            RoomController::class
+        );
+
+        Route::apiResource(
+            'seat-categories',
+            SeatCategoryController::class
+        );
+
+        Route::apiResource(
+            'seats',
+            SeatController::class
+        );
+
+        Route::apiResource(
+            'seat-bookings',
+            SeatBookingController::class
+        );
+
+        Route::apiResource(
+            'lockers',
+            LockerController::class
+        );
+
+        Route::apiResource(
+            'locker-assignments',
+            LockerAssigmentsController::class
         );
     });
 });

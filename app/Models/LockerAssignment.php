@@ -7,27 +7,33 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'book_id',
+    'booking_id',
+    'locker_id',
     'member_id',
-    'reservation_date',
+    'assigned_date',
     'expiry_date',
+    'returned_date',
     'status',
 ])]
-class BookReservation extends Model
+class LockerAssignment extends Model
 {
-    public $timestamps = false;
-
     protected function casts(): array
     {
         return [
-            'reservation_date' => 'datetime',
+            'assigned_date' => 'date',
             'expiry_date' => 'date',
+            'returned_date' => 'date',
         ];
     }
 
-    public function book(): BelongsTo
+    public function booking(): BelongsTo
     {
-        return $this->belongsTo(Book::class);
+        return $this->belongsTo(Booking::class);
+    }
+
+    public function locker(): BelongsTo
+    {
+        return $this->belongsTo(Locker::class);
     }
 
     public function member(): BelongsTo

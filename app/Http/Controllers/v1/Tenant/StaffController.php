@@ -23,13 +23,22 @@ class StaffController extends Controller
         );
     }
 
-    public function store(StoreStaffRequest $request): StaffResource
+    public function store(StoreStaffRequest $request): StaffResource|JsonResponse
     {
-        $staff = $this->staffService->create(
-            $request->validated()
-        );
+        try {
+            $staff = $this->staffService->create(
+                $request->validated()
+            );
 
-        return new StaffResource($staff);
+            return new StaffResource($staff);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], 500);
+        }
     }
 
     public function show(int $staff): StaffResource

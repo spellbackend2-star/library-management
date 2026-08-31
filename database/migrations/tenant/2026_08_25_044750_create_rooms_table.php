@@ -12,28 +12,23 @@ return new class extends Migration
         Schema::create('rooms', function (Blueprint $table) {
             $table->id();
 
-            $table->string('name', 100)
-                ->unique();
+            $table->foreignId('floor_id')
+                ->constrained('floors')
+                ->restrictOnDelete();
 
-            $table->string('room_type', 50)
-                ->default('study_area');
+            $table->string('name', 100);
 
-            $table->timestamp('created_at')
-                ->useCurrent();
+            $table->enum('room_type', [
+                'study_area',
+                'quiet_zone',
+                'group_room',
+                'computer_lab',
+            ])->default('study_area');
+
+            $table->timestamps();
+
+            $table->unique(['floor_id', 'name']);
         });
-
-        DB::statement("
-            ALTER TABLE rooms
-            ADD CONSTRAINT rooms_room_type_check
-            CHECK (
-                room_type IN (
-                    'study_area',
-                    'quiet_zone',
-                    'group_room',
-                    'computer_lab'
-                )
-            )
-        ");
     }
 
     public function down(): void

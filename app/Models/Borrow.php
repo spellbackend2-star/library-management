@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
+    'booking_id',
     'copy_id',
     'member_id',
     'staff_id',
@@ -28,6 +29,11 @@ class Borrow extends Model
             'return_date' => 'datetime',
             'renewal_count' => 'integer',
         ];
+    }
+
+    public function booking(): BelongsTo
+    {
+        return $this->belongsTo(Booking::class);
     }
 
     public function copy(): BelongsTo

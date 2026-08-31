@@ -4,42 +4,18 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'seat_id',
-    'member_id',
-    'pricing_id',
-    'start_time',
-    'end_time',
-    'total_amount',
-    'status',
+    'name',
+    'description',
 ])]
-class SeatBooking extends Model
+class SeatCategory extends Model
 {
     public $timestamps = false;
 
-    protected function casts(): array
+    public function seats(): HasMany
     {
-        return [
-            'start_time' => 'datetime',
-            'end_time' => 'datetime',
-            'total_amount' => 'decimal:2',
-        ];
-    }
-
-    public function seat(): BelongsTo
-    {
-        return $this->belongsTo(Seat::class);
-    }
-
-    public function member(): BelongsTo
-    {
-        return $this->belongsTo(Member::class);
-    }
-
-    public function pricing(): BelongsTo
-    {
-        return $this->belongsTo(SeatPricing::class, 'pricing_id');
+        return $this->hasMany(Seat::class);
     }
 }

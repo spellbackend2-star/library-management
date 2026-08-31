@@ -33,25 +33,27 @@ class Member extends Model
         return $this->belongsTo(Package::class);
     }
 
-    // public function borrows(): HasMany
-    // {
-    //     return $this->hasMany(Borrow::class);
-    // }
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
+    }
 
-    // public function bookReservations(): HasMany
-    // {
-    //     return $this->hasMany(BookReservation::class);
-    // }
+    public function borrows(): HasMany
+    {
+        return $this->hasMany(Borrow::class);
+    }
 
-    // public function seatBookings(): HasMany
-    // {
-    //     return $this->hasMany(SeatBooking::class);
-    // }
+    
 
-    // public function fines(): HasMany
-    // {
-    //     return $this->hasMany(Fine::class);
-    // }
+    public function seatBookings(): HasMany
+    {
+        return $this->hasMany(SeatBooking::class);
+    }
+
+    public function fines(): HasMany
+    {
+        return $this->hasMany(Fine::class);
+    }
 
     // public function invoices(): HasMany
     // {

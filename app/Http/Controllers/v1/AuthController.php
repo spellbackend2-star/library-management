@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\v1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Staff;
 use App\Models\Tenant;
 use App\Models\User;
 use GuzzleHttp\Psr7\Response;
@@ -10,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Psr\Http\Message\ServerRequestInterface;
+use Spatie\Permission\Models\Role;
 
 class AuthController extends Controller
 {
@@ -40,6 +42,27 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'Staff account is inactive'
             ], 403);
+        }
+
+        if (!$user->staff) {
+            $nameParts = explode(' ', $user->name, 2);
+
+            $staff = $user->staff()->create([
+                'first_name' => $nameParts[0] ?? $user->name,
+                'last_name' => $nameParts[1] ?? '',
+                'email' => $user->email,
+                'is_active' => true,
+            ]);
+
+            $adminRole = Role::where('name', 'admin')
+                ->where('guard_name', 'api')
+                ->first();
+
+            if ($adminRole) {
+                $user->assignRole('admin');
+            }
+
+            app('cache')->forget(config('permission.cache.key'));
         }
 
         $tokenRequest = $serverRequest->withParsedBody([

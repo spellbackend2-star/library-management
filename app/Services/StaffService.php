@@ -30,19 +30,31 @@ class StaffService
             $user = User::create([
                 'name' => $data['first_name'] . ' ' . $data['last_name'],
                 'email' => $data['email'],
-                'password' => bcrypt($data['password']),
+                'password' => $data['password'],
             ]);
 
-            $staff = $user->staff()->create([
+            $staffData = [
+                'user_id' => $user->id,
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
                 'email' => $data['email'],
-                'hire_date' => $data['hire_date'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
-            ]);
+            ];
+
+            if (!empty($data['hire_date'])) {
+                $staffData['hire_date'] = $data['hire_date'];
+            }
+
+            $staff = Staff::create($staffData);
 
             if (!empty($data['role'])) {
-                $user->assignRole($data['role']);
+                $role = Role::where('name', $data['role'])
+                    ->where('guard_name', 'api')
+                    ->first();
+
+                if ($role) {
+                    $user->assignRole($data['role']);
+                }
             }
 
             return $staff;

@@ -1,0 +1,684 @@
+{
+	"info": {
+		"_postman_id": "library-management-tenant",
+		"name": "Library Management - Tenant APIs",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "tenant-modules"
+	},
+	"item": [
+		{
+			"name": "Borrows",
+			"item": [
+				{
+					"name": "List Borrows",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/borrows",
+							"host": ["{{base_url}}"],
+							"path": ["borrows"]
+						}
+					}
+				},
+				{
+					"name": "Create Borrow",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"copy_id\": 1,\n  \"member_id\": 1,\n  \"staff_id\": 1,\n  \"due_date\": \"2026-09-15\",\n  \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/borrows",
+							"host": ["{{base_url}}"],
+							"path": ["borrows"]
+						}
+					}
+				},
+				{
+					"name": "Get Borrow",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/borrows/1",
+							"host": ["{{base_url}}"],
+							"path": ["borrows", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Borrow",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"returned\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/borrows/1",
+							"host": ["{{base_url}}"],
+							"path": ["borrows", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Borrow",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/borrows/1",
+							"host": ["{{base_url}}"],
+							"path": ["borrows", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Floors",
+			"item": [
+				{
+					"name": "List Floors",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/floors",
+							"host": ["{{base_url}}"],
+							"path": ["floors"]
+						}
+					}
+				},
+				{
+					"name": "Create Floor",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Ground Floor\",\n  \"floor_number\": 1,\n  \"description\": \"Main floor\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/floors",
+							"host": ["{{base_url}}"],
+							"path": ["floors"]
+						}
+					}
+				},
+				{
+					"name": "Get Floor",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/floors/1",
+							"host": ["{{base_url}}"],
+							"path": ["floors", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Floor",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"description\": \"Updated description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/floors/1",
+							"host": ["{{base_url}}"],
+							"path": ["floors", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Floor",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/floors/1",
+							"host": ["{{base_url}}"],
+							"path": ["floors", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Rooms",
+			"item": [
+				{
+					"name": "List Rooms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/rooms",
+							"host": ["{{base_url}}"],
+							"path": ["rooms"]
+						}
+					}
+				},
+				{
+					"name": "Create Room",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"floor_id\": 1,\n  \"name\": \"Room A\",\n  \"room_type\": \"study_area\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/rooms",
+							"host": ["{{base_url}}"],
+							"path": ["rooms"]
+						}
+					}
+				},
+				{
+					"name": "Get Room",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/rooms/1",
+							"host": ["{{base_url}}"],
+							"path": ["rooms", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Room",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_type\": \"quiet_zone\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/rooms/1",
+							"host": ["{{base_url}}"],
+							"path": ["rooms", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Room",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/rooms/1",
+							"host": ["{{base_url}}"],
+							"path": ["rooms", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Seat Categories",
+			"item": [
+				{
+					"name": "List Seat Categories",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seat-categories",
+							"host": ["{{base_url}}"],
+							"path": ["seat-categories"]
+						}
+					}
+				},
+				{
+					"name": "Create Seat Category",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Premium\",\n  \"description\": \"Premium seats with power outlet\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/seat-categories",
+							"host": ["{{base_url}}"],
+							"path": ["seat-categories"]
+						}
+					}
+				},
+				{
+					"name": "Get Seat Category",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seat-categories/1",
+							"host": ["{{base_url}}"],
+							"path": ["seat-categories", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Seat Category",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"description\": \"Updated description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/seat-categories/1",
+							"host": ["{{base_url}}"],
+							"path": ["seat-categories", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Seat Category",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seat-categories/1",
+							"host": ["{{base_url}}"],
+							"path": ["seat-categories", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Seats",
+			"item": [
+				{
+					"name": "List Seats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seats",
+							"host": ["{{base_url}}"],
+							"path": ["seats"]
+						}
+					}
+				},
+				{
+					"name": "Create Seat",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"room_id\": 1,\n  \"category_id\": 1,\n  \"seat_number\": \"A-01\",\n  \"has_power_outlet\": true,\n  \"is_accessible\": false,\n  \"status\": \"available\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/seats",
+							"host": ["{{base_url}}"],
+							"path": ["seats"]
+						}
+					}
+				},
+				{
+					"name": "Get Seat",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seats/1",
+							"host": ["{{base_url}}"],
+							"path": ["seats", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Seat",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"maintenance\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/seats/1",
+							"host": ["{{base_url}}"],
+							"path": ["seats", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Seat",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seats/1",
+							"host": ["{{base_url}}"],
+							"path": ["seats", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Seat Bookings",
+			"item": [
+				{
+					"name": "List Seat Bookings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seat-bookings",
+							"host": ["{{base_url}}"],
+							"path": ["seat-bookings"]
+						}
+					}
+				},
+				{
+					"name": "Create Seat Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"seat_id\": 1,\n  \"member_id\": 1,\n  \"start_time\": \"2026-09-01 09:00:00\",\n  \"end_time\": \"2026-09-01 12:00:00\",\n  \"status\": \"booked\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/seat-bookings",
+							"host": ["{{base_url}}"],
+							"path": ["seat-bookings"]
+						}
+					}
+				},
+				{
+					"name": "Get Seat Booking",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seat-bookings/1",
+							"host": ["{{base_url}}"],
+							"path": ["seat-bookings", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Seat Booking",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"cancelled\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/seat-bookings/1",
+							"host": ["{{base_url}}"],
+							"path": ["seat-bookings", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Seat Booking",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/seat-bookings/1",
+							"host": ["{{base_url}}"],
+							"path": ["seat-bookings", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Lockers",
+			"item": [
+				{
+					"name": "List Lockers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/lockers",
+							"host": ["{{base_url}}"],
+							"path": ["lockers"]
+						}
+					}
+				},
+				{
+					"name": "Create Locker",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"floor_id\": 1,\n  \"locker_number\": \"L-001\",\n  \"locker_type\": \"small\",\n  \"location\": \"Near entrance\",\n  \"status\": \"available\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/lockers",
+							"host": ["{{base_url}}"],
+							"path": ["lockers"]
+						}
+					}
+				},
+				{
+					"name": "Get Locker",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/lockers/1",
+							"host": ["{{base_url}}"],
+							"path": ["lockers", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Locker",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"assigned\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/lockers/1",
+							"host": ["{{base_url}}"],
+							"path": ["lockers", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Locker",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/lockers/1",
+							"host": ["{{base_url}}"],
+							"path": ["lockers", "1"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Locker Assignments",
+			"item": [
+				{
+					"name": "List Locker Assignments",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/locker-assignments",
+							"host": ["{{base_url}}"],
+							"path": ["locker-assignments"]
+						}
+					}
+				},
+				{
+					"name": "Create Locker Assignment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"locker_id\": 1,\n  \"member_id\": 1,\n  \"assigned_date\": \"2026-09-01\",\n  \"expiry_date\": \"2026-12-01\",\n  \"status\": \"active\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/locker-assignments",
+							"host": ["{{base_url}}"],
+							"path": ["locker-assignments"]
+						}
+					}
+				},
+				{
+					"name": "Get Locker Assignment",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/locker-assignments/1",
+							"host": ["{{base_url}}"],
+							"path": ["locker-assignments", "1"]
+						}
+					}
+				},
+				{
+					"name": "Update Locker Assignment",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"returned\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/locker-assignments/1",
+							"host": ["{{base_url}}"],
+							"path": ["locker-assignments", "1"]
+						}
+					}
+				},
+				{
+					"name": "Delete Locker Assignment",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/locker-assignments/1",
+							"host": ["{{base_url}}"],
+							"path": ["locker-assignments", "1"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://your-tenant-domain.test/api/v1"
+		},
+		{
+			"key": "token",
+			"value": "YOUR_BEARER_TOKEN"
+		}
+	]
+}

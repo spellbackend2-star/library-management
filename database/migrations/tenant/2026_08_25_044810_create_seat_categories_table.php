@@ -10,15 +10,9 @@ return new class extends Migration
     {
         Schema::create('seat_categories', function (Blueprint $table) {
             $table->id();
-
-            $table->string('name', 100)
-                ->unique();
-
-            $table->string('description', 255)
-                ->nullable();
-
-            $table->timestamp('created_at')
-                ->useCurrent();
+            $table->string('name', 100)->unique();
+            $table->string('description', 255)->nullable();
+            $table->timestamps();
         });
     }
 

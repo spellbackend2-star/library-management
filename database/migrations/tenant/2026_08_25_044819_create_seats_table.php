@@ -22,23 +22,18 @@ return new class extends Migration
 
             $table->string('seat_number', 20);
 
-            $table->boolean('has_power_outlet')
-                ->default(false);
+            $table->boolean('has_power_outlet')->default(false);
+            $table->boolean('is_accessible')->default(false);
 
-            $table->boolean('is_accessible')
-                ->default(false);
+            $table->enum('status', [
+                'available',
+                'maintenance',
+                'out_of_service',
+            ])->default('available');
 
-            $table->string('status', 30)
-                ->default('available');
-
-            $table->timestamp('created_at')
-                ->useCurrent();
+            $table->timestamps();
 
             $table->unique(['room_id', 'seat_number']);
-
-            // Indexes
-            $table->index('room_id');
-            $table->index('category_id');
         });
 
         DB::statement("

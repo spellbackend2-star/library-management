@@ -4,23 +4,34 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'name',
-    'description',
+    'seat_id',
+    'member_id',
+    'start_time',
+    'end_time',
+    'status',
 ])]
-class SeatCategory extends Model
+class SeatBooking extends Model
 {
     public $timestamps = false;
 
-    public function seats(): HasMany
+    protected function casts(): array
     {
-        return $this->hasMany(Seat::class, 'category_id');
+        return [
+            'start_time' => 'datetime',
+            'end_time' => 'datetime',
+        ];
     }
 
-    public function pricing(): HasMany
+    public function seat(): BelongsTo
     {
-        return $this->hasMany(SeatPricing::class, 'category_id');
+        return $this->belongsTo(Seat::class);
+    }
+
+    public function member(): BelongsTo
+    {
+        return $this->belongsTo(Member::class);
     }
 }

@@ -39,9 +39,8 @@ return new class extends Migration
             $table->string('status', 20)
                 ->default('active');
 
-            $table->timestamp('created_at')
-                ->useCurrent();
-
+           
+            $table->timestamps();
             // Indexes
             $table->index('member_id');
             $table->index('copy_id');

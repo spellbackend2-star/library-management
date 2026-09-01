@@ -8,25 +8,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'booking_id',
-    'copy_id',
     'member_id',
-    'checkout_date',
-    'due_date',
-    'return_date',
-    'renewal_count',
+    'amount',
+    'currency',
+    'payment_method',
+    'transaction_id',
+    'gateway_reference',
+    'payment_url',
+    'gateway_response',
     'status',
+    'payment_date',
+    'paid_at',
 ])]
-class Borrow extends Model
+class Payment extends Model
 {
-    public $timestamps = false;
+    public $timestamps = true;
 
     protected function casts(): array
     {
         return [
-            'checkout_date' => 'datetime',
-            'due_date' => 'date',
-            'return_date' => 'datetime',
-            'renewal_count' => 'integer',
+            'amount' => 'decimal:2',
+            'gateway_response' => 'array',
+            'payment_date' => 'datetime',
+            'paid_at' => 'datetime',
         ];
     }
 
@@ -35,18 +39,8 @@ class Borrow extends Model
         return $this->belongsTo(Booking::class);
     }
 
-    public function copy(): BelongsTo
-    {
-        return $this->belongsTo(Copy::class);
-    }
-
     public function member(): BelongsTo
     {
         return $this->belongsTo(Member::class);
-    }
-
-    public function staff(): BelongsTo
-    {
-        return $this->belongsTo(Staff::class);
     }
 }

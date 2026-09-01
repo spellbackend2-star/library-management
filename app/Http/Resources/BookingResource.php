@@ -15,10 +15,17 @@ class BookingResource extends JsonResource
             'package_id' => $this->package_id,
             'booking_type' => $this->booking_type,
             'status' => $this->status,
-            'amount' => $this->amount,
+            'amount' => $this->package?->price,
             'notes' => $this->notes,
             'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
+            'package' => [
+                'id' => $this->package?->id,
+                'name' => $this->package?->name,
+                'price' => $this->package?->price,
+                'duration' => $this->package?->duration,
+                'duration_unit' => $this->package?->duration_unit,
+            ],
         ];
 
         if ($this->whenLoaded('bookingSeats')) {

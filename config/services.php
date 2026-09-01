@@ -34,5 +34,14 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'khalti' => [
+        'base_url' => env('KHALTI_BASE_URL'),
+        'secret_key' => env('KHALTI_SECRET_KEY'),
+    ],
+    'esewa' => [
+        'base_url' => env('ESEWA_BASE_URL'),
+        'product_code' => env('ESEWA_PRODUCT_CODE'),
+        'secret' => env('ESEWA_SECRET'),
+    ],
 
 ];

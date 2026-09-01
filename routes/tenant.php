@@ -17,6 +17,7 @@ use App\Http\Controllers\v1\Tenant\LockerAssigmentsController;
 use App\Http\Controllers\v1\Tenant\LockerController;
 use App\Http\Controllers\v1\Tenant\MemberController;
 use App\Http\Controllers\v1\Tenant\PackageController;
+use App\Http\Controllers\v1\Tenant\PaymentController;
 use App\Http\Controllers\v1\Tenant\PublisherController;
 use App\Http\Controllers\v1\Tenant\RoomController;
 use App\Http\Controllers\v1\Tenant\SeatBookingController;
@@ -139,6 +140,11 @@ Route::middleware([
             'bookings',
             BookingController::class
         );
+
+        Route::apiResource(
+            'payments',
+            PaymentController::class
+        )->only(['index', 'store', 'show', 'destroy']);
 
         Route::apiResource(
             'floors',

@@ -15,7 +15,9 @@ return new class extends Migration
             $table->foreignId('booking_id')
                 ->constrained('bookings')
                 ->cascadeOnDelete();
-
+            $table->foreignId('member_id')
+                ->constrained('members')
+                ->restrictOnDelete();
             $table->foreignId('seat_id')
                 ->constrained('seats')
                 ->restrictOnDelete();

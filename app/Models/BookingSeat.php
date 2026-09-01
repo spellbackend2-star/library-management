@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'booking_id',
+    'member_id',
     'seat_id',
     'start_at',
     'end_at',

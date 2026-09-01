@@ -20,6 +20,18 @@ class StoreBookingRequest extends FormRequest
                 'exists:members,id',
             ],
 
+            'staff_id' => [
+                'nullable',
+                'integer',
+                'exists:staff,id',
+            ],
+
+            'amount' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
             'bookings' => [
                 'required',
                 'array',
@@ -29,7 +41,7 @@ class StoreBookingRequest extends FormRequest
             'bookings.*.type' => [
                 'required',
                 'string',
-                'in:seat,book,locker',
+                'in:seat,book,locker,package',
             ],
 
             'bookings.*.seat_id' => [

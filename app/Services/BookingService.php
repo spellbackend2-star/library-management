@@ -15,6 +15,7 @@ use App\Repositories\Interface\PackageInterface;
 use App\Repositories\Interface\SeatInterface;
 use App\Repositories\Interface\CopyInterface;
 use App\Repositories\Interface\LockerInterface;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
@@ -56,6 +57,19 @@ class BookingService
             throw new \Exception('Member does not have an active package.');
         }
 
+        $staffId = $data['staff_id'] ?? null;
+        $bookedById = null;
+
+        if (Auth::check()) {
+            $user = Auth::user();
+            $staff = \App\Models\Staff::where('user_id', $user->id)->first();
+
+            if ($staff) {
+                $bookedById = $staff->id;
+                $staffId = $staffId ?? $staff->id;
+            }
+        }
+
         $bookings = $data['bookings'] ?? [];
 
         if (empty($bookings)) {
@@ -63,19 +77,23 @@ class BookingService
         }
 
         foreach ($bookings as $bookingData) {
+            $bookingData['staff_id'] = $staffId;
             $this->validateBooking($bookingData, $package, $data['member_id']);
         }
 
-        $firstType = $bookings[0]['type'];
+        $parentBooking = DB::transaction(function () use ($data, $package, $bookedById) {
+            $finalAmount = isset($data['amount']) && $data['amount'] !== null
+                ? (float) $data['amount']
+                : (float) $package->price;
 
-        $parentBooking = DB::transaction(function () use ($data, $package, $firstType) {
             return $this->bookingRepository->create([
                 'member_id' => $data['member_id'],
                 'package_id' => $package->id,
-                'booking_type' => $firstType,
+                'booking_type' => 'package',
                 'status' => 'pending',
-                'amount' => $data['amount'] ?? 0,
+                'amount' => $finalAmount,
                 'notes' => $data['notes'] ?? null,
+                'booked_by_user_id' => $bookedById,
             ]);
         });
 
@@ -213,6 +231,7 @@ class BookingService
 
         $this->bookingSeatRepository->create([
             'booking_id' => $parentBookingId,
+            'member_id' => $memberId,
             'seat_id' => $data['seat_id'],
             'start_at' => $data['start_at'],
             'end_at' => $data['end_at'],
@@ -255,7 +274,7 @@ class BookingService
             'booking_id' => $parentBookingId,
             'copy_id' => $data['copy_id'],
             'member_id' => $memberId,
-            'staff_id' => null,
+            'staff_id' => $data['staff_id'] ?? null,
             'checkout_date' => $checkoutDate,
             'due_date' => $dueDate,
             'renewal_count' => 0,

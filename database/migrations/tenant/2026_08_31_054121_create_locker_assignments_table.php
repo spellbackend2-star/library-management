@@ -10,6 +10,12 @@ return new class extends Migration
     {
         Schema::create('locker_assignments', function (Blueprint $table) {
             $table->id();
+              $table->foreignId('booking_id')
+                ->nullable()
+                ->constrained('bookings')
+                ->nullOnDelete();
+
+            $table->index('booking_id');
 
             $table->foreignId('locker_id')
                 ->constrained('lockers')

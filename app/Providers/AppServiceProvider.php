@@ -18,6 +18,7 @@ use App\Repositories\Eloquent\LockerRepository;
 use App\Repositories\Eloquent\MembershipTypeRepository;
 use App\Repositories\Eloquent\MemberRepository;
 use App\Repositories\Eloquent\PackageRepository;
+use App\Repositories\Eloquent\PaymentRepository;
 use App\Repositories\Eloquent\PublisherRepository;
 use App\Repositories\Eloquent\RoomRepository;
 use App\Repositories\Eloquent\SeatBookingRepository;
@@ -40,6 +41,7 @@ use App\Repositories\Interface\LockerInterface;
 use App\Repositories\Interface\MemberInterface;
 use App\Repositories\Interface\MembershipTypeInterface;
 use App\Repositories\Interface\PackageInterface;
+use App\Repositories\Interface\PaymentRepositoryInterface;
 use App\Repositories\Interface\PublisherInterface;
 use App\Repositories\Interface\RoomInterface;
 use App\Repositories\Interface\SeatBookingInterface;
@@ -143,6 +145,10 @@ class AppServiceProvider extends ServiceProvider
          $this->app->bind(
             BookingSeatInterface::class,
             BookingSeatRepository::class
+        );
+         $this->app->bind(
+            PaymentRepositoryInterface::class,
+            PaymentRepository::class
         );
     }
 

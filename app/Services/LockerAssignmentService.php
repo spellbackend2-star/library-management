@@ -2,37 +2,37 @@
 
 namespace App\Services;
 
-use App\Models\LockerAssigments;
+use App\Models\LockerAssignment;
 use App\Repositories\Interface\LockerAssignmentInterface;
 
-class LockerAssigmentsService
+class LockerAssignmentService
 {
     public function __construct(
-        protected LockerAssignmentInterface $lockerAssigmentsRepository
+        protected LockerAssignmentInterface $lockerAssignmentRepository
     ) {}
 
     public function getAll()
     {
-        return $this->lockerAssigmentsRepository->all();
+        return $this->lockerAssignmentRepository->all();
     }
 
-    public function getById(int $id): ?LockerAssigments
+    public function getById(int $id): ?LockerAssignment
     {
-        return $this->lockerAssigmentsRepository->find($id);
+        return $this->lockerAssignmentRepository->find($id);
     }
 
-    public function create(array $data): LockerAssigments
+    public function create(array $data): LockerAssignment
     {
-        return $this->lockerAssigmentsRepository->create($data);
+        return $this->lockerAssignmentRepository->create($data);
     }
 
-    public function update(int $id, array $data): LockerAssigments
+    public function update(int $id, array $data): LockerAssignment
     {
-        return $this->lockerAssigmentsRepository->update($id, $data);
+        return $this->lockerAssignmentRepository->update($id, $data);
     }
 
     public function delete(int $id): bool
     {
-        return $this->lockerAssigmentsRepository->delete($id);
+        return $this->lockerAssignmentRepository->delete($id);
     }
 }

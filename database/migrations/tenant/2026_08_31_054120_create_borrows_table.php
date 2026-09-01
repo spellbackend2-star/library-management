@@ -12,6 +12,12 @@ return new class extends Migration
         Schema::create('borrows', function (Blueprint $table) {
             $table->id();
 
+            // Package booking that created this borrow
+            $table->foreignId('booking_id')
+                ->nullable()
+                ->constrained('bookings')
+                ->nullOnDelete();
+
             $table->foreignId('copy_id')
                 ->constrained('copies')
                 ->restrictOnDelete();
@@ -20,10 +26,8 @@ return new class extends Migration
                 ->constrained('members')
                 ->restrictOnDelete();
 
-            $table->foreignId('staff_id')
-                ->nullable()
-                ->constrained('staff')
-                ->nullOnDelete();
+        
+          
 
             $table->timestamp('checkout_date')
                 ->useCurrent();
@@ -39,9 +43,10 @@ return new class extends Migration
             $table->string('status', 20)
                 ->default('active');
 
-           
             $table->timestamps();
+
             // Indexes
+            $table->index('booking_id');
             $table->index('member_id');
             $table->index('copy_id');
             $table->index('status');
@@ -60,3 +65,4 @@ return new class extends Migration
         Schema::dropIfExists('borrows');
     }
 };
+

@@ -12,7 +12,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'package_id',
     'booking_type',
     'status',
+    'amount',
     'notes',
+    'booked_by_user_id',
 ])]
 class Booking extends Model
 {

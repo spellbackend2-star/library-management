@@ -13,8 +13,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'booking_type',
     'status',
     'amount',
+    'subtotal',
+    'tax_amount',
+    'discount_amount',
+    'convenience_fee',
+    'total_amount',
+    'coupon_id',
+    'payment_status',
+    'booking_source',
     'notes',
     'booked_by_user_id',
+    'expires_at',
+    'confirmed_at',
+    'cancelled_at',
 ])]
 class Booking extends Model
 {
@@ -22,6 +33,15 @@ class Booking extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'subtotal' => 'decimal:2',
+            'tax_amount' => 'decimal:2',
+            'discount_amount' => 'decimal:2',
+            'convenience_fee' => 'decimal:2',
+            'total_amount' => 'decimal:2',
+            'is_active' => 'boolean',
+            'expires_at' => 'datetime',
+            'confirmed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
         ];
     }
 
@@ -33,6 +53,11 @@ class Booking extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     public function bookingSeats(): HasMany

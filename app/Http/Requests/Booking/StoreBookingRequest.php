@@ -84,6 +84,12 @@ class StoreBookingRequest extends FormRequest
                 'string',
                 'max:1000',
             ],
+
+            'coupon_id' => [
+                'nullable',
+                'integer',
+                'exists:coupons,id',
+            ],
         ];
 
         return $rules;

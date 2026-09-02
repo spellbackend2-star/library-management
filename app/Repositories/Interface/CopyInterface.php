@@ -15,5 +15,6 @@ interface CopyInterface
     public function update(int $id, array $data): Copy;
 
     public function delete(int $id): bool;
-    
+    public function deleteNotIn(int $editionId, array $keptIds): void;
+
 }

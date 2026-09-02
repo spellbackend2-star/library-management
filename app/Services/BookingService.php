@@ -14,6 +14,7 @@ use App\Repositories\Interface\MemberInterface;
 use App\Repositories\Interface\PackageInterface;
 use App\Repositories\Interface\SeatInterface;
 use App\Repositories\Interface\CopyInterface;
+use App\Repositories\Interface\CouponInterface;
 use App\Repositories\Interface\LockerInterface;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,7 @@ class BookingService
         protected SeatInterface $seatRepository,
         protected CopyInterface $copyRepository,
         protected LockerInterface $lockerRepository,
+        protected CouponInterface $couponRepository,
     ) {}
 
     public function getAll()
@@ -81,21 +83,77 @@ class BookingService
             $this->validateBooking($bookingData, $package, $data['member_id']);
         }
 
-        $parentBooking = DB::transaction(function () use ($data, $package, $bookedById) {
-            $finalAmount = isset($data['amount']) && $data['amount'] !== null
-                ? (float) $data['amount']
-                : (float) $package->price;
+        $finalAmount = isset($data['amount']) && $data['amount'] !== null
+            ? (float) $data['amount']
+            : (float) $package->price;
 
+        $couponId = $data['coupon_id'] ?? null;
+        $discountAmount = 0.0;
+        $coupon = null;
+
+        if ($couponId) {
+            $coupon = $this->couponRepository->find($couponId);
+
+            if (!$coupon) {
+                throw new \Exception('Coupon not found.');
+            }
+
+            if (!$coupon->is_active) {
+                throw new \Exception('Coupon is not active.');
+            }
+
+            if ($coupon->valid_from && now()->lt($coupon->valid_from)) {
+                throw new \Exception('Coupon is not yet valid.');
+            }
+
+            if ($coupon->valid_until && now()->gt($coupon->valid_until)) {
+                throw new \Exception('Coupon has expired.');
+            }
+
+            if ($coupon->max_uses !== null && $coupon->used_count >= $coupon->max_uses) {
+                throw new \Exception('Coupon has reached its maximum usage limit.');
+            }
+
+            if ($finalAmount < $coupon->min_order_value) {
+                throw new \Exception('Order amount does not meet the minimum required for this coupon.');
+            }
+
+            if ($coupon->discount_type === 'FLAT') {
+                $discountAmount = (float) $coupon->discount_value;
+            } else {
+                $discountAmount = $finalAmount * ((float) $coupon->discount_value / 100);
+            }
+
+            if ($coupon->max_discount !== null && $discountAmount > $coupon->max_discount) {
+                $discountAmount = (float) $coupon->max_discount;
+            }
+
+            if ($discountAmount > $finalAmount) {
+                $discountAmount = $finalAmount;
+            }
+
+            $discountAmount = round($discountAmount, 2);
+        }
+
+        $parentBooking = DB::transaction(function () use ($data, $package, $bookedById, $finalAmount, $couponId, $discountAmount) {
             return $this->bookingRepository->create([
                 'member_id' => $data['member_id'],
                 'package_id' => $package->id,
                 'booking_type' => 'package',
                 'status' => 'pending',
                 'amount' => $finalAmount,
+                'subtotal' => $finalAmount,
+                'discount_amount' => $discountAmount,
+                'total_amount' => round($finalAmount - $discountAmount, 2),
+                'coupon_id' => $couponId,
                 'notes' => $data['notes'] ?? null,
                 'booked_by_user_id' => $bookedById,
             ]);
         });
+
+        if ($coupon) {
+            $coupon->increment('used_count');
+        }
 
         foreach ($bookings as $bookingData) {
             $type = $bookingData['type'];
@@ -112,6 +170,7 @@ class BookingService
         return $parentBooking->fresh([
             'member',
             'package',
+            'coupon',
             'bookingSeats',
             'borrows',
             'lockerAssignments',

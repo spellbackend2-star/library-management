@@ -9,12 +9,12 @@ class CopyRepository implements CopyInterface
 {
     public function all()
     {
-        return Copy::latest()->get();
+        return Copy::with(['edition.book'])->latest()->get();
     }
 
     public function find(int $id): ?Copy
     {
-        return Copy::find($id);
+        return Copy::with(['edition.book'])->find($id);
     }
 
     public function create(array $data): Copy
@@ -34,5 +34,18 @@ class CopyRepository implements CopyInterface
     public function delete(int $id): bool
     {
         return Copy::findOrFail($id)->delete();
+    }
+     public function findForEdition(int $editionId, int $copyId): Copy
+    {
+        return Copy::where('edition_id', $editionId)
+            ->where('id', $copyId)
+            ->firstOrFail();
+    }
+
+    public function deleteNotIn(int $editionId, array $keptIds): void
+    {
+        Copy::where('edition_id', $editionId)
+            ->whereNotIn('id', $keptIds)
+            ->delete();
     }
 }

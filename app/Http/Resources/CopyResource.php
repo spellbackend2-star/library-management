@@ -11,14 +11,14 @@ class CopyResource extends JsonResource
     {
         return [
             'id' => $this->id,
-
-            'book_id' => $this->book_id,
+            'book_id' => $this->edition?->book?->id,
+            'edition_id' => $this->edition_id,
+            'book_name' => $this->edition?->book?->title,
             'barcode' => $this->barcode,
             'shelf_location' => $this->shelf_location,
             'condition' => $this->condition,
             'status' => $this->status,
             'acquisition_date' => $this->acquisition_date?->format('Y-m-d'),
-
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

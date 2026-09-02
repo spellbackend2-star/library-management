@@ -11,10 +11,10 @@ return new class extends Migration
         Schema::create('copies', function (Blueprint $table) {
             $table->id();
 
-            $table->foreignId('book_id')
-                ->constrained('books')
-                ->cascadeOnDelete();
-
+            
+            $table->foreignId('edition_id')
+                ->constrained('book_editions')
+                ->restrictOnDelete();
             $table->string('barcode', 100)->unique();
 
             $table->string('shelf_location', 100)->nullable();

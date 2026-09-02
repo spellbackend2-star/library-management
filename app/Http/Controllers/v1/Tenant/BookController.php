@@ -24,16 +24,22 @@ class BookController extends Controller
 
     public function store(StoreBookRequest $request): BookResource
     {
-        $book = $this->bookService->create(
-            $request->validated()
-        );
+        $payload = $request->validated();
+
+        $hasNested = isset($payload['author_ids'])
+            || isset($payload['category_ids'])
+            || isset($payload['editions']);
+
+        $book = $hasNested
+            ? $this->bookService->createWithRelations($payload)
+            : $this->bookService->create($payload);
 
         return new BookResource($book);
     }
 
     public function show(int $book): BookResource
     {
-        $bookData = $this->bookService->getById($book);
+        $bookData = $this->bookService->getByIdWithRelations($book);
 
         abort_if(!$bookData, 404, 'Book not found.');
 
@@ -44,20 +50,27 @@ class BookController extends Controller
         UpdateBookRequest $request,
         int $book
     ): BookResource {
-        $bookData = $this->bookService->update(
-            $book,
-            $request->validated()
-        );
+        $payload = $request->validated();
+
+        $hasNested = isset($payload['author_ids'])
+            || isset($payload['category_ids'])
+            || isset($payload['editions']);
+
+        $bookData = $hasNested
+            ? $this->bookService->updateWithRelations($book, $payload)
+            : $this->bookService->update($book, $payload);
 
         return new BookResource($bookData);
     }
 
     public function destroy(int $book): JsonResponse
     {
-        $this->bookService->delete($book);
+        $deleted = $this->bookService->delete($book);
+
+        abort_if(!$deleted, 404, 'Book not found.');
 
         return response()->json([
-            'message' => 'Book deleted successfully.',
+            'message' => 'Book, all its editions, copies, and pivot links were permanently deleted.',
         ]);
     }
 }

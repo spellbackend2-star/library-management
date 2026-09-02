@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'book_id',
+    'edition_id',
     'barcode',
     'shelf_location',
     'condition',
@@ -25,6 +26,11 @@ class Copy extends Model
     public function book(): BelongsTo
     {
         return $this->belongsTo(Book::class);
+    }
+
+    public function edition(): BelongsTo
+    {
+        return $this->belongsTo(BookEdition::class, 'edition_id');
     }
 
     public function borrows(): HasMany

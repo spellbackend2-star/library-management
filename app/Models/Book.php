@@ -21,7 +21,9 @@ class Book extends Model
 
     const DELETED_AT = 'deleted_at';
 
-    public $timestamps = false;
+    const UPDATED_AT = null;
+
+    public $timestamps = true;
 
     public function editions(): HasMany
     {

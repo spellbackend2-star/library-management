@@ -12,6 +12,7 @@ use App\Http\Controllers\v1\Tenant\BookingController;
 use App\Http\Controllers\v1\Tenant\BorrowController;
 use App\Http\Controllers\v1\Tenant\CategoryController;
 use App\Http\Controllers\v1\Tenant\CopyController;
+use App\Http\Controllers\v1\Tenant\CouponController;
 use App\Http\Controllers\v1\Tenant\FloorController;
 use App\Http\Controllers\v1\Tenant\LockerAssigmentsController;
 use App\Http\Controllers\v1\Tenant\LockerController;
@@ -139,6 +140,11 @@ Route::middleware([
         Route::apiResource(
             'bookings',
             BookingController::class
+        );
+
+        Route::apiResource(
+            'coupons',
+            CouponController::class
         );
 
         Route::apiResource(

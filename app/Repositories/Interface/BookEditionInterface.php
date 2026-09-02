@@ -15,4 +15,6 @@ interface BookEditionInterface
     public function update(int $id, array $data): BookEdition;
 
     public function delete(int $id): bool;
+
+    public function deleteNotIn(int $bookId, array $keptIds): void;
 }

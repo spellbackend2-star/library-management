@@ -12,6 +12,7 @@ use App\Repositories\Eloquent\BookRepository;
 use App\Repositories\Eloquent\BorrowRepository;
 use App\Repositories\Eloquent\CategoryRepository;
 use App\Repositories\Eloquent\CopyRepository;
+use App\Repositories\Eloquent\CouponRepository;
 use App\Repositories\Eloquent\FloorRepository;
 use App\Repositories\Eloquent\LockerAssignmentRepository;
 use App\Repositories\Eloquent\LockerRepository;
@@ -35,6 +36,7 @@ use App\Repositories\Interface\BookInterface;
 use App\Repositories\Interface\BorrowInterface;
 use App\Repositories\Interface\CategoryInterface;
 use App\Repositories\Interface\CopyInterface;
+use App\Repositories\Interface\CouponInterface;
 use App\Repositories\Interface\FloorInterface;
 use App\Repositories\Interface\LockerAssignmentInterface;
 use App\Repositories\Interface\LockerInterface;
@@ -101,6 +103,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             CopyInterface::class,
             CopyRepository::class
+        );
+        $this->app->bind(
+            CouponInterface::class,
+            CouponRepository::class
         );
         $this->app->bind(
             PackageInterface::class,

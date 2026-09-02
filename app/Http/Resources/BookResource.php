@@ -18,8 +18,12 @@ class BookResource extends JsonResource
             'description' => $this->description,
             'cover_image_url' => $this->cover_image_url,
 
-            'created_at' => $this->created_at,
+            'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
             'deleted_at' => $this->deleted_at,
+
+            'authors' => AuthorResource::collection($this->whenLoaded('authors')),
+            'categories' => CategoryResource::collection($this->whenLoaded('categories')),
+            'editions' => BookEditionResource::collection($this->whenLoaded('editions')),
         ];
     }
 }

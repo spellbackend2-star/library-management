@@ -14,4 +14,6 @@ interface LockerAssignmentInterface
     public function update(int $id, array $data): LockerAssignment;
 
     public function delete(int $id): bool;
+
+    public function byBooking(int $bookingId);
 }

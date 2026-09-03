@@ -457,4 +457,37 @@ class BookingService
             return $this->bookingRepository->delete($booking->id);
         });
     }
+
+    public function getAllSeatBookings()
+    {
+        return $this->bookingSeatRepository->all();
+    }
+
+    public function getSeatBookingsByBooking(int $bookingId)
+    {
+        $this->ensureBookingExists($bookingId);
+
+        return $this->bookingSeatRepository->byBooking($bookingId);
+    }
+
+    public function getBorrowsByBooking(int $bookingId)
+    {
+        $this->ensureBookingExists($bookingId);
+
+        return $this->borrowRepository->byBooking($bookingId);
+    }
+
+    public function getLockerAssignmentsByBooking(int $bookingId)
+    {
+        $this->ensureBookingExists($bookingId);
+
+        return $this->lockerAssigmentsRepository->byBooking($bookingId);
+    }
+
+    protected function ensureBookingExists(int $bookingId): void
+    {
+        if (!$this->bookingRepository->find($bookingId)) {
+            throw new \Exception('Booking not found.');
+        }
+    }
 }

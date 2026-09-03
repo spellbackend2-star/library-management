@@ -9,6 +9,7 @@ use App\Http\Controllers\v1\Tenant\BookCategoryController;
 use App\Http\Controllers\v1\Tenant\BookController;
 use App\Http\Controllers\v1\Tenant\BookEditionController;
 use App\Http\Controllers\v1\Tenant\BookingController;
+use App\Http\Controllers\v1\Tenant\BookingDetailsController;
 use App\Http\Controllers\v1\Tenant\BorrowController;
 use App\Http\Controllers\v1\Tenant\CategoryController;
 use App\Http\Controllers\v1\Tenant\CopyController;
@@ -21,7 +22,6 @@ use App\Http\Controllers\v1\Tenant\PackageController;
 use App\Http\Controllers\v1\Tenant\PaymentController;
 use App\Http\Controllers\v1\Tenant\PublisherController;
 use App\Http\Controllers\v1\Tenant\RoomController;
-use App\Http\Controllers\v1\Tenant\SeatBookingController;
 use App\Http\Controllers\v1\Tenant\SeatCategoryController;
 use App\Http\Controllers\v1\Tenant\SeatController;
 use App\Http\Controllers\v1\Tenant\StaffController;
@@ -142,6 +142,20 @@ Route::middleware([
             BookingController::class
         );
 
+        // Per-booking child records (saved together with the booking)
+        Route::get(
+            'bookings/{booking}/seat-bookings',
+            [BookingDetailsController::class, 'seatBookings']
+        );
+        Route::get(
+            'bookings/{booking}/borrows',
+            [BookingDetailsController::class, 'borrows']
+        );
+        Route::get(
+            'bookings/{booking}/locker-assignments',
+            [BookingDetailsController::class, 'lockerAssignments']
+        );
+
         Route::apiResource(
             'coupons',
             CouponController::class
@@ -172,9 +186,12 @@ Route::middleware([
             SeatController::class
         );
 
-        Route::apiResource(
-            'seat-bookings',
-            SeatBookingController::class
+        // All seat-bookings saved inside bookings (data is in the
+        // `booking_seats` table; the legacy `seat_bookings` table is
+        // not used and was never created by tenant migrations).
+        Route::get(
+            'booking-seats',
+            [BookingDetailsController::class, 'allSeatBookings']
         );
 
         Route::apiResource(

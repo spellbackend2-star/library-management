@@ -15,4 +15,6 @@ interface BookingSeatInterface
     public function update(int $id, array $data): BookingSeat;
 
     public function delete(int $id): bool;
+
+    public function byBooking(int $bookingId);
 }

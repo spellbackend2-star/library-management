@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Requests\Locker;
+use Illuminate\Validation\Rule;
 
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -28,11 +29,10 @@ class StoreLockerRequest extends FormRequest
             ],
 
             'locker_type' => [
-                'nullable',
+                'required',
                 'string',
-                'max:50',
+                Rule::in(['small', 'medium', 'big']),
             ],
-
             'location' => [
                 'nullable',
                 'string',

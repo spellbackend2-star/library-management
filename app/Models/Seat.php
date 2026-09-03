@@ -39,7 +39,7 @@ class Seat extends Model
 
     public function bookings(): HasMany
     {
-        return $this->hasMany(SeatBooking::class);
+        return $this->hasMany(BookingSeat::class);
     }
 
     public function bookingSeats(): HasMany

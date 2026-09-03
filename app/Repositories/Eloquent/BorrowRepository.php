@@ -35,4 +35,12 @@ class BorrowRepository implements BorrowInterface
     {
         return Borrow::findOrFail($id)->delete();
     }
+
+    public function byBooking(int $bookingId)
+    {
+        return Borrow::with(['copy', 'member'])
+            ->where('booking_id', $bookingId)
+            ->latest()
+            ->get();
+    }
 }

@@ -22,12 +22,10 @@ use App\Repositories\Eloquent\PackageRepository;
 use App\Repositories\Eloquent\PaymentRepository;
 use App\Repositories\Eloquent\PublisherRepository;
 use App\Repositories\Eloquent\RoomRepository;
-use App\Repositories\Eloquent\SeatBookingRepository;
 use App\Repositories\Eloquent\SeatCategoryRepository;
 use App\Repositories\Eloquent\SeatRepository;
 use App\Repositories\Eloquent\StaffRepository;
-use App\Repositories\Eloquent\TenantRepository;
-use App\Repositories\Interface\AuthorInterface;
+use App\Repositories\Eloquent\TenantRepository;use App\Repositories\Interface\AuthorInterface;
 use App\Repositories\Interface\BookAuthorInterface;
 use App\Repositories\Interface\BookCategoryInterface;
 use App\Repositories\Interface\BookEditionInterface;
@@ -47,7 +45,6 @@ use App\Repositories\Interface\PackageInterface;
 use App\Repositories\Interface\PaymentRepositoryInterface;
 use App\Repositories\Interface\PublisherInterface;
 use App\Repositories\Interface\RoomInterface;
-use App\Repositories\Interface\SeatBookingInterface;
 use App\Repositories\Interface\SeatCategoryInterface;
 use App\Repositories\Interface\SeatInterface;
 use App\Repositories\Interface\StaffInterface;
@@ -141,10 +138,6 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             SeatCategoryInterface::class,
             SeatCategoryRepository::class
-        );
-        $this->app->bind(
-            SeatBookingInterface::class,
-            SeatBookingRepository::class
         );
         $this->app->bind(
             BookingInterface::class,

@@ -15,4 +15,6 @@ interface BorrowInterface
     public function update(int $id, array $data): Borrow;
 
     public function delete(int $id): bool;
+
+    public function byBooking(int $bookingId);
 }

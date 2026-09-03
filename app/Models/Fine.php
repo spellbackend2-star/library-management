@@ -36,7 +36,7 @@ class Fine extends Model
 
     public function seatBooking(): BelongsTo
     {
-        return $this->belongsTo(SeatBooking::class);
+        return $this->belongsTo(BookingSeat::class, 'seat_booking_id');
     }
 
     public function member(): BelongsTo

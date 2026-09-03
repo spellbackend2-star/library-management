@@ -47,7 +47,7 @@ class Member extends Model
 
     public function seatBookings(): HasMany
     {
-        return $this->hasMany(SeatBooking::class);
+        return $this->hasMany(BookingSeat::class);
     }
 
     public function fines(): HasMany

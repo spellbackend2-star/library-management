@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\LockerAssigments\StoreLockerAssigmentsRequest;
 use App\Http\Requests\LockerAssigments\UpdateLockerAssigmentsRequest;
 use App\Http\Resources\LockerAssigmentsResource;
-use App\Services\LockerAssigmentsService;
+use App\Services\LockerAssignmentService;
 use App\Models\LockerAssigments;
 use App\Models\LockerAssignment;
 use Illuminate\Http\JsonResponse;
@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 class LockerAssigmentsController extends Controller
 {
     public function __construct(
-        protected LockerAssigmentsService $lockerAssigmentsService
+        protected LockerAssignmentService $lockerAssigmentsService
     ) {}
 
     public function index()

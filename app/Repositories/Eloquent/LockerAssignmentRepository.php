@@ -35,4 +35,12 @@ class LockerAssignmentRepository implements LockerAssignmentInterface
     {
         return LockerAssignment::findOrFail($id)->delete();
     }
+
+    public function byBooking(int $bookingId)
+    {
+        return LockerAssignment::with(['locker', 'member'])
+            ->where('booking_id', $bookingId)
+            ->latest()
+            ->get();
+    }
 }

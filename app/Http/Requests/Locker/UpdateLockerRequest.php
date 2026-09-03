@@ -31,9 +31,9 @@ class UpdateLockerRequest extends FormRequest
             ],
 
             'locker_type' => [
-                'nullable',
+                'sometimes',
                 'string',
-                'max:50',
+                Rule::in(['small', 'medium', 'big']),
             ],
 
             'location' => [

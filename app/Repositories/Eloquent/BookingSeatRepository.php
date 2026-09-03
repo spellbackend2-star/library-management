@@ -35,4 +35,12 @@ class BookingSeatRepository implements BookingSeatInterface
     {
         return BookingSeat::findOrFail($id)->delete();
     }
+
+    public function byBooking(int $bookingId)
+    {
+        return BookingSeat::with(['seat'])
+            ->where('booking_id', $bookingId)
+            ->latest()
+            ->get();
+    }
 }

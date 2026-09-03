@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\Central\CentralAuthController;
+use App\Http\Controllers\v1\Central\CentralAuthController;
 use Illuminate\Support\Facades\Route;
 
 

@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'guard' => 'web',
+    'guard' => 'api',
 
     'middleware' => [],
 
@@ -31,7 +31,9 @@ return [
     'private_key' => env('PASSPORT_PRIVATE_KEY'),
 
     'public_key' => env('PASSPORT_PUBLIC_KEY'),
+    'central_client_id' => env('CENTRAL_PASSPORT_CLIENT_ID'),
 
+    'central_client_secret' => env('CENTRAL_PASSPORT_CLIENT_SECRET'),
     /*
     |--------------------------------------------------------------------------
     | Passport Database Connection

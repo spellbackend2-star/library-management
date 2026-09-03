@@ -26,6 +26,7 @@ use App\Repositories\Eloquent\SeatBookingRepository;
 use App\Repositories\Eloquent\SeatCategoryRepository;
 use App\Repositories\Eloquent\SeatRepository;
 use App\Repositories\Eloquent\StaffRepository;
+use App\Repositories\Eloquent\TenantRepository;
 use App\Repositories\Interface\AuthorInterface;
 use App\Repositories\Interface\BookAuthorInterface;
 use App\Repositories\Interface\BookCategoryInterface;
@@ -50,6 +51,7 @@ use App\Repositories\Interface\SeatBookingInterface;
 use App\Repositories\Interface\SeatCategoryInterface;
 use App\Repositories\Interface\SeatInterface;
 use App\Repositories\Interface\StaffInterface;
+use App\Repositories\Interface\TenantInterface;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passport\Passport;
 
@@ -155,6 +157,10 @@ class AppServiceProvider extends ServiceProvider
          $this->app->bind(
             PaymentRepositoryInterface::class,
             PaymentRepository::class
+        );
+        $this->app->bind(
+            TenantInterface::class,
+            TenantRepository::class
         );
     }
 

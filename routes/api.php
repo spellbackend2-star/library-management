@@ -1,21 +1,17 @@
 <?php
 
+use App\Http\Controllers\Central\CentralAuthController;
 use App\Http\Controllers\v1\Tenant\TenantController;
-use App\Http\Controllers\v1\AuthController;
 use Illuminate\Support\Facades\Route;
 
 
 Route::prefix('central')->group(function () {
 
-    // Create tenant
-    Route::post('/tenants', [TenantController::class, 'register']);
+    Route::post('/login', [CentralAuthController::class, 'login']);
 
-    // Create owner inside tenant
-    Route::post('/tenants/register', [TenantController::class, 'register']);
-    Route::post('/tenants/{tenant}/login', [
-        AuthController::class,
-        'login'
-    ]);
+    Route::middleware('auth:api')->group(function () {
+        Route::post('/tenants', [TenantController::class, 'register']);
+        Route::get('/me', [CentralAuthController::class, 'me']);
+    });
 
-   
 });

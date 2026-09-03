@@ -4,11 +4,13 @@ namespace App\Http\Controllers\v1\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Laravel\Passport\ClientRepository;
+use Spatie\Permission\Models\Role;
 
-class TenantController extends Controller
-{
+class TenantController extends Controller{
 
 
     public function register(Request $request)
@@ -25,6 +27,7 @@ class TenantController extends Controller
         $tenant = Tenant::create([
             'company_name' => $validate['company_name'],
             'tenant_code' => $validate['subdomain'],
+            'owner_email' => $validate['email'],
         ]);
 
         $domain = $tenant->domains()->create([
@@ -34,23 +37,31 @@ class TenantController extends Controller
         try {
             $tenant->run(function () use ($validate, $tenant) {
 
-                // Create tenant owner
-               \App\Models\User::create([
-                   'name' => $validate['owner'],
-                   'email' => $validate['email'],
-                   'password' => bcrypt($validate['password']),
-               ]);
+                $owner = \App\Models\User::create([
+                    'name' => $validate['owner'],
+                    'email' => $validate['email'],
+                    'password' => bcrypt($validate['password']),
+                ]);
 
-                // Create Passport client INSIDE tenant context
-                $repo = app(ClientRepository::class);
+                Artisan::call('db:seed', [
+                    '--class' => RolePermissionSeeder::class,
+                    '--force' => true,
+                ]);
 
-                $client = $repo->createPasswordGrantClient(
+                $adminRole = Role::where('name', 'admin')
+                    ->where('guard_name', 'api')
+                    ->first();
+
+                if ($adminRole) {
+                    $owner->assignRole($adminRole->name);
+                }
+
+                $client = app(ClientRepository::class)->createPasswordGrantClient(
                     name: $validate['company_name'] . ' Password Grant Client',
                     provider: 'users',
                     confidential: true,
                 );
 
-                // Store client information on central tenant record
                 $tenant->update([
                     'passport_client_id' => $client->id,
                     'passport_client_secret' => $client->plainSecret,
@@ -72,5 +83,5 @@ class TenantController extends Controller
         }
     }
 
-   
+
 }

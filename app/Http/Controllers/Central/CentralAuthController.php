@@ -87,45 +87,30 @@ class CentralAuthController extends Controller
         ]);
     }
 
-    public function loginByDomain(Request $request, string $domain, ServerRequestInterface $serverRequest): JsonResponse
+    public function register(Request $request): JsonResponse
     {
-        $credentials = $request->validate([
+        $data = $request->validate([
+            'owner' => ['required', 'string', 'max:255'],
+            'company_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:1'],
+            'password' => ['required', 'string', 'min:8'],
+            'subdomain' => ['required', 'string', 'max:255'],
         ]);
 
         try {
-            $result = $this->centralAuthService->loginByDomain(
-                $domain,
-                $credentials['email'],
-                $credentials['password'],
-                $serverRequest
-            );
+            $result = $this->centralAuthService->registerTenant($data);
         } catch (\RuntimeException $e) {
             return response()->json([
+                'status' => 'error',
                 'message' => $e->getMessage(),
-            ], 401);
+            ], 500);
         }
 
-        $tenant = $result['tenant'];
-        $user = $result['user'];
-        $domainRow = $tenant->domains()->first();
-
         return response()->json([
-            'success' => true,
-            'message' => 'Login successful',
-            'token' => $result['token'],
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ],
-            'tenant' => [
-                'id' => $tenant->id,
-                'company_name' => $tenant->company_name,
-                'tenant_code' => $tenant->tenant_code,
-                'domain' => $domainRow?->domain,
-            ],
-        ]);
+            'status' => 'success',
+            'message' => 'Tenant registered successfully',
+            'tenant' => $result['tenant'],
+            'domain' => $result['domain'],
+        ], 201);
     }
 }

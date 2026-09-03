@@ -5,11 +5,15 @@ namespace App\Services;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Repositories\Interface\TenantInterface;
+use Database\Seeders\Tenant\RolePermissionSeeder;
 use GuzzleHttp\Psr7\Response;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Psr\Http\Message\ServerRequestInterface;
+use Spatie\Permission\Models\Role;
 use Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentified;
 
 class CentralAuthService
@@ -130,111 +134,75 @@ class CentralAuthService
     }
 
     /**
-     * Authenticate a tenant user using tenant domain.
+     * Register a new tenant.
+     *
+     * Flow:
+     *   1. Create central tenant row + domain.
+     *   2. Initialize tenancy to provision the tenant DB and run migrations.
+     *   3. Inside the tenant context: create the owner, seed
+     *      RolePermissionSeeder, assign the admin role, create the
+     *      per-tenant Passport client, persist client credentials
+     *      on the central tenant row.
+     *
+     * @return array{tenant: Tenant, domain: string}
      */
-    public function loginByDomain(
-        string $domain,
-        string $email,
-        string $password,
-        ServerRequestInterface $serverRequest
-    ): array {
-        $tenant = $this->tenantRepository->findByDomain($domain);
+    public function registerTenant(array $data): array
+    {
+        $tenant = Tenant::create([
+            'company_name' => $data['company_name'],
+            'tenant_code' => $data['subdomain'],
+            'owner_email' => $data['email'],
+        ]);
 
-        if (!$tenant) {
-            throw new \RuntimeException('Invalid credentials.');
-        }
-
-        if (
-            !$tenant->passport_client_id ||
-            !$tenant->passport_client_secret
-        ) {
-            throw new \RuntimeException(
-                'Tenant Passport client is not configured.'
-            );
-        }
-
-        $user = null;
-        $token = null;
+        $domain = $tenant->domains()->create([
+            'domain' => $data['subdomain']
+                . '.'
+                . config('tenancy.central_domains')[0],
+        ]);
 
         try {
-            /*
-            |--------------------------------------------------------------------------
-            | Initialize tenant
-            |--------------------------------------------------------------------------
-            */
+            $tenant->run(function () use ($data, $tenant) {
+                $owner = User::create([
+                    'name' => $data['owner'],
+                    'email' => $data['email'],
+                    'password' => bcrypt($data['password']),
+                ]);
 
-            tenancy()->initialize($tenant);
+                Artisan::call('db:seed', [
+                    '--class' => RolePermissionSeeder::class,
+                    '--force' => true,
+                ]);
 
-            /*
-            |--------------------------------------------------------------------------
-            | Find tenant user
-            |--------------------------------------------------------------------------
-            */
+                $adminRole = Role::where('name', 'admin')
+                    ->where('guard_name', 'api')
+                    ->first();
 
-            $user = User::where('email', $email)->first();
+                if ($adminRole) {
+                    $owner->assignRole($adminRole->name);
+                }
 
-            if (
-                !$user ||
-                !Hash::check($password, $user->password)
-            ) {
-                throw new \RuntimeException(
-                    'Invalid credentials.'
-                );
-            }
+                $client = app(ClientRepository::class)
+                    ->createPasswordGrantClient(
+                        name: $data['company_name']
+                            . ' Password Grant Client',
+                        provider: 'users',
+                        confidential: true,
+                    );
 
-            /*
-            |--------------------------------------------------------------------------
-            | Issue tenant Passport token
-            |--------------------------------------------------------------------------
-            */
-
-            $tokenRequest = $serverRequest->withParsedBody([
-                'grant_type' => 'password',
-                'client_id' => $tenant->passport_client_id,
-                'client_secret' => $tenant->passport_client_secret,
-                'username' => $email,
-                'password' => $password,
-                'scope' => '*',
-            ]);
-
-            $passportResponse = app(AccessTokenController::class)
-                ->issueToken(
-                    $tokenRequest,
-                    new Response()
-                );
-
-            $token = json_decode(
-                (string) $passportResponse->getContent(),
-                true
-            );
-        } catch (TenantCouldNotBeIdentified $e) {
+                $tenant->update([
+                    'passport_client_id' => $client->id,
+                    'passport_client_secret' => $client->plainSecret,
+                ]);
+            });
+        } catch (\Throwable $e) {
             throw new \RuntimeException(
-                'Invalid credentials.'
-            );
-        } finally {
-            /*
-            |--------------------------------------------------------------------------
-            | Always end tenancy
-            |--------------------------------------------------------------------------
-            */
-
-            if (tenancy()->initialized) {
-                tenancy()->end();
-            }
-        }
-
-        if (!is_array($token) || isset($token['error'])) {
-            throw new \RuntimeException(
-                $token['error_description']
-                    ?? $token['message']
-                    ?? 'Unable to issue tenant access token.'
+                'Failed to create tenant: ' . $e->getMessage()
             );
         }
 
         return [
-            'token' => $token,
-            'tenant' => $tenant,
-            'user' => $user,
+            'tenant' => $tenant->fresh(),
+            'domain' => $domain->domain,
         ];
     }
 }

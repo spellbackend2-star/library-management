@@ -112,6 +112,40 @@ Route::middleware([
             BookController::class
         );
 
+        // Add copies to an existing book
+        Route::post(
+            'books/{book}/copies',
+            [BookController::class, 'addCopies']
+        );
+
+        // List all copies of a book (across all editions)
+        Route::get(
+            'books/{book}/copies',
+            [BookController::class, 'listCopies']
+        );
+
+        // Show a single copy that belongs to the book
+        Route::get(
+            'books/{book}/copies/{copy}',
+            [BookController::class, 'showCopy']
+        );
+
+        // Update a single copy that belongs to the book
+        Route::put(
+            'books/{book}/copies/{copy}',
+            [BookController::class, 'updateCopy']
+        );
+        Route::patch(
+            'books/{book}/copies/{copy}',
+            [BookController::class, 'updateCopy']
+        );
+
+        // Delete a single copy that belongs to the book
+        Route::delete(
+            'books/{book}/copies/{copy}',
+            [BookController::class, 'deleteCopy']
+        );
+
         Route::apiResource(
             'book-editions',
             BookEditionController::class
@@ -154,6 +188,12 @@ Route::middleware([
         Route::get(
             'bookings/{booking}/locker-assignments',
             [BookingDetailsController::class, 'lockerAssignments']
+        );
+
+        // Mark a single seat-booking as completed (triggers overdue fine if late)
+        Route::patch(
+            'booking-seats/{seat}/complete',
+            [BookingDetailsController::class, 'completeSeatBooking']
         );
 
         Route::apiResource(

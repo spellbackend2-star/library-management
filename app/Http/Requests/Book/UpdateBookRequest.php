@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Book;
 
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
 
 class UpdateBookRequest extends FormRequest
@@ -59,13 +61,14 @@ class UpdateBookRequest extends FormRequest
 
             /*
             |--------------------------------------------------------------------------
-            | Authors
+            | Authors (required, at least one valid author)
             |--------------------------------------------------------------------------
             */
 
             'author_ids' => [
-                'nullable',
+                'required',
                 'array',
+                'min:1',
             ],
 
             'author_ids.*' => [
@@ -76,13 +79,14 @@ class UpdateBookRequest extends FormRequest
 
             /*
             |--------------------------------------------------------------------------
-            | Categories
+            | Categories (required, at least one valid category)
             |--------------------------------------------------------------------------
             */
 
             'category_ids' => [
-                'nullable',
+                'required',
                 'array',
+                'min:1',
             ],
 
             'category_ids.*' => [
@@ -195,5 +199,33 @@ class UpdateBookRequest extends FormRequest
                 'date',
             ],
         ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'title.required' => 'Book title is required.',
+            'author_ids.required' => 'At least one author is required to update a book.',
+            'author_ids.array' => 'author_ids must be an array.',
+            'author_ids.min' => 'At least one author is required to update a book.',
+            'author_ids.*.exists' => 'One or more author_ids do not exist in the authors table.',
+            'category_ids.required' => 'At least one category is required to update a book.',
+            'category_ids.array' => 'category_ids must be an array.',
+            'category_ids.min' => 'At least one category is required to update a book.',
+            'category_ids.*.exists' => 'One or more category_ids do not exist in the categories table.',
+            'editions.*.publisher_id.required' => 'Each edition must have a publisher_id.',
+            'editions.*.publisher_id.exists' => 'The selected publisher_id does not exist.',
+            'editions.*.copies.*.barcode.required' => 'Each copy must have a barcode.',
+            'editions.*.copies.*.barcode.unique' => 'The barcode :input has already been taken.',
+        ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => 'Validation failed.',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

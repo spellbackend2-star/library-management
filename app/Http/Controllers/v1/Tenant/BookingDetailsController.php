@@ -53,6 +53,20 @@ class BookingDetailsController extends Controller
         ]);
     }
 
+    public function completeSeatBooking(Request $request, int $seat): JsonResponse
+    {
+        try {
+            $row = $this->bookingService->completeSeatBooking($seat);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
+
+        return response()->json([
+            'message' => 'Seat booking completed.',
+            'seat' => new BookingSeatResource($row),
+        ]);
+    }
+
     public function lockerAssignments(Request $request, int $booking): JsonResponse
     {
         try {

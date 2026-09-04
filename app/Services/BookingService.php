@@ -339,6 +339,10 @@ class BookingService
             'renewal_count' => 0,
             'status' => 'active',
         ]);
+
+        $this->copyRepository->update($copy->id, [
+            'status' => 'on_loan',
+        ]);
     }
 
     protected function createLockerBooking(array $data, $package, int $memberId, ?string $notes, int $parentBookingId): void
@@ -433,8 +437,35 @@ class BookingService
                 }
             }
 
+            if (isset($data['status']) && strtoupper($data['status']) === 'CANCELLED') {
+                $this->releaseCopyForBooking($booking);
+            }
+
             return $updated;
         });
+    }
+
+    protected function releaseCopyForBooking(Booking $booking): void
+    {
+        if ($booking->booking_type !== 'book') {
+            return;
+        }
+
+        $booking->loadMissing('borrows');
+
+        foreach ($booking->borrows as $borrow) {
+            if (in_array($borrow->status, ['returned', 'lost'], true)) {
+                continue;
+            }
+
+            $this->borrowRepository->delete($borrow->id);
+
+            if ($borrow->copy_id) {
+                $this->copyRepository->update($borrow->copy_id, [
+                    'status' => 'available',
+                ]);
+            }
+        }
     }
 
     public function delete(int $id): bool
@@ -449,6 +480,13 @@ class BookingService
             if ($booking->booking_type === 'seat' && $booking->bookingSeats) {
                 $this->bookingSeatRepository->delete($booking->bookingSeats->first()->id);
             } elseif ($booking->booking_type === 'book' && $booking->borrows) {
+                foreach ($booking->borrows as $borrow) {
+                    if ($borrow->copy_id) {
+                        $this->copyRepository->update($borrow->copy_id, [
+                            'status' => 'available',
+                        ]);
+                    }
+                }
                 $this->borrowRepository->delete($booking->borrows->first()->id);
             } elseif ($booking->booking_type === 'locker' && $booking->lockerAssignments) {
                 $this->lockerAssigmentsRepository->delete($booking->lockerAssignments->first()->id);
@@ -461,6 +499,26 @@ class BookingService
     public function getAllSeatBookings()
     {
         return $this->bookingSeatRepository->all();
+    }
+
+    public function completeSeatBooking(int $id): \App\Models\BookingSeat
+    {
+        $seat = $this->bookingSeatRepository->find($id);
+
+        if (!$seat) {
+            throw new \Exception('Seat booking not found.');
+        }
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($seat) {
+            $updated = $this->bookingSeatRepository->update($seat->id, [
+                'status' => 'completed',
+            ]);
+
+            $fine = app(\App\Services\FineService::class)
+                ->fineForBookingSeatOnComplete($updated);
+
+            return $updated->fresh();
+        });
     }
 
     public function getSeatBookingsByBooking(int $bookingId)

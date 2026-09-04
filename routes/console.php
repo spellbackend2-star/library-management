@@ -9,3 +9,8 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('bookings:release-expired')->everyMinute();
+
+Schedule::command('lms:check-overdue')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();

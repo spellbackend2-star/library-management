@@ -2,41 +2,43 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable([
-    'borrow_id',
-    'seat_booking_id',
-    'member_id',
-    'amount',
-    'reason',
-    'issued_date',
-    'paid_date',
-    'status',
-])]
 class Fine extends Model
 {
-    public $timestamps = false;
+    protected $fillable = [
+        'borrow_id',
+        'locker_assignment_id',
+        'booking_seat_id',
+        'member_id',
+        'amount',
+        'reason',
+        'days_late',
+        'issued_date',
+        'paid_date',
+        'status',
+    ];
 
-    protected function casts(): array
-    {
-        return [
-            'amount' => 'decimal:2',
-            'issued_date' => 'date',
-            'paid_date' => 'date',
-        ];
-    }
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'issued_date' => 'date',
+        'paid_date' => 'date',
+    ];
 
     public function borrow(): BelongsTo
     {
         return $this->belongsTo(Borrow::class);
     }
 
-    public function seatBooking(): BelongsTo
+    public function bookingSeat(): BelongsTo
     {
-        return $this->belongsTo(BookingSeat::class, 'seat_booking_id');
+        return $this->belongsTo(BookingSeat::class, 'booking_seat_id');
+    }
+
+    public function lockerAssignment(): BelongsTo
+    {
+        return $this->belongsTo(LockerAssignment::class);
     }
 
     public function member(): BelongsTo

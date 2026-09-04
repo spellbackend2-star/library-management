@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Book;
 
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 class StoreBookRequest extends FormRequest
 {
@@ -52,13 +54,14 @@ class StoreBookRequest extends FormRequest
 
             /*
             |--------------------------------------------------------------------------
-            | Authors
+            | Authors (required, at least one valid author)
             |--------------------------------------------------------------------------
             */
 
             'author_ids' => [
-                'nullable',
+                'required',
                 'array',
+                'min:1',
             ],
 
             'author_ids.*' => [
@@ -69,13 +72,14 @@ class StoreBookRequest extends FormRequest
 
             /*
             |--------------------------------------------------------------------------
-            | Categories
+            | Categories (required, at least one valid category)
             |--------------------------------------------------------------------------
             */
 
             'category_ids' => [
-                'nullable',
+                'required',
                 'array',
+                'min:1',
             ],
 
             'category_ids.*' => [
@@ -129,34 +133,7 @@ class StoreBookRequest extends FormRequest
                 'nullable',
                 'in:physical,ebook,audiobook',
             ],
-            'editions.*.copies.*.barcode' => [
-                'required',
-                'string',
-                'max:100',
-                'distinct',
-                'unique:copies,barcode',
-            ],
 
-            'editions.*.copies.*.shelf_location' => [
-                'nullable',
-                'string',
-                'max:100',
-            ],
-
-            'editions.*.copies.*.condition' => [
-                'nullable',
-                'in:new,good,fair,damaged',
-            ],
-
-            'editions.*.copies.*.status' => [
-                'nullable',
-                'in:available,on_loan,reserved,withdrawn',
-            ],
-
-            'editions.*.copies.*.acquisition_date' => [
-                'nullable',
-                'date',
-            ],
             /*
             |--------------------------------------------------------------------------
             | Copies
@@ -202,5 +179,33 @@ class StoreBookRequest extends FormRequest
                 'date',
             ],
         ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'title.required' => 'Book title is required.',
+            'author_ids.required' => 'At least one author is required to create a book.',
+            'author_ids.array' => 'author_ids must be an array.',
+            'author_ids.min' => 'At least one author is required to create a book.',
+            'author_ids.*.exists' => 'One or more author_ids do not exist in the authors table.',
+            'category_ids.required' => 'At least one category is required to create a book.',
+            'category_ids.array' => 'category_ids must be an array.',
+            'category_ids.min' => 'At least one category is required to create a book.',
+            'category_ids.*.exists' => 'One or more category_ids do not exist in the categories table.',
+            'editions.*.publisher_id.required' => 'Each edition must have a publisher_id.',
+            'editions.*.publisher_id.exists' => 'The selected publisher_id does not exist.',
+            'editions.*.copies.*.barcode.required' => 'Each copy must have a barcode.',
+            'editions.*.copies.*.barcode.unique' => 'The barcode :input has already been taken.',
+        ];
+    }
+
+    protected function failedValidation(Validator $validator): void
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => 'Validation failed.',
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

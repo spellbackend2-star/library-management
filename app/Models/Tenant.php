@@ -18,7 +18,6 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'owner_email',
         'passport_client_id',
         'passport_client_secret',
-        'database',
     ];
 
     public static function getCustomColumns(): array
@@ -30,7 +29,6 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'owner_email',
             'passport_client_id',
             'passport_client_secret',
-            'database',
         ];
     }
 

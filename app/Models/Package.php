@@ -23,6 +23,9 @@ class Package extends Model
         'locker_allowed',
         'locker_type',
         'max_locker_hours_per_day',
+        'overdue_fine_per_day',
+        'seat_overdue_fine_per_hour',
+        'locker_overdue_fine_per_day',
         'is_active',
     ];
 
@@ -35,6 +38,9 @@ class Package extends Model
         'max_seat_hours_per_day' => 'decimal:2',
         'locker_allowed' => 'boolean',
         'max_locker_hours_per_day' => 'decimal:2',
+        'overdue_fine_per_day' => 'decimal:2',
+        'seat_overdue_fine_per_hour' => 'decimal:2',
+        'locker_overdue_fine_per_day' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Book;
+use App\Models\Copy;
 use App\Repositories\Interface\BookInterface;
 use App\Repositories\Interface\BookEditionInterface;
 use App\Repositories\Interface\CopyInterface;
@@ -311,6 +312,131 @@ class BookService
                 'editions.publisher',
                 'editions.copies.edition.book',
             ]);
+        });
+    }
+
+    /**
+     * Add one or more copies to an existing edition of a book.
+     */
+    public function addCopies(int $bookId, int $editionId, array $copies): array
+    {
+        return DB::transaction(function () use ($bookId, $editionId, $copies) {
+            $book = $this->bookRepository->findOrFail($bookId);
+
+            $edition = $this->editionRepository->find($editionId);
+
+            if (!$edition || $edition->book_id !== $book->id) {
+                throw new \Exception('Edition does not belong to this book.');
+            }
+
+            $created = [];
+
+            foreach ($copies as $copyData) {
+                $created[] = $this->copyRepository->create([
+                    'edition_id' => $edition->id,
+                    'barcode' => $copyData['barcode'],
+                    'shelf_location' => $copyData['shelf_location'] ?? null,
+                    'condition' => $copyData['condition'] ?? 'new',
+                    'status' => $copyData['status'] ?? 'available',
+                    'acquisition_date' =>
+                        $copyData['acquisition_date'] ?? now()->toDateString(),
+                ]);
+            }
+
+            return [
+                'book' => $book->load([
+                    'authors',
+                    'categories',
+                    'editions.publisher',
+                    'editions.copies',
+                ]),
+                'created_copies' => $created,
+            ];
+        });
+    }
+
+    /**
+     * Get a single copy that belongs to the book.
+     */
+    public function getCopy(int $bookId, int $copyId): Copy
+    {
+        $book = $this->bookRepository->findOrFail($bookId);
+
+        $copy = $this->copyRepository->find($copyId);
+
+        if (!$copy) {
+            throw new \Exception('Copy not found.');
+        }
+
+        $edition = $this->editionRepository->find($copy->edition_id);
+
+        if (!$edition || $edition->book_id !== $book->id) {
+            throw new \Exception('Copy does not belong to this book.');
+        }
+
+        return $copy;
+    }
+
+    /**
+     * List all copies that belong to the book (across all editions).
+     */
+    public function listCopies(int $bookId)
+    {
+        $book = $this->bookRepository->findOrFail($bookId);
+
+        return Copy::with(['edition'])
+            ->whereHas('edition', function ($q) use ($book) {
+                $q->where('book_id', $book->id);
+            })
+            ->latest()
+            ->get();
+    }
+
+    /**
+     * Update an existing copy that belongs to one of the book's editions.
+     */
+    public function updateCopy(int $bookId, int $copyId, array $data): Copy
+    {
+        return DB::transaction(function () use ($bookId, $copyId, $data) {
+            $book = $this->bookRepository->findOrFail($bookId);
+
+            $copy = $this->copyRepository->find($copyId);
+
+            if (!$copy) {
+                throw new \Exception('Copy not found.');
+            }
+
+            $edition = $this->editionRepository->find($copy->edition_id);
+
+            if (!$edition || $edition->book_id !== $book->id) {
+                throw new \Exception('Copy does not belong to this book.');
+            }
+
+            return $this->copyRepository->update($copyId, $data);
+        });
+    }
+
+    /**
+     * Delete a copy that belongs to one of the book's editions.
+     */
+    public function deleteCopy(int $bookId, int $copyId): bool
+    {
+        return DB::transaction(function () use ($bookId, $copyId) {
+            $book = $this->bookRepository->findOrFail($bookId);
+
+            $copy = $this->copyRepository->find($copyId);
+
+            if (!$copy) {
+                throw new \Exception('Copy not found.');
+            }
+
+            $edition = $this->editionRepository->find($copy->edition_id);
+
+            if (!$edition || $edition->book_id !== $book->id) {
+                throw new \Exception('Copy does not belong to this book.');
+            }
+
+            return $this->copyRepository->delete($copyId);
         });
     }
 

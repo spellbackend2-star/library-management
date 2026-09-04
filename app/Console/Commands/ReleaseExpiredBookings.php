@@ -22,6 +22,12 @@ class ReleaseExpiredBookings extends Command
 
         foreach (Tenant::on('mysql')->get() as $tenant) {
             try {
+                $dbName = $tenant->database()->getName();
+                $manager = $tenant->database()->manager();
+                if (!$manager->databaseExists($dbName)) {
+                    $this->warn("Skipping tenant {$tenant->id} ({$tenant->company_name}): database {$dbName} not found.");
+                    continue;
+                }
                 tenancy()->initialize($tenant);
 
                 $expiredBookings = Booking::where('status', 'PENDING')
@@ -37,24 +43,37 @@ class ReleaseExpiredBookings extends Command
                         ]);
 
                         $booking->bookingSeats()
-                            ->where('status', 'booked')
-                            ->update(['status' => 'cancelled']);
+                            ->where('status', '!=', 'cancelled')
+                            ->get()
+                            ->each(function ($seat) {
+                                $seat->update(['status' => 'cancelled']);
+                                if ($seat->seat_id) {
+                                    \App\Models\Seat::where('id', $seat->seat_id)
+                                        ->update(['status' => 'available']);
+                                }
+                            });
 
                         $booking->lockerAssignments()
-                            ->where('status', 'active')
-                            ->update(['status' => 'cancelled']);
+                            ->where('status', '!=', 'cancelled')
+                            ->get()
+                            ->each(function ($assignment) {
+                                $assignment->update(['status' => 'cancelled']);
+                                if ($assignment->locker_id) {
+                                    \App\Models\Locker::where('id', $assignment->locker_id)
+                                        ->update(['status' => 'available']);
+                                }
+                            });
 
-                        $borrows = $booking->borrows()
+                        $booking->borrows()
                             ->whereIn('status', ['active', 'overdue'])
-                            ->get();
-
-                        foreach ($borrows as $borrow) {
-                            if ($borrow->copy_id) {
-                                \App\Models\Copy::where('id', $borrow->copy_id)
-                                    ->update(['status' => 'available']);
-                            }
-                            $borrow->delete();
-                        }
+                            ->get()
+                            ->each(function ($borrow) {
+                                if ($borrow->copy_id) {
+                                    \App\Models\Copy::where('id', $borrow->copy_id)
+                                        ->update(['status' => 'available']);
+                                }
+                                $borrow->delete();
+                            });
                     });
 
                     $released++;

@@ -90,6 +90,12 @@ class StoreBookingRequest extends FormRequest
                 'integer',
                 'exists:coupons,id',
             ],
+
+            'convenience_fee' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
         ];
 
         return $rules;

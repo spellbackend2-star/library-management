@@ -91,6 +91,10 @@ class BookingService
         $discountAmount = 0.0;
         $coupon = null;
 
+        $convenienceFee = isset($data['convenience_fee']) && $data['convenience_fee'] !== null
+            ? round((float) $data['convenience_fee'], 2)
+            : 0.0;
+
         if ($couponId) {
             $coupon = $this->couponRepository->find($couponId);
 
@@ -135,7 +139,7 @@ class BookingService
             $discountAmount = round($discountAmount, 2);
         }
 
-        $parentBooking = DB::transaction(function () use ($data, $package, $bookedById, $finalAmount, $couponId, $discountAmount) {
+        $parentBooking = DB::transaction(function () use ($data, $package, $bookedById, $finalAmount, $couponId, $discountAmount, $convenienceFee) {
             return $this->bookingRepository->create([
                 'member_id' => $data['member_id'],
                 'package_id' => $package->id,
@@ -144,7 +148,8 @@ class BookingService
                 'amount' => $finalAmount,
                 'subtotal' => $finalAmount,
                 'discount_amount' => $discountAmount,
-                'total_amount' => round($finalAmount - $discountAmount, 2),
+                'convenience_fee' => $convenienceFee,
+                'total_amount' => round($finalAmount - $discountAmount + $convenienceFee, 2),
                 'coupon_id' => $couponId,
                 'notes' => $data['notes'] ?? null,
                 'booked_by_user_id' => $bookedById,
@@ -296,6 +301,10 @@ class BookingService
             'end_at' => $data['end_at'],
             'status' => 'booked',
         ]);
+
+        $this->seatRepository->update($seat->id, [
+            'status' => 'occupied',
+        ]);
     }
 
     protected function createBookBooking(array $data, $package, int $memberId, ?string $notes, int $parentBookingId): void
@@ -373,6 +382,10 @@ class BookingService
             'expiry_date' => $data['end_at'],
             'status' => 'active',
         ]);
+
+        $this->lockerRepository->update($locker->id, [
+            'status' => 'assigned',
+        ]);
     }
 
     public function update(int $id, array $data): Booking
@@ -384,6 +397,17 @@ class BookingService
         }
 
         return DB::transaction(function () use ($booking, $data) {
+            if (array_key_exists('convenience_fee', $data)) {
+                $fee = round((float) ($data['convenience_fee'] ?? 0), 2);
+                $data['convenience_fee'] = $fee;
+                $data['total_amount'] = round(
+                    (float) $booking->subtotal
+                    - (float) $booking->discount_amount
+                    + $fee,
+                    2
+                );
+            }
+
             $updated = $this->bookingRepository->update($booking->id, $data);
 
             if (isset($data['start_at']) || isset($data['end_at'])) {
@@ -438,28 +462,46 @@ class BookingService
             }
 
             if (isset($data['status']) && strtoupper($data['status']) === 'CANCELLED') {
-                $this->releaseCopyForBooking($booking);
+                $this->releaseResourcesForBooking($booking);
             }
 
             return $updated;
         });
     }
 
-    protected function releaseCopyForBooking(Booking $booking): void
+    protected function releaseResourcesForBooking(Booking $booking): void
     {
-        if ($booking->booking_type !== 'book') {
-            return;
+        $booking->loadMissing('bookingSeats', 'borrows', 'lockerAssignments');
+
+        foreach ($booking->bookingSeats as $seat) {
+            if ($seat->status === 'cancelled') {
+                continue;
+            }
+            $this->bookingSeatRepository->update($seat->id, [
+                'status' => 'cancelled',
+            ]);
+            $this->seatRepository->update($seat->seat_id, [
+                'status' => 'available',
+            ]);
         }
 
-        $booking->loadMissing('borrows');
+        foreach ($booking->lockerAssignments as $assignment) {
+            if ($assignment->status === 'cancelled') {
+                continue;
+            }
+            $this->lockerAssigmentsRepository->update($assignment->id, [
+                'status' => 'cancelled',
+            ]);
+            $this->lockerRepository->update($assignment->locker_id, [
+                'status' => 'available',
+            ]);
+        }
 
         foreach ($booking->borrows as $borrow) {
             if (in_array($borrow->status, ['returned', 'lost'], true)) {
                 continue;
             }
-
             $this->borrowRepository->delete($borrow->id);
-
             if ($borrow->copy_id) {
                 $this->copyRepository->update($borrow->copy_id, [
                     'status' => 'available',
@@ -477,20 +519,7 @@ class BookingService
         }
 
         return DB::transaction(function () use ($booking) {
-            if ($booking->booking_type === 'seat' && $booking->bookingSeats) {
-                $this->bookingSeatRepository->delete($booking->bookingSeats->first()->id);
-            } elseif ($booking->booking_type === 'book' && $booking->borrows) {
-                foreach ($booking->borrows as $borrow) {
-                    if ($borrow->copy_id) {
-                        $this->copyRepository->update($borrow->copy_id, [
-                            'status' => 'available',
-                        ]);
-                    }
-                }
-                $this->borrowRepository->delete($booking->borrows->first()->id);
-            } elseif ($booking->booking_type === 'locker' && $booking->lockerAssignments) {
-                $this->lockerAssigmentsRepository->delete($booking->lockerAssignments->first()->id);
-            }
+            $this->releaseResourcesForBooking($booking);
 
             return $this->bookingRepository->delete($booking->id);
         });

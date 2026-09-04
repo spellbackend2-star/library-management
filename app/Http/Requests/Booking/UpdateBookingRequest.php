@@ -25,6 +25,12 @@ class UpdateBookingRequest extends FormRequest
                 'min:0',
             ],
 
+            'convenience_fee' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
+
             'notes' => [
                 'nullable',
                 'string',

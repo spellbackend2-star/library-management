@@ -59,6 +59,35 @@ class BookingService
             throw new \Exception('Member does not have an active package.');
         }
 
+        $unpaidInvoice = app(\App\Services\InvoiceService::class)
+            ->findByMember($member->id);
+
+        if ($unpaidInvoice) {
+            throw new \Exception(
+                'Member has an unpaid invoice #'.$unpaidInvoice->invoice_number.'. Please complete payment before booking.'
+            );
+        }
+
+        $invoiceId = null;
+        $paymentId = null;
+
+        $currentInvoice = \App\Models\Invoice::where('member_id', $member->id)
+            ->whereIn('status', ['partially_paid', 'paid'])
+            ->orderByDesc('id')
+            ->first();
+
+        if ($currentInvoice) {
+            $invoiceId = $currentInvoice->id;
+
+            $lastPayment = \App\Models\Payment::where('invoice_id', $invoiceId)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($lastPayment) {
+                $paymentId = $lastPayment->id;
+            }
+        }
+
         $staffId = $data['staff_id'] ?? null;
         $bookedById = null;
 
@@ -139,10 +168,12 @@ class BookingService
             $discountAmount = round($discountAmount, 2);
         }
 
-        $parentBooking = DB::transaction(function () use ($data, $package, $bookedById, $finalAmount, $couponId, $discountAmount, $convenienceFee) {
+        $parentBooking = DB::transaction(function () use ($data, $package, $bookedById, $finalAmount, $couponId, $discountAmount, $convenienceFee, $invoiceId, $paymentId) {
             return $this->bookingRepository->create([
                 'member_id' => $data['member_id'],
                 'package_id' => $package->id,
+                'invoice_id' => $invoiceId,
+                'payment_id' => $paymentId,
                 'booking_type' => 'package',
                 'status' => 'pending',
                 'amount' => $finalAmount,

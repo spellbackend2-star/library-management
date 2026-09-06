@@ -1,0 +1,173 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Invoice;
+use App\Models\Member;
+use App\Models\Payment;
+use App\Repositories\Interface\InvoiceInterface;
+use App\Repositories\Interface\PaymentRepositoryInterface;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+class InvoiceService
+{
+    public function __construct(
+        protected InvoiceInterface $invoiceRepository,
+        protected PaymentRepositoryInterface $paymentRepository,
+    ) {}
+
+    public function getAll()
+    {
+        return $this->invoiceRepository->all();
+    }
+
+    public function findById(int $id): ?Invoice
+    {
+        return $this->invoiceRepository->find($id);
+    }
+
+    public function findByMember(int $memberId): ?Invoice
+    {
+        return $this->invoiceRepository->findByMember($memberId);
+    }
+
+    public function create(array $data): Invoice
+    {
+        $memberId = (int) $data['member_id'];
+        $totalAmount = round((float) ($data['total_amount'] ?? 0), 2);
+
+        $existing = $this->invoiceRepository->findByMember($memberId);
+
+        if ($existing) {
+            throw new \Exception('Member already has an unpaid invoice.');
+        }
+
+        $member = Member::findOrFail($memberId);
+        $package = $member->package;
+
+        if (!$package) {
+            throw new \Exception('Member does not have a package assigned.');
+        }
+
+        if ($totalAmount <= 0) {
+            $totalAmount = round((float) $package->price, 2);
+        }
+
+        $invoiceNumber = $this->generateInvoiceNumber();
+
+        return DB::transaction(function () use ($memberId, $totalAmount, $invoiceNumber, $data) {
+            return $this->invoiceRepository->create([
+                'member_id' => $memberId,
+                'invoice_number' => $invoiceNumber,
+                'total_amount' => $totalAmount,
+                'paid_amount' => 0,
+                'remaining_amount' => $totalAmount,
+                'status' => 'unpaid',
+                'due_date' => $data['due_date'] ?? now()->addDays(7)->toDateString(),
+                'notes' => $data['notes'] ?? null,
+            ]);
+        });
+    }
+
+    public function addPayment(int $invoiceId, array $paymentData): Payment|array
+    {
+        $invoice = $this->invoiceRepository->find($invoiceId);
+
+        if (!$invoice) {
+            throw new \Exception('Invoice not found.');
+        }
+
+        if ($invoice->status === 'paid') {
+            $lastPayment = Payment::where('invoice_id', $invoice->id)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($lastPayment) {
+                return ['status' => 'already_paid', 'payment' => $lastPayment];
+            }
+
+            throw new \Exception('Invoice is already fully paid.');
+        }
+
+        if (in_array($invoice->status, ['cancelled', 'refunded'], true)) {
+            throw new \Exception('Invoice is not open for payment.');
+        }
+
+        $amount = round((float) ($paymentData['amount'] ?? 0), 2);
+
+        if ($amount <= 0) {
+            throw new \Exception('Payment amount must be greater than 0.');
+        }
+
+        $remaining = round((float) $invoice->total_amount - (float) $invoice->paid_amount, 2);
+
+        if ($amount > $remaining) {
+            throw new \Exception("Payment amount ({$amount}) exceeds remaining balance ({$remaining}).");
+        }
+
+        return DB::transaction(function () use ($invoice, $paymentData, $amount) {
+            $payment = $this->paymentRepository->create([
+                'invoice_id' => $invoice->id,
+                'member_id' => $invoice->member_id,
+                'amount' => $amount,
+                'currency' => $paymentData['currency'] ?? 'NPR',
+                'payment_method' => strtoupper($paymentData['payment_method']),
+                'status' => 'SUCCESS',
+                'payment_date' => now(),
+                'paid_at' => now(),
+            ]);
+
+            $newPaidAmount = round((float) $invoice->paid_amount + $amount, 2);
+            $newRemainingAmount = round((float) $invoice->total_amount - $newPaidAmount, 2);
+            $newStatus = 'partially_paid';
+
+            if ($newPaidAmount >= (float) $invoice->total_amount) {
+                $newStatus = 'paid';
+                $newRemainingAmount = 0;
+            }
+
+            $this->invoiceRepository->update($invoice->id, [
+                'paid_amount' => $newPaidAmount,
+                'remaining_amount' => $newRemainingAmount,
+                'status' => $newStatus,
+            ]);
+
+            if ($newStatus === 'paid') {
+                $this->activateMemberPackage($invoice);
+            }
+
+            return $payment;
+        });
+    }
+
+    protected function activateMemberPackage(Invoice $invoice): void
+    {
+        $member = $invoice->member;
+
+        if (!$member) {
+            return;
+        }
+
+        $package = $member->package;
+
+        if (!$package) {
+            return;
+        }
+
+        $member->update([
+            'status' => 'active',
+            'membership_start' => now()->toDateString(),
+            'membership_expiry' => now()->addDays((int) $package->duration)->toDateString(),
+        ]);
+    }
+
+    protected function generateInvoiceNumber(): string
+    {
+        $last = Invoice::orderByDesc('id')->first();
+
+        $next = $last ? ((int) $last->id + 1) : 1;
+
+        return 'INV-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+    }
+}

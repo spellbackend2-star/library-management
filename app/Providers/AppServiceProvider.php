@@ -49,6 +49,7 @@ use App\Repositories\Interface\SeatCategoryInterface;
 use App\Repositories\Interface\SeatInterface;
 use App\Repositories\Interface\StaffInterface;
 use App\Repositories\Interface\TenantInterface;
+use App\Repositories\Interface\InvoiceInterface;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passport\Passport;
 
@@ -150,6 +151,10 @@ class AppServiceProvider extends ServiceProvider
          $this->app->bind(
             PaymentRepositoryInterface::class,
             PaymentRepository::class
+        );
+        $this->app->bind(
+            InvoiceInterface::class,
+            \App\Repositories\Eloquent\InvoiceRepository::class
         );
         $this->app->bind(
             TenantInterface::class,

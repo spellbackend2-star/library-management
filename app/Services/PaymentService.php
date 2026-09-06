@@ -45,8 +45,8 @@ class PaymentService
             $reference = $this->generateUniqueReference();
 
             $payment = $this->paymentRepo->create([
-                'member_id' => $booking->member_id,
                 'booking_id' => $booking->id,
+                'member_id' => $booking->member_id,
 
                 'amount' => $booking->total_amount,
 
@@ -92,6 +92,65 @@ class PaymentService
                         'Unsupported payment method.'
                     ),
             };
+        });
+    }
+
+    /**
+     * Create payment against an invoice.
+     */
+    public function createFromInvoice(
+        Invoice $invoice,
+        array $data
+    ): Payment {
+        return DB::transaction(function () use ($invoice, $data) {
+            $payment = $this->paymentRepo->create([
+                'invoice_id' => $invoice->id,
+                'member_id' => $invoice->member_id,
+
+                'amount' => $data['amount'],
+
+                'currency' =>
+                    $data['currency'] ?? 'NPR',
+
+                'payment_method' =>
+                    strtoupper($data['payment_method']),
+
+                'status' => 'SUCCESS',
+
+                'transaction_id' =>
+                    $data['transaction_id'] ?? null,
+
+                'payment_date' => $data['paid_at'] ?? now(),
+
+                'paid_at' => $data['paid_at'] ?? now(),
+            ]);
+
+            $newPaidAmount = round(
+                (float) $invoice->paid_amount + (float) $payment->amount,
+                2
+            );
+
+            $newStatus = 'partially_paid';
+
+            if ($newPaidAmount >= (float) $invoice->total_amount) {
+                $newStatus = 'paid';
+            }
+
+            $invoiceService = app(\App\Services\InvoiceService::class);
+            $updatedInvoice = $invoiceService->findById($invoice->id);
+
+            if ($updatedInvoice) {
+                $updatedInvoice->update([
+                    'paid_amount' => $newPaidAmount,
+                    'status' => $newStatus,
+                ]);
+            }
+
+            if ($newStatus === 'paid') {
+                $invoiceService->activateMemberPackage($invoice);
+            }
+
+            return $payment;
         });
     }
 

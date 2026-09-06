@@ -11,16 +11,11 @@ class PaymentResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'booking_id' => $this->booking_id,
+            'invoice_id' => $this->invoice_id,
             'amount' => $this->amount,
-            'currency' => $this->currency,
             'payment_method' => $this->payment_method,
-            'transaction_id' => $this->transaction_id,
-            'gateway_response' => $this->gateway_response,
             'status' => $this->status,
             'paid_at' => $this->paid_at?->format('Y-m-d H:i:s'),
-            'created_at' => $this->created_at?->format('Y-m-d H:i:s'),
-            'updated_at' => $this->updated_at?->format('Y-m-d H:i:s'),
         ];
     }
 }

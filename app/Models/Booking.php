@@ -26,6 +26,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'expires_at',
     'confirmed_at',
     'cancelled_at',
+    'invoice_id',
+    'payment_id',
 ])]
 class Booking extends Model
 {
@@ -73,5 +75,15 @@ class Booking extends Model
     public function lockerAssignments(): HasMany
     {
         return $this->hasMany(LockerAssignment::class);
+    }
+
+    public function invoice(): BelongsTo
+    {
+        return $this->belongsTo(Invoice::class);
+    }
+
+    public function payment(): BelongsTo
+    {
+        return $this->belongsTo(Payment::class);
     }
 }

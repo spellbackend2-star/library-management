@@ -71,6 +71,13 @@ class StoreMemberRequest extends FormRequest
                 'nullable',
                 'in:active,suspended,expired,cancelled',
             ],
+
+            'with_invoice' => [
+                'nullable',
+                'boolean',
+            ],
         ];
+
+        return $rules;
     }
 }

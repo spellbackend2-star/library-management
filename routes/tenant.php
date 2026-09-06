@@ -25,6 +25,7 @@ use App\Http\Controllers\v1\Tenant\RoomController;
 use App\Http\Controllers\v1\Tenant\SeatCategoryController;
 use App\Http\Controllers\v1\Tenant\SeatController;
 use App\Http\Controllers\v1\Tenant\StaffController;
+use App\Http\Controllers\v1\Tenant\InvoiceController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
@@ -205,6 +206,21 @@ Route::middleware([
             'payments',
             PaymentController::class
         )->only(['index', 'store', 'show', 'destroy']);
+
+        Route::apiResource(
+            'invoices',
+            InvoiceController::class
+        )->only(['index', 'show', 'store']);
+
+        Route::post(
+            'invoices/{invoice}/payments',
+            [InvoiceController::class, 'addPayment']
+        );
+
+        Route::get(
+            'members/{member}/invoice',
+            [InvoiceController::class, 'byMember']
+        );
 
         Route::apiResource(
             'floors',

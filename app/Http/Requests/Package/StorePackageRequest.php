@@ -63,8 +63,9 @@ class StorePackageRequest extends FormRequest
 
             'max_seat_hours_per_day' => [
                 'nullable',
+                'required_if:seat_access_allowed,true',
                 'numeric',
-                'min:0',
+                'gt:0',
                 'max:24',
             ],
 
@@ -75,14 +76,17 @@ class StorePackageRequest extends FormRequest
 
             'locker_type' => [
                 'nullable',
+                'required_if:locker_allowed,true',
                 'string',
                 'max:50',
+                'in:small,medium,big',
             ],
 
             'max_locker_hours_per_day' => [
                 'nullable',
+                'required_if:locker_allowed,true',
                 'numeric',
-                'min:0',
+                'gt:0',
                 'max:24',
             ],
 
@@ -91,5 +95,39 @@ class StorePackageRequest extends FormRequest
                 'boolean',
             ],
         ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $seatAccessAllowed = $this->boolean('seat_access_allowed');
+            $seatHours = $this->input('max_seat_hours_per_day');
+
+            if (! $seatAccessAllowed && $seatHours !== null) {
+                $validator->errors()->add(
+                    'max_seat_hours_per_day',
+                    'The max seat hours per day must be null when seat access is disabled.'
+                );
+            }
+
+            $lockerAllowed = $this->boolean('locker_allowed');
+            $lockerType = $this->input('locker_type');
+            $lockerHours = $this->input('max_locker_hours_per_day');
+
+            if (! $lockerAllowed) {
+                if ($lockerType !== null) {
+                    $validator->errors()->add(
+                        'locker_type',
+                        'The locker type must be null when locker access is disabled.'
+                    );
+                }
+                if ($lockerHours !== null) {
+                    $validator->errors()->add(
+                        'max_locker_hours_per_day',
+                        'The max locker hours per day must be null when locker access is disabled.'
+                    );
+                }
+            }
+        });
     }
 }

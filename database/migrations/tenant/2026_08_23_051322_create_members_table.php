@@ -49,7 +49,7 @@ return new class extends Migration
             $table->index('membership_expiry');
         });
 
-        // Status CHECK constraint
+        //Status CHECK constraint
         DB::statement("
             ALTER TABLE members
             ADD CONSTRAINT members_status_check

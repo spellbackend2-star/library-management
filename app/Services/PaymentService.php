@@ -3,11 +3,12 @@
 namespace App\Services;
 
 use App\Models\Booking;
+use App\Models\Invoice;
 use App\Repositories\Interface\PaymentRepositoryInterface;
-use App\Services\Payments\KhaltiService;
 use App\Services\Payments\EsewaService;
-use Illuminate\Support\Str;
+use App\Services\Payments\KhaltiService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PaymentService
 {
@@ -50,11 +51,9 @@ class PaymentService
 
                 'amount' => $booking->total_amount,
 
-                'currency' =>
-                    $data['currency'] ?? 'NPR',
+                'currency' => $data['currency'] ?? 'NPR',
 
-                'payment_method' =>
-                    strtoupper($data['payment_method']),
+                'payment_method' => strtoupper($data['payment_method']),
 
                 'status' => 'PENDING',
 
@@ -81,16 +80,13 @@ class PaymentService
              */
             return match ($payment->payment_method) {
 
-                'KHALTI' =>
-                    $this->handleKhalti($payment),
+                'KHALTI' => $this->handleKhalti($payment),
 
-                'ESEWA' =>
-                    $this->handleEsewa($payment),
+                'ESEWA' => $this->handleEsewa($payment),
 
-                default =>
-                    throw new \Exception(
-                        'Unsupported payment method.'
-                    ),
+                default => throw new \Exception(
+                    'Unsupported payment method.'
+                ),
             };
         });
     }
@@ -102,23 +98,41 @@ class PaymentService
         Invoice $invoice,
         array $data
     ): Payment {
-        return DB::transaction(function () use ($invoice, $data) {
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+        $extraDiscount = round((float) ($data['extra_discount'] ?? 0), 2);
+
+        if ($amount <= 0 && $extraDiscount <= 0) {
+            throw new \Exception('Payment amount or extra discount must be greater than 0.');
+        }
+
+        $remaining = round((float) $invoice->total_amount - (float) $invoice->paid_amount - (float) $invoice->coupon_discount, 2);
+
+        if ($extraDiscount > $remaining) {
+            throw new \Exception("Extra discount ({$extraDiscount}) exceeds remaining balance ({$remaining}).");
+        }
+
+        if ($extraDiscount > 0) {
+            $amount = $remaining - $extraDiscount;
+        }
+
+        if ($amount > $remaining) {
+            throw new \Exception("Payment amount ({$amount}) exceeds remaining balance ({$remaining}).");
+        }
+
+        return DB::transaction(function () use ($invoice, $data, $amount, $extraDiscount) {
             $payment = $this->paymentRepo->create([
                 'invoice_id' => $invoice->id,
                 'member_id' => $invoice->member_id,
+                'booking_id' => null,
+                'amount' => $amount,
+                'extra_discount' => $extraDiscount,
+                'currency' => $data['currency'] ?? 'NPR',
 
-                'amount' => $data['amount'],
-
-                'currency' =>
-                    $data['currency'] ?? 'NPR',
-
-                'payment_method' =>
-                    strtoupper($data['payment_method']),
+                'payment_method' => strtoupper($data['payment_method']),
 
                 'status' => 'SUCCESS',
 
-                'transaction_id' =>
-                    $data['transaction_id'] ?? null,
+                'transaction_id' => $data['transaction_id'] ?? null,
 
                 'payment_date' => $data['paid_at'] ?? now(),
 
@@ -132,11 +146,11 @@ class PaymentService
 
             $newStatus = 'partially_paid';
 
-            if ($newPaidAmount >= (float) $invoice->total_amount) {
+            if ($newPaidAmount >= (float) $invoice->total_amount - (float) $invoice->coupon_discount) {
                 $newStatus = 'paid';
             }
 
-            $invoiceService = app(\App\Services\InvoiceService::class);
+            $invoiceService = app(InvoiceService::class);
             $updatedInvoice = $invoiceService->findById($invoice->id);
 
             if ($updatedInvoice) {
@@ -163,11 +177,9 @@ class PaymentService
             $this->esewaService->initiate($payment);
 
         $payment->update([
-            'payment_url' =>
-                $response['payment_url'] ?? null,
+            'payment_url' => $response['payment_url'] ?? null,
 
-            'gateway_response' =>
-                $response,
+            'gateway_response' => $response,
         ]);
 
         return [
@@ -185,17 +197,13 @@ class PaymentService
             $this->khaltiService->initiate($payment);
 
         $payment->update([
-            'transaction_id' =>
-                $response['pidx'] ?? $payment->transaction_id,
+            'transaction_id' => $response['pidx'] ?? $payment->transaction_id,
 
-            'gateway_reference' =>
-                $response['pidx'] ?? null,
+            'gateway_reference' => $response['pidx'] ?? null,
 
-            'payment_url' =>
-                $response['payment_url'] ?? null,
+            'payment_url' => $response['payment_url'] ?? null,
 
-            'gateway_response' =>
-                $response,
+            'gateway_response' => $response,
         ]);
 
         return [
@@ -216,7 +224,7 @@ class PaymentService
 
         $booking = $payment->booking;
 
-        if (!$booking) {
+        if (! $booking) {
             throw new \Exception(
                 'Booking not found for payment.'
             );
@@ -238,7 +246,7 @@ class PaymentService
     {
         do {
             $reference =
-                'PAY-' .
+                'PAY-'.
                 strtoupper(Str::random(8));
 
         } while (

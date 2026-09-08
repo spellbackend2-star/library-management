@@ -16,7 +16,7 @@ class UpdateBookingRequest extends FormRequest
         return [
             'status' => [
                 'nullable',
-                'in:pending,confirmed,active,completed,cancelled',
+                'in:PENDING,CONFIRMED,ACTIVE,COMPLETED,CANCELLED,EXPIRED',
             ],
 
             'amount' => [

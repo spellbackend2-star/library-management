@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'invoice_id',
     'member_id',
     'amount',
+    'extra_discount',
     'currency',
     'payment_method',
     'transaction_id',
@@ -29,6 +30,7 @@ class Payment extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'extra_discount' => 'decimal:2',
             'gateway_response' => 'array',
             'payment_date' => 'datetime',
             'paid_at' => 'datetime',

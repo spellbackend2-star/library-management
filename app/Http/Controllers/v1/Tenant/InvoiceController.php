@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\v1\Tenant;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\InvoiceResource;
-use App\Repositories\Interface\InvoiceInterface;
-use App\Services\InvoiceService;
-use App\Http\Requests\Invoice\StoreInvoiceRequest;
 use App\Http\Requests\Invoice\AddPaymentRequest;
+use App\Http\Requests\Invoice\StoreInvoiceRequest;
+use App\Http\Resources\InvoiceResource;
+use App\Http\Resources\PaymentResource;
+use App\Services\InvoiceService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -28,7 +28,7 @@ class InvoiceController extends Controller
     {
         $invoice = $this->invoiceService->findById($id);
 
-        if (!$invoice) {
+        if (! $invoice) {
             return response()->json(['message' => 'Invoice not found.'], 404);
         }
 
@@ -58,13 +58,14 @@ class InvoiceController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Payment already completed for this invoice.',
-                'payment' => new \App\Http\Resources\PaymentResource($payment),
+                'payment' => new PaymentResource($payment),
                 'invoice' => [
                     'id' => $invoice->id,
                     'invoice_number' => $invoice->invoice_number,
                     'total_amount' => $invoice->total_amount,
+                    'coupon_discount' => $invoice->coupon_discount,
                     'paid_amount' => $invoice->paid_amount,
-                    'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount, 2, '.', ''),
+                    'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount - (float) $invoice->coupon_discount, 2, '.', ''),
                     'status' => $invoice->status,
                 ],
             ], 200);
@@ -76,13 +77,14 @@ class InvoiceController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Payment successful.',
-            'payment' => new \App\Http\Resources\PaymentResource($payment),
+            'payment' => new PaymentResource($payment),
             'invoice' => [
                 'id' => $invoice->id,
                 'invoice_number' => $invoice->invoice_number,
                 'total_amount' => $invoice->total_amount,
+                'coupon_discount' => $invoice->coupon_discount,
                 'paid_amount' => $invoice->paid_amount,
-                'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount, 2, '.', ''),
+                'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount - (float) $invoice->coupon_discount, 2, '.', ''),
                 'status' => $invoice->status,
             ],
         ], 201);
@@ -92,7 +94,7 @@ class InvoiceController extends Controller
     {
         $invoice = $this->invoiceService->findByMember($memberId);
 
-        if (!$invoice) {
+        if (! $invoice) {
             return response()->json(['message' => 'No unpaid invoice found for member.'], 404);
         }
 

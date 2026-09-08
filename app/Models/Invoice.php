@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'member_id',
     'invoice_number',
     'total_amount',
+    'coupon_discount',
     'paid_amount',
     'remaining_amount',
     'status',
@@ -23,6 +24,7 @@ class Invoice extends Model
     {
         return [
             'total_amount' => 'decimal:2',
+            'coupon_discount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'remaining_amount' => 'decimal:2',
             'due_date' => 'date',

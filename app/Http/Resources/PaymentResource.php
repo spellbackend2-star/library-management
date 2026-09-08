@@ -13,6 +13,7 @@ class PaymentResource extends JsonResource
             'id' => $this->id,
             'invoice_id' => $this->invoice_id,
             'amount' => $this->amount,
+            'extra_discount' => $this->extra_discount,
             'payment_method' => $this->payment_method,
             'status' => $this->status,
             'paid_at' => $this->paid_at?->format('Y-m-d H:i:s'),

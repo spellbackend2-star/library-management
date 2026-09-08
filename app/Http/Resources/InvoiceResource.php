@@ -14,6 +14,7 @@ class InvoiceResource extends JsonResource
             'member_id' => $this->member_id,
             'invoice_number' => $this->invoice_number,
             'total_amount' => $this->total_amount,
+            'coupon_discount' => $this->coupon_discount,
             'paid_amount' => $this->paid_amount,
             'remaining_amount' => $this->remaining_amount,
             'status' => $this->status,

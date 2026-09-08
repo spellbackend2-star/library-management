@@ -169,13 +169,13 @@ class BookingService
         }
 
         $parentBooking = DB::transaction(function () use ($data, $package, $bookedById, $finalAmount, $couponId, $discountAmount, $convenienceFee, $invoiceId, $paymentId) {
-            return $this->bookingRepository->create([
+            $booking = $this->bookingRepository->create([
                 'member_id' => $data['member_id'],
                 'package_id' => $package->id,
                 'invoice_id' => $invoiceId,
                 'payment_id' => $paymentId,
                 'booking_type' => 'package',
-                'status' => 'pending',
+                'status' => 'PENDING',
                 'amount' => $finalAmount,
                 'subtotal' => $finalAmount,
                 'discount_amount' => $discountAmount,
@@ -185,7 +185,25 @@ class BookingService
                 'notes' => $data['notes'] ?? null,
                 'booked_by_user_id' => $bookedById,
             ]);
+
+            if ($paymentId) {
+                \App\Models\Payment::where('id', $paymentId)->update(['booking_id' => $booking->id]);
+            }
+
+            return $booking;
         });
+
+        if ($paymentId) {
+            $payment = \App\Models\Payment::find($paymentId);
+
+            if ($payment && $payment->status === 'SUCCESS') {
+                $parentBooking->update([
+                    'status' => 'CONFIRMED',
+                    'payment_status' => 'PAID',
+                    'confirmed_at' => now(),
+                ]);
+            }
+        }
 
         if ($coupon) {
             $coupon->increment('used_count');

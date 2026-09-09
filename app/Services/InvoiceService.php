@@ -8,6 +8,8 @@ use App\Models\Member;
 use App\Models\Payment;
 use App\Repositories\Interface\InvoiceInterface;
 use App\Repositories\Interface\PaymentRepositoryInterface;
+use App\Services\Payments\EsewaService;
+use App\Services\Payments\KhaltiService;
 use Illuminate\Support\Facades\DB;
 
 class InvoiceService
@@ -139,31 +141,72 @@ class InvoiceService
             throw new \Exception('Invoice is not open for payment.');
         }
 
+        // Refresh invoice to get latest paid_amount
+        $invoice = $this->invoiceRepository->find($invoice->id);
+
         $amount = round((float) ($paymentData['amount'] ?? 0), 2);
+        $extraDiscount = round((float) ($paymentData['extra_discount'] ?? 0), 2);
+        $paymentMethod = strtoupper($paymentData['payment_method'] ?? 'CASH');
+
+        // Maximum payable = total - coupon discount
+        $maxPayable = round((float) $invoice->total_amount - (float) $invoice->coupon_discount, 2);
+        // Already paid (only SUCCESS payments)
+        $paidAmount = round((float) $invoice->paid_amount, 2);
+        // Remaining balance
+        $remaining = max(0, $maxPayable - $paidAmount);
+
+        if ($extraDiscount > $remaining) {
+            throw new \Exception("Extra discount ({$extraDiscount}) exceeds remaining balance ({$remaining}). Max payable: {$maxPayable}, Already paid: {$paidAmount}");
+        }
+
+        if ($extraDiscount > 0) {
+            $amount = $remaining - $extraDiscount;
+        }
 
         if ($amount <= 0) {
             throw new \Exception('Payment amount must be greater than 0.');
         }
 
-        $remaining = round((float) $invoice->total_amount - (float) $invoice->paid_amount - (float) $invoice->coupon_discount, 2);
-
         if ($amount > $remaining) {
-            throw new \Exception("Payment amount ({$amount}) exceeds remaining balance ({$remaining}).");
+            throw new \Exception("Payment amount ({$amount}) exceeds remaining balance ({$remaining}). Max payable: {$maxPayable}, Already paid: {$paidAmount}");
         }
 
-        return DB::transaction(function () use ($invoice, $paymentData, $amount) {
+        $isGateway = in_array($paymentMethod, ['KHALTI', 'ESEWA'], true);
+
+        return DB::transaction(function () use ($invoice, $paymentData, $amount, $extraDiscount, $paymentMethod, $isGateway) {
             $payment = $this->paymentRepository->create([
                 'invoice_id' => $invoice->id,
                 'member_id' => $invoice->member_id,
                 'booking_id' => null,
                 'amount' => $amount,
-                'extra_discount' => $paymentData['extra_discount'] ?? 0,
+                'extra_discount' => $extraDiscount,
                 'currency' => $paymentData['currency'] ?? 'NPR',
-                'payment_method' => strtoupper($paymentData['payment_method']),
-                'status' => 'SUCCESS',
+                'payment_method' => $paymentMethod,
+                'status' => $isGateway ? 'PENDING' : 'SUCCESS',
                 'payment_date' => now(),
-                'paid_at' => now(),
+                'paid_at' => $isGateway ? null : now(),
             ]);
+
+            if ($isGateway) {
+                if ($paymentMethod === 'KHALTI') {
+                    $khaltiService = app(KhaltiService::class);
+                    $result = $khaltiService->initiate($payment);
+                    $payment->update([
+                        'payment_url' => $result['payment_url'] ?? null,
+                        'gateway_reference' => $result['pidx'] ?? null,
+                        'gateway_response' => $result,
+                    ]);
+                } elseif ($paymentMethod === 'ESEWA') {
+                    $esewaService = app(EsewaService::class);
+                    $result = $esewaService->initiate($payment);
+                    $payment->update([
+                        'payment_url' => $result['payment_url'] ?? null,
+                        'gateway_response' => $result,
+                    ]);
+                }
+
+                return ['gateway' => true, 'payment' => $payment->fresh()];
+            }
 
             $newPaidAmount = round((float) $invoice->paid_amount + $amount, 2);
             $newRemainingAmount = round((float) $invoice->total_amount - $newPaidAmount - (float) $invoice->coupon_discount, 2);
@@ -188,7 +231,7 @@ class InvoiceService
         });
     }
 
-    protected function activateMemberPackage(Invoice $invoice): void
+    public function activateMemberPackage(Invoice $invoice): void
     {
         $member = $invoice->member;
 

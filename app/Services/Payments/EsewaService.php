@@ -8,20 +8,37 @@ use Illuminate\Support\Facades\Http;
 class EsewaService
 {
     protected string $baseUrl;
+
     protected string $productCode;
+
     protected string $secret;
 
     public function __construct()
     {
         $this->baseUrl = config('services.esewa.base_url');
 
-        $this->productCode = config('services.esewa.product_code');
+        $this->productCode = config('services.esewa.merchant_code');
 
-        $this->secret = config('services.esewa.secret');
+        $this->secret = config('services.esewa.secret_key');
     }
 
     public function initiate(Payment $payment): array
     {
+        $invoice = $payment->invoice;
+
+        if (! $invoice) {
+            throw new \Exception('Invoice not found for this payment.');
+        }
+
+        // Verify remaining balance before initiating
+        $maxPayable = round((float) $invoice->total_amount - (float) $invoice->coupon_discount, 2);
+        $paidAmount = round((float) $invoice->paid_amount, 2);
+        $remaining = max(0, $maxPayable - $paidAmount);
+
+        if ($payment->amount > $remaining) {
+            throw new \Exception("Payment amount ({$payment->amount}) exceeds remaining balance ({$remaining}). Max payable: {$maxPayable}, Already paid: {$paidAmount}");
+        }
+
         $totalAmount = number_format(
             (float) $payment->amount,
             2,
@@ -50,8 +67,7 @@ class EsewaService
                 'success_url' => route('payments.esewa.success'),
                 'failure_url' => route('payments.esewa.failure'),
 
-                'signed_field_names' =>
-                    'total_amount,transaction_uuid,product_code',
+                'signed_field_names' => 'total_amount,transaction_uuid,product_code',
 
                 'signature' => $signature,
             ],
@@ -63,8 +79,8 @@ class EsewaService
         string $transactionUuid
     ): string {
         $message =
-            "total_amount={$totalAmount}," .
-            "transaction_uuid={$transactionUuid}," .
+            "total_amount={$totalAmount},".
+            "transaction_uuid={$transactionUuid},".
             "product_code={$this->productCode}";
 
         return base64_encode(
@@ -81,7 +97,7 @@ class EsewaService
     {
         $encoded = $data['data'] ?? null;
 
-        if (!$encoded) {
+        if (! $encoded) {
             throw new \Exception(
                 'Missing eSewa data payload.'
             );
@@ -92,7 +108,7 @@ class EsewaService
             true
         );
 
-        if (!$decoded) {
+        if (! $decoded) {
             throw new \Exception(
                 'Invalid eSewa response.'
             );
@@ -101,7 +117,7 @@ class EsewaService
         $transactionUuid =
             $decoded['transaction_uuid'] ?? null;
 
-        if (!$transactionUuid) {
+        if (! $transactionUuid) {
             throw new \Exception(
                 'Transaction UUID missing.'
             );
@@ -112,7 +128,7 @@ class EsewaService
             $transactionUuid
         )->first();
 
-        if (!$payment) {
+        if (! $payment) {
             throw new \Exception(
                 'Payment not found.'
             );
@@ -132,8 +148,7 @@ class EsewaService
         if ($payment->status === 'SUCCESS') {
             return [
                 'status' => 'Completed',
-                'transaction_id' =>
-                    $payment->transaction_id,
+                'transaction_id' => $payment->transaction_id,
             ];
         }
 
@@ -142,10 +157,8 @@ class EsewaService
             "{$this->baseUrl}/transaction/status/",
             [
                 'product_code' => $this->productCode,
-                'total_amount' =>
-                    $decoded['total_amount'],
-                'transaction_uuid' =>
-                    $transactionUuid,
+                'total_amount' => $decoded['total_amount'],
+                'transaction_uuid' => $transactionUuid,
             ]
         );
 
@@ -173,8 +186,7 @@ class EsewaService
         $payment->update([
             'status' => 'SUCCESS',
             'paid_at' => now(),
-            'gateway_reference' =>
-                $verify['transaction_code'] ?? null,
+            'gateway_reference' => $verify['transaction_code'] ?? null,
         ]);
 
         // Confirm booking
@@ -185,8 +197,7 @@ class EsewaService
 
         return [
             'status' => 'Completed',
-            'transaction_id' =>
-                $payment->transaction_id,
+            'transaction_id' => $payment->transaction_id,
         ];
     }
 }

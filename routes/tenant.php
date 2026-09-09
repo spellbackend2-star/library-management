@@ -15,6 +15,7 @@ use App\Http\Controllers\v1\Tenant\CategoryController;
 use App\Http\Controllers\v1\Tenant\CopyController;
 use App\Http\Controllers\v1\Tenant\CouponController;
 use App\Http\Controllers\v1\Tenant\FloorController;
+use App\Http\Controllers\v1\Tenant\InvoiceController;
 use App\Http\Controllers\v1\Tenant\LockerAssigmentsController;
 use App\Http\Controllers\v1\Tenant\LockerController;
 use App\Http\Controllers\v1\Tenant\MemberController;
@@ -25,7 +26,6 @@ use App\Http\Controllers\v1\Tenant\RoomController;
 use App\Http\Controllers\v1\Tenant\SeatCategoryController;
 use App\Http\Controllers\v1\Tenant\SeatController;
 use App\Http\Controllers\v1\Tenant\StaffController;
-use App\Http\Controllers\v1\Tenant\InvoiceController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 use Stancl\Tenancy\Middleware\PreventAccessFromCentralDomains;
@@ -42,21 +42,39 @@ Route::middleware([
     PreventAccessFromCentralDomains::class,
 ])->group(function () {
 
-    // Tenant login
-    Route::post('/login', [
-        AuthController::class,
-        'login'
-    ]);
+    /*
+    |--------------------------------------------------------------------------
+    | Public Routes
+    |--------------------------------------------------------------------------
+    */
 
-    // PROTECTED
+    // Tenant login
+    Route::post('/login', [AuthController::class, 'login']);
+
+    // Khalti callback / verification
+    Route::get(
+        '/payments/khalti/verify/{paymentId}',
+        [PaymentController::class, 'verifyKhalti']
+    )->name('payments.khalti.verify');
+
+    // eSewa callback / verification
+    Route::get(
+        '/payments/esewa/verify/{paymentId}',
+        [PaymentController::class, 'verifyEsewa']
+    )->name('payments.esewa.verify');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Protected Routes
+    |--------------------------------------------------------------------------
+    */
+
     Route::middleware('auth:api')->group(function () {
 
-        Route::apiResource(
-            'members',
-            MemberController::class
-        );
+        // Members
+        Route::apiResource('members', MemberController::class);
 
-        // Setup tenant owner
+        // Staff owner setup
         Route::patch(
             'staff/setup-owner',
             [StaffController::class, 'setupOwner']
@@ -70,48 +88,38 @@ Route::middleware([
             ->middlewareFor('update', 'can:staff.update')
             ->middlewareFor('destroy', 'can:staff.delete');
 
-        // Activate
+        // Activate staff
         Route::patch(
             'staff/{staff}/activate',
             [StaffController::class, 'activate']
         )->middleware('can:staff.update');
 
-        // Deactivate
+        // Deactivate staff
         Route::patch(
             'staff/{staff}/deactivate',
             [StaffController::class, 'deactivate']
         )->middleware('can:staff.update');
 
-        // Assign role
+        // Assign staff role
         Route::patch(
             'staff/{staff}/role',
             [StaffController::class, 'assignRole']
         )->middleware('can:staff.assign-role');
 
-        Route::apiResource(
-            'publishers',
-            PublisherController::class
-        );
+        // Publishers
+        Route::apiResource('publishers', PublisherController::class);
 
-        Route::apiResource(
-            'packages',
-            PackageController::class
-        );
+        // Packages
+        Route::apiResource('packages', PackageController::class);
 
-        Route::apiResource(
-            'authors',
-            AuthorController::class
-        );
+        // Authors
+        Route::apiResource('authors', AuthorController::class);
 
-        Route::apiResource(
-            'categories',
-            CategoryController::class
-        );
+        // Categories
+        Route::apiResource('categories', CategoryController::class);
 
-        Route::apiResource(
-            'books',
-            BookController::class
-        );
+        // Books
+        Route::apiResource('books', BookController::class);
 
         // Add copies to an existing book
         Route::post(
@@ -119,145 +127,169 @@ Route::middleware([
             [BookController::class, 'addCopies']
         );
 
-        // List all copies of a book (across all editions)
+        // List all copies of a book
         Route::get(
             'books/{book}/copies',
             [BookController::class, 'listCopies']
         );
 
-        // Show a single copy that belongs to the book
+        // Show a single copy
         Route::get(
             'books/{book}/copies/{copy}',
             [BookController::class, 'showCopy']
         );
 
-        // Update a single copy that belongs to the book
+        // Update a single copy
         Route::put(
             'books/{book}/copies/{copy}',
             [BookController::class, 'updateCopy']
         );
+
         Route::patch(
             'books/{book}/copies/{copy}',
             [BookController::class, 'updateCopy']
         );
 
-        // Delete a single copy that belongs to the book
+        // Delete a single copy
         Route::delete(
             'books/{book}/copies/{copy}',
             [BookController::class, 'deleteCopy']
         );
 
+        // Book editions
         Route::apiResource(
             'book-editions',
             BookEditionController::class
         );
 
+        // Book authors
         Route::apiResource(
             'book-authors',
             BookAuthorController::class
         );
 
+        // Book categories
         Route::apiResource(
             'book-categories',
             BookCategoryController::class
         );
 
-        Route::apiResource(
-            'copies',
-            CopyController::class
-        );
+        // Copies
+        Route::apiResource('copies', CopyController::class);
 
-        Route::apiResource(
-            'borrows',
-            BorrowController::class
-        );
+        // Borrows
+        Route::apiResource('borrows', BorrowController::class);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Bookings
+        |--------------------------------------------------------------------------
+        */
 
         Route::apiResource(
             'bookings',
             BookingController::class
         );
 
-        // Per-booking child records (saved together with the booking)
+        // Booking seat records
         Route::get(
             'bookings/{booking}/seat-bookings',
             [BookingDetailsController::class, 'seatBookings']
         );
+
+        // Booking borrow records
         Route::get(
             'bookings/{booking}/borrows',
             [BookingDetailsController::class, 'borrows']
         );
+
+        // Booking locker assignments
         Route::get(
             'bookings/{booking}/locker-assignments',
             [BookingDetailsController::class, 'lockerAssignments']
         );
 
-        // Mark a single seat-booking as completed (triggers overdue fine if late)
+        // Complete seat booking
         Route::patch(
             'booking-seats/{seat}/complete',
             [BookingDetailsController::class, 'completeSeatBooking']
         );
 
-        Route::apiResource(
-            'coupons',
-            CouponController::class
-        );
-
-        Route::apiResource(
-            'payments',
-            PaymentController::class
-        )->only(['index', 'store', 'show', 'destroy']);
-
-        Route::apiResource(
-            'invoices',
-            InvoiceController::class
-        )->only(['index', 'show', 'store']);
-
-        Route::post(
-            'invoices/{invoice}/payments',
-            [InvoiceController::class, 'addPayment']
-        );
-
-        Route::get(
-            'members/{member}/invoice',
-            [InvoiceController::class, 'byMember']
-        );
-
-        Route::apiResource(
-            'floors',
-            FloorController::class
-        );
-
-        Route::apiResource(
-            'rooms',
-            RoomController::class
-        );
-
-        Route::apiResource(
-            'seat-categories',
-            SeatCategoryController::class
-        );
-
-        Route::apiResource(
-            'seats',
-            SeatController::class
-        );
-
-        // All seat-bookings saved inside bookings (data is in the
-        // `booking_seats` table; the legacy `seat_bookings` table is
-        // not used and was never created by tenant migrations).
+        // All seat bookings
         Route::get(
             'booking-seats',
             [BookingDetailsController::class, 'allSeatBookings']
         );
 
+        // Coupons
+        Route::apiResource('coupons', CouponController::class);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Payments & Invoices
+        |--------------------------------------------------------------------------
+        */
+
         Route::apiResource(
-            'lockers',
-            LockerController::class
+            'payments',
+            PaymentController::class
+        )->only([
+            'index',
+            'store',
+            'show',
+            'destroy',
+        ]);
+
+        Route::apiResource(
+            'invoices',
+            InvoiceController::class
+        )->only([
+            'index',
+            'show',
+            'store',
+        ]);
+
+        // Add payment to invoice
+        Route::post(
+            'invoices/{invoice}/payments',
+            [InvoiceController::class, 'addPayment']
         );
 
+        // Get member invoice
+        Route::get(
+            'members/{member}/invoice',
+            [InvoiceController::class, 'byMember']
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Facilities
+        |--------------------------------------------------------------------------
+        */
+
+        // Floors
+        Route::apiResource('floors', FloorController::class);
+
+        // Rooms
+        Route::apiResource('rooms', RoomController::class);
+
+        // Seat categories
+        Route::apiResource(
+            'seat-categories',
+            SeatCategoryController::class
+        );
+
+        // Seats
+        Route::apiResource('seats', SeatController::class);
+
+        // Lockers
+        Route::apiResource('lockers', LockerController::class);
+
+        // Locker assignments
         Route::apiResource(
             'locker-assignments',
             LockerAssigmentsController::class
         );
+
     });
 });

@@ -39,9 +39,9 @@ return [
         'secret_key' => env('KHALTI_SECRET_KEY'),
     ],
     'esewa' => [
+        'merchant_code' => env('ESEWA_MERCHANT_CODE'),
+        'secret_key' => env('ESEWA_SECRET_KEY'),
         'base_url' => env('ESEWA_BASE_URL'),
-        'product_code' => env('ESEWA_PRODUCT_CODE'),
-        'secret' => env('ESEWA_SECRET'),
     ],
 
 ];

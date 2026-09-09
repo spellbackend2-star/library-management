@@ -33,7 +33,6 @@ class AddPaymentRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:255',
-                'required_if:payment_method,ESEWA,KHALTI',
             ],
             'gateway_response' => [
                 'nullable',

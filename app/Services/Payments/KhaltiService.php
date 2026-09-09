@@ -8,15 +8,13 @@ use Illuminate\Support\Facades\Http;
 class KhaltiService
 {
     protected string $baseUrl;
+
     protected string $secretKey;
 
     public function __construct()
     {
         $this->baseUrl = config('services.khalti.base_url');
-
-        $this->secretKey = config(
-            'services.khalti.secret_key'
-        );
+        $this->secretKey = config('services.khalti.secret_key');
     }
 
     /**
@@ -24,38 +22,54 @@ class KhaltiService
      */
     public function initiate(Payment $payment): array
     {
+        $invoice = $payment->invoice;
+
+        if (! $invoice) {
+            throw new \Exception('Invoice not found for this payment.');
+        }
+
+        if (! $invoice->invoice_number) {
+            throw new \Exception('Invoice number not found.');
+        }
+
+        // Verify remaining balance before initiating
+        $maxPayable = round((float) $invoice->total_amount - (float) $invoice->coupon_discount, 2);
+        $paidAmount = round((float) $invoice->paid_amount, 2);
+        $remaining = max(0, $maxPayable - $paidAmount);
+
+        if ($payment->amount > $remaining) {
+            throw new \Exception("Payment amount ({$payment->amount}) exceeds remaining balance ({$remaining}). Max payable: {$maxPayable}, Already paid: {$paidAmount}");
+        }
+
         $response = Http::withHeaders([
-            'Authorization' => 'Key ' . $this->secretKey,
+            'Authorization' => 'Key '.$this->secretKey,
             'Content-Type' => 'application/json',
         ])->post(
-            rtrim($this->baseUrl, '/') . '/epayment/initiate/',
+            rtrim($this->baseUrl, '/').'/epayment/initiate/',
             [
                 'return_url' => route(
                     'payments.khalti.verify',
                     [
-                        'payment' => $payment->id,
+                        'paymentId' => $payment->id,
                     ]
                 ),
 
                 'website_url' => config('app.url'),
 
-                // Khalti amount is in paisa
                 'amount' => (int) round(
                     $payment->amount * 100
                 ),
 
-                'purchase_order_id' =>
-                    $payment->booking->booking_reference,
+                'purchase_order_id' => $invoice->invoice_number,
 
-                'purchase_order_name' =>
-                    'Booking #' . $payment->booking_id,
+                'purchase_order_name' => 'Invoice #'.$invoice->invoice_number,
             ]
         );
 
         if ($response->failed()) {
             throw new \Exception(
-                'Khalti initiation failed: ' .
-                $response->body()
+                'Khalti initiation failed: '.
+                    $response->body()
             );
         }
 
@@ -77,95 +91,34 @@ class KhaltiService
     /**
      * Verify Khalti payment.
      */
-    public function verify(Payment $payment): array
+    public function verify(string $pidx): array
     {
-        // Already successful
-        if ($payment->status === 'SUCCESS') {
-            return [
-                'status' => 'Completed',
-                'transaction_id' =>
-                    $payment->transaction_id,
-                'payment' => $payment,
-            ];
-        }
-
-        if (!$payment->transaction_id) {
-            throw new \Exception(
-                'Khalti pidx not found.'
-            );
-        }
-
         $response = Http::withHeaders([
-            'Authorization' =>
-                'Key ' . $this->secretKey,
+            'Authorization' => 'Key '.$this->secretKey,
             'Content-Type' => 'application/json',
         ])->post(
-            rtrim($this->baseUrl, '/') .
-            '/epayment/lookup/',
+            rtrim($this->baseUrl, '/').'/epayment/lookup/',
             [
-                'pidx' => $payment->transaction_id,
+                'pidx' => $pidx,
             ]
         );
 
         if ($response->failed()) {
             throw new \Exception(
-                'Khalti verification failed: ' .
-                $response->body()
+                'Khalti verification failed: '.
+                    $response->body()
             );
         }
 
         $result = $response->json();
 
-        $status = $result['status'] ?? 'Unknown';
-
-        /*
-         * Payment completed
-         */
-        if ($status === 'Completed') {
-
-            $payment->update([
-                'status' => 'SUCCESS',
-                'paid_at' => now(),
-                'gateway_response' => $result,
-            ]);
-
-            $payment->booking?->update([
-                'status' => 'CONFIRMED',
-                'payment_status' => 'PAID',
-                'confirmed_at' => now(),
-            ]);
-        }
-
-        /*
-         * Payment still pending
-         */
-        elseif ($status === 'Pending') {
-
-            $payment->update([
-                'status' => 'PENDING',
-                'gateway_response' => $result,
-            ]);
-        }
-
-        /*
-         * Payment failed/canceled/expired
-         */
-        else {
-
-            $payment->update([
-                'status' => 'FAILED',
-                'gateway_response' => $result,
-            ]);
-        }
-
         return [
-            'status' => $status,
+            'status' => $result['status'] ?? 'Unknown',
 
-            'transaction_id' =>
-                $result['transaction_id']
-                ?? $payment->transaction_id,
+            'transaction_id' => $result['transaction_id']
+                    ?? $pidx,
 
-            'payment' => $payment->fresh(),
+            'gateway_response' => $result,
         ];
     }
 }

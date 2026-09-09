@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Booking;
 use App\Models\Invoice;
+use App\Models\Payment;
 use App\Repositories\Interface\PaymentRepositoryInterface;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
@@ -17,22 +18,6 @@ class PaymentService
         protected KhaltiService $khaltiService,
         protected EsewaService $esewaService,
     ) {}
-
-    /**
-     * Get all payments.
-     */
-    public function getAll(array $filters = [])
-    {
-        return $this->paymentRepo->getAll($filters);
-    }
-
-    /**
-     * Find payment.
-     */
-    public function findById(int $id)
-    {
-        return $this->paymentRepo->findById($id);
-    }
 
     /**
      * Create payment from booking.
@@ -82,7 +67,7 @@ class PaymentService
 
                 'KHALTI' => $this->handleKhalti($payment),
 
-                'ESEWA' => $this->handleEsewa($payment),
+                 'ESEWA' => $this->handleEsewa($payment),
 
                 default => throw new \Exception(
                     'Unsupported payment method.'
@@ -91,24 +76,33 @@ class PaymentService
         });
     }
 
-    /**
-     * Create payment against an invoice.
-     */
     public function createFromInvoice(
         Invoice $invoice,
         array $data
     ): Payment {
         $amount = round((float) ($data['amount'] ?? 0), 2);
-        $extraDiscount = round((float) ($data['extra_discount'] ?? 0), 2);
+        $extraDiscount = round(
+            (float) ($data['extra_discount'] ?? 0),
+            2
+        );
 
         if ($amount <= 0 && $extraDiscount <= 0) {
-            throw new \Exception('Payment amount or extra discount must be greater than 0.');
+            throw new \Exception(
+                'Payment amount or extra discount must be greater than 0.'
+            );
         }
 
-        $remaining = round((float) $invoice->total_amount - (float) $invoice->paid_amount - (float) $invoice->coupon_discount, 2);
+        $remaining = round(
+            (float) $invoice->total_amount
+                - (float) $invoice->paid_amount
+                - (float) $invoice->coupon_discount,
+            2
+        );
 
         if ($extraDiscount > $remaining) {
-            throw new \Exception("Extra discount ({$extraDiscount}) exceeds remaining balance ({$remaining}).");
+            throw new \Exception(
+                "Extra discount ({$extraDiscount}) exceeds remaining balance ({$remaining})."
+            );
         }
 
         if ($extraDiscount > 0) {
@@ -116,53 +110,37 @@ class PaymentService
         }
 
         if ($amount > $remaining) {
-            throw new \Exception("Payment amount ({$amount}) exceeds remaining balance ({$remaining}).");
+            throw new \Exception(
+                "Payment amount ({$amount}) exceeds remaining balance ({$remaining})."
+            );
         }
 
-        return DB::transaction(function () use ($invoice, $data, $amount, $extraDiscount) {
+        return DB::transaction(function () use (
+            $invoice,
+            $data,
+            $amount,
+            $extraDiscount
+        ) {
+
             $payment = $this->paymentRepo->create([
                 'invoice_id' => $invoice->id,
                 'member_id' => $invoice->member_id,
                 'booking_id' => null,
+
                 'amount' => $amount,
                 'extra_discount' => $extraDiscount,
+
                 'currency' => $data['currency'] ?? 'NPR',
 
                 'payment_method' => strtoupper($data['payment_method']),
 
-                'status' => 'SUCCESS',
+                // IMPORTANT
+                'status' => 'PENDING',
 
                 'transaction_id' => $data['transaction_id'] ?? null,
 
-                'payment_date' => $data['paid_at'] ?? now(),
-
-                'paid_at' => $data['paid_at'] ?? now(),
+                'payment_date' => now(),
             ]);
-
-            $newPaidAmount = round(
-                (float) $invoice->paid_amount + (float) $payment->amount,
-                2
-            );
-
-            $newStatus = 'partially_paid';
-
-            if ($newPaidAmount >= (float) $invoice->total_amount - (float) $invoice->coupon_discount) {
-                $newStatus = 'paid';
-            }
-
-            $invoiceService = app(InvoiceService::class);
-            $updatedInvoice = $invoiceService->findById($invoice->id);
-
-            if ($updatedInvoice) {
-                $updatedInvoice->update([
-                    'paid_amount' => $newPaidAmount,
-                    'status' => $newStatus,
-                ]);
-            }
-
-            if ($newStatus === 'paid') {
-                $invoiceService->activateMemberPackage($invoice);
-            }
 
             return $payment;
         });
@@ -197,9 +175,9 @@ class PaymentService
             $this->khaltiService->initiate($payment);
 
         $payment->update([
-            'transaction_id' => $response['pidx'] ?? $payment->transaction_id,
+            'transaction_id' => $response['pidx'],
 
-            'gateway_reference' => $response['pidx'] ?? null,
+            'gateway_reference' => $response['pidx'],
 
             'payment_url' => $response['payment_url'] ?? null,
 
@@ -215,28 +193,88 @@ class PaymentService
     /**
      * Complete successful payment.
      */
-    public function completePayment($payment)
+    public function completePayment(Payment $payment): Payment
     {
-        $payment->update([
-            'status' => 'SUCCESS',
-            'paid_at' => now(),
-        ]);
+        return DB::transaction(function () use ($payment) {
 
-        $booking = $payment->booking;
+            $completedStatuses = ['SUCCESS', 'COMPLETED'];
 
-        if (! $booking) {
+            // Prevent duplicate completion
+            if (! in_array($payment->status, $completedStatuses, true)) {
+                $payment->update([
+                    'status' => 'COMPLETED',
+                    'paid_at' => now(),
+                ]);
+            }
+
+            /*
+         * Invoice payment
+         */
+            if ($payment->invoice_id) {
+
+                $invoice = Invoice::query()
+                    ->lockForUpdate()
+                    ->findOrFail($payment->invoice_id);
+
+                // Calculate total completed payments
+                $paidAmount = $invoice->payments()
+                    ->whereIn('status', $completedStatuses)
+                    ->sum('amount');
+
+                $paidAmount = round((float) $paidAmount, 2);
+
+                $payableAmount = round(
+                    (float) $invoice->total_amount
+                        - (float) $invoice->coupon_discount,
+                    2
+                );
+
+                $remainingAmount = max(
+                    0,
+                    $payableAmount - $paidAmount
+                );
+
+                $status = $remainingAmount <= 0
+                    ? 'paid'
+                    : 'partially_paid';
+
+                $invoice->update([
+                    'paid_amount' => $paidAmount,
+                    'remaining_amount' => $remainingAmount,
+                    'status' => $status,
+                ]);
+
+                /*
+             * Activate package only when invoice is fully paid
+             */
+                if ($status === 'paid') {
+                    app(InvoiceService::class)
+                        ->activateMemberPackage($invoice);
+                }
+
+                return $payment->fresh();
+            }
+
+            /*
+         * Booking payment
+         */
+            if ($payment->booking_id) {
+
+                $booking = $payment->booking;
+
+                $booking->update([
+                    'status' => 'CONFIRMED',
+                    'payment_status' => 'PAID',
+                    'confirmed_at' => now(),
+                ]);
+
+                return $payment->fresh();
+            }
+
             throw new \Exception(
-                'Booking not found for payment.'
+                'Payment must belong to either an invoice or booking.'
             );
-        }
-
-        $booking->update([
-            'status' => 'CONFIRMED',
-            'payment_status' => 'PAID',
-            'confirmed_at' => now(),
-        ]);
-
-        return $payment->fresh();
+        });
     }
 
     /**
@@ -248,7 +286,6 @@ class PaymentService
             $reference =
                 'PAY-'.
                 strtoupper(Str::random(8));
-
         } while (
             $this->paymentRepo
                 ->existsByReference($reference)

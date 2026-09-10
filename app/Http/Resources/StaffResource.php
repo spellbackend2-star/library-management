@@ -15,6 +15,7 @@ class StaffResource extends JsonResource
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,
             'email' => $this->email,
+            'phone' => $this->phone,
             'role' => $this->user?->roles->first()?->name,
             'hire_date' => $this->hire_date?->format('Y-m-d'),
             'is_active' => $this->is_active,

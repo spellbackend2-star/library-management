@@ -13,9 +13,9 @@ class MemberService
         protected MemberInterface $memberRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return $this->memberRepository->all();
+        return $this->memberRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Member

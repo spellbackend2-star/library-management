@@ -24,6 +24,7 @@ use App\Repositories\Eloquent\PublisherRepository;
 use App\Repositories\Eloquent\RoomRepository;
 use App\Repositories\Eloquent\SeatCategoryRepository;
 use App\Repositories\Eloquent\SeatRepository;
+use App\Repositories\Eloquent\SettingRepository;
 use App\Repositories\Eloquent\StaffRepository;
 use App\Repositories\Eloquent\TenantRepository;use App\Repositories\Interface\AuthorInterface;
 use App\Repositories\Interface\BookAuthorInterface;
@@ -47,6 +48,7 @@ use App\Repositories\Interface\PublisherInterface;
 use App\Repositories\Interface\RoomInterface;
 use App\Repositories\Interface\SeatCategoryInterface;
 use App\Repositories\Interface\SeatInterface;
+use App\Repositories\Interface\SettingInterface;
 use App\Repositories\Interface\StaffInterface;
 use App\Repositories\Interface\TenantInterface;
 use App\Repositories\Interface\InvoiceInterface;
@@ -155,6 +157,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             InvoiceInterface::class,
             \App\Repositories\Eloquent\InvoiceRepository::class
+        );
+        $this->app->bind(
+            SettingInterface::class,
+            SettingRepository::class
         );
         $this->app->bind(
             TenantInterface::class,

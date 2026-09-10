@@ -25,6 +25,7 @@ use App\Http\Controllers\v1\Tenant\PublisherController;
 use App\Http\Controllers\v1\Tenant\RoomController;
 use App\Http\Controllers\v1\Tenant\SeatCategoryController;
 use App\Http\Controllers\v1\Tenant\SeatController;
+use App\Http\Controllers\v1\Tenant\SettingController;
 use App\Http\Controllers\v1\Tenant\StaffController;
 use Illuminate\Support\Facades\Route;
 use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
@@ -111,6 +112,9 @@ Route::middleware([
 
         // Packages
         Route::apiResource('packages', PackageController::class);
+
+        // Settings
+        Route::apiResource('settings', SettingController::class);
 
         // Authors
         Route::apiResource('authors', AuthorController::class);

@@ -14,9 +14,9 @@ class StaffService
         protected StaffInterface $staffRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return $this->staffRepository->all();
+        return $this->staffRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Staff
@@ -38,6 +38,7 @@ class StaffService
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
                 'email' => $data['email'],
+                'phone' => $data['phone'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
             ];
 

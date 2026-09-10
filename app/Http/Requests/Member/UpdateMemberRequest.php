@@ -74,6 +74,13 @@ class UpdateMemberRequest extends FormRequest
                 'sometimes',
                 'in:active,suspended,expired,cancelled',
             ],
+
+            'gender' => [
+                'sometimes',
+                'string',
+                'max:20',
+                'in:male,female,other',
+            ],
         ];
     }
 }

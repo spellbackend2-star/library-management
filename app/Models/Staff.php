@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
     'first_name',
     'last_name',
     'email',
+    'phone',
     'hire_date',
     'is_active',
 ])]

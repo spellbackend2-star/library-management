@@ -72,6 +72,13 @@ class StoreMemberRequest extends FormRequest
                 'in:active,suspended,expired,cancelled',
             ],
 
+            'gender' => [
+                'nullable',
+                'string',
+                'max:20',
+                'in:male,female,other',
+            ],
+
             'with_invoice' => [
                 'nullable',
                 'boolean',

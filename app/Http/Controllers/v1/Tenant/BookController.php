@@ -11,6 +11,7 @@ use App\Http\Resources\BookResource;
 use App\Http\Resources\CopyResource;
 use App\Services\BookService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class BookController extends Controller
 {
@@ -18,11 +19,23 @@ class BookController extends Controller
         protected BookService $bookService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return BookResource::collection(
-            $this->bookService->getAll()
-        );
+        $filters = $request->only([
+            'search',
+            'category_id',
+            'author_id',
+            'language',
+            'status',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $result = $this->bookService->getAll($filters);
+
+        return BookResource::collection(collect($result['data']))
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreBookRequest $request): BookResource

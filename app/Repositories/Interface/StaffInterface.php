@@ -8,6 +8,8 @@ interface StaffInterface
 {
     public function all();
 
+    public function getAll(array $filters = []);
+
     public function find(int $id): ?Staff;
 
     public function create(array $data): Staff;

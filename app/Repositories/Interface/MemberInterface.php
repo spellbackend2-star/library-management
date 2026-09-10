@@ -8,6 +8,8 @@ interface MemberInterface
 {
     public function all();
 
+    public function getAll(array $filters = []);
+
     public function find(int $id): ?Member;
 
     public function create(array $data): Member;

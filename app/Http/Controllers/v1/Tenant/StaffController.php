@@ -9,6 +9,7 @@ use App\Http\Requests\Staff\UpdateStaffRequest;
 use App\Http\Resources\StaffResource;
 use App\Services\StaffService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class StaffController extends Controller
 {
@@ -16,11 +17,21 @@ class StaffController extends Controller
         protected StaffService $staffService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return StaffResource::collection(
-            $this->staffService->getAll()
-        );
+        $filters = $request->only([
+            'search',
+            'role',
+            'status',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $result = $this->staffService->getAll($filters);
+
+        return StaffResource::collection(collect($result['data']))
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreStaffRequest $request): StaffResource|JsonResponse

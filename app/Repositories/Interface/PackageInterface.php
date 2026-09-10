@@ -8,6 +8,8 @@ interface PackageInterface
 {
     public function all();
 
+    public function getAll(array $filters = []);
+
     public function find(int $id): ?Package;
 
     public function create(array $data): Package;

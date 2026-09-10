@@ -9,6 +9,7 @@ use App\Http\Resources\PackageResource;
 use App\Services\PackageService;
 use App\Models\Package;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PackageController extends Controller
 {
@@ -16,11 +17,23 @@ class PackageController extends Controller
         protected PackageService $packageService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return PackageResource::collection(
-            $this->packageService->getAll()
-        );
+        $filters = $request->only([
+            'search',
+            'is_active',
+            'duration_unit',
+            'min_price',
+            'max_price',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $result = $this->packageService->getAll($filters);
+
+        return PackageResource::collection(collect($result['data']))
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StorePackageRequest $request): PackageResource

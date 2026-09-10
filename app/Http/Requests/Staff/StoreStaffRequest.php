@@ -34,6 +34,12 @@ class StoreStaffRequest extends FormRequest
                 'unique:staff,email',
             ],
 
+            'phone' => [
+                'nullable',
+                'string',
+                'max:30',
+            ],
+
             'password' => [
                 'required',
                 'string',

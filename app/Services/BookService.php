@@ -20,7 +20,15 @@ class BookService
     /**
      * Get all books.
      */
-    public function getAll()
+    public function getAll(array $filters = [])
+    {
+        return $this->bookRepository->getAll($filters);
+    }
+
+    /**
+     * Get all books (legacy method for backward compatibility).
+     */
+    public function getAllLegacy()
     {
         return $this->bookRepository->all();
     }

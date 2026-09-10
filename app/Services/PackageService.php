@@ -11,9 +11,9 @@ class PackageService
         protected PackageInterface $packageRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return $this->packageRepository->all();
+        return $this->packageRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Package

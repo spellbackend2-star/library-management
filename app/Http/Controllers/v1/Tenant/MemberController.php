@@ -9,6 +9,7 @@ use App\Http\Resources\MemberResource;
 use App\Services\MemberService;
 use App\Services\InvoiceService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class MemberController extends Controller
@@ -17,11 +18,22 @@ class MemberController extends Controller
         protected MemberService $memberService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return MemberResource::collection(
-            $this->memberService->getAll()
-        );
+        $filters = $request->only([
+            'search',
+            'status',
+            'package_id',
+            'gender',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $result = $this->memberService->getAll($filters);
+
+        return MemberResource::collection(collect($result['data']))
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreMemberRequest $request): JsonResponse

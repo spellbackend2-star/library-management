@@ -39,6 +39,12 @@ class UpdateStaffRequest extends FormRequest
                 Rule::unique('staff', 'email')->ignore($staffId),
             ],
 
+            'phone' => [
+                'nullable',
+                'string',
+                'max:30',
+            ],
+
             'role' => [
                 'sometimes',
                 'string',

@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'membership_start',
     'membership_expiry',
     'status',
+    'gender',
 ])]
 class Member extends Model
 {

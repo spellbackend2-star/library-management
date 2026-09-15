@@ -26,6 +26,8 @@ class Borrow extends Model
             'checkout_date' => 'datetime',
             'due_date' => 'date',
             'return_date' => 'datetime',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
             'renewal_count' => 'integer',
         ];
     }

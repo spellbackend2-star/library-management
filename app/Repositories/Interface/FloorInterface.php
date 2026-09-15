@@ -8,6 +8,8 @@ interface FloorInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?Floor;
 
     public function create(array $data): Floor;

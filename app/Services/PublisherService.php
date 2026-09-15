@@ -11,9 +11,9 @@ class PublisherService
         protected PublisherInterface $publisherRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->publisherRepository->all();
+        return $this->publisherRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Publisher

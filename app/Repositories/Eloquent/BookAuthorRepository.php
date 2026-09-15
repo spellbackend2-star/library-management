@@ -3,13 +3,36 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\BookAuthor;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\BookAuthorInterface;
 
-class BookAuthorRepository implements BookAuthorInterface
+class BookAuthorRepository extends BaseRepository implements BookAuthorInterface
 {
+    protected array $allowedFilters = [
+        'id' => [
+            'type' => 'exact',
+            'column' => 'id',
+        ],
+    ];
+
     public function all()
     {
          return BookAuthor::all();
+    }
+
+    public function getAll(array $filters = []): array
+    {
+        $query = BookAuthor::query();
+
+        $paginator = $this->applyPagination(
+            $this->applyFilters($query, $filters),
+            $filters
+        );
+
+        return [
+            'data' => $paginator->items(),
+            'meta' => $this->paginationMeta($paginator),
+        ];
     }
 
     public function find(int $id): ?BookAuthor

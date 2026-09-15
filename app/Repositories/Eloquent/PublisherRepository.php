@@ -3,13 +3,43 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Publisher;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\PublisherInterface;
 
-class PublisherRepository implements PublisherInterface
+class PublisherRepository extends BaseRepository implements PublisherInterface
 {
+    protected array $allowedSorts = [
+        'id',
+        'name',
+        'created_at',
+        'updated_at',
+    ];
+
+    protected array $allowedFilters = [
+        'id' => [
+            'type' => 'exact',
+            'column' => 'id',
+        ],
+        'search' => [
+            'type' => 'like',
+            'column' => 'name',
+        ],
+        'name' => [
+            'type' => 'like',
+            'column' => 'name',
+        ],
+    ];
+
     public function all()
     {
         return Publisher::latest()->get();
+    }
+
+    public function getAll(array $filters = []): array
+    {
+        $query = Publisher::query();
+
+        return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?Publisher

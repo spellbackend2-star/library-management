@@ -11,9 +11,9 @@ class CopyService
         protected CopyInterface $copyRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->copyRepository->all();
+        return $this->copyRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Copy

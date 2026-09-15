@@ -11,9 +11,9 @@ class AuthorService
         protected AuthorInterface $authorRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->authorRepository->all();
+        return $this->authorRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Author

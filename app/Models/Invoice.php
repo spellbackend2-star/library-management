@@ -3,21 +3,23 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+    use Illuminate\Database\Eloquent\Model;
+    use Illuminate\Database\Eloquent\Relations\BelongsTo;
+    use Illuminate\Database\Eloquent\Relations\HasMany;
+    use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
-    'member_id',
-    'invoice_number',
-    'total_amount',
-    'coupon_discount',
-    'paid_amount',
-    'remaining_amount',
-    'status',
-    'due_date',
-    'notes',
-])]
+        'member_id',
+        'invoice_number',
+        'invoice_type',
+        'total_amount',
+        'coupon_discount',
+        'paid_amount',
+        'remaining_amount',
+        'status',
+        'due_date',
+        'notes',
+    ])]
 class Invoice extends Model
 {
     protected function casts(): array
@@ -44,5 +46,10 @@ class Invoice extends Model
     public function items(): HasMany
     {
         return $this->hasMany(InvoiceItem::class);
+    }
+
+    public function fines(): HasMany
+    {
+        return $this->hasMany(Fine::class);
     }
 }

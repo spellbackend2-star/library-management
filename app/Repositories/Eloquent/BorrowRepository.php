@@ -3,9 +3,10 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Borrow;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\BorrowInterface;
 
-class BorrowRepository implements BorrowInterface
+class BorrowRepository extends BaseRepository implements BorrowInterface
 {
     public function all()
     {

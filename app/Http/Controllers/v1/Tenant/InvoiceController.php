@@ -129,4 +129,21 @@ class InvoiceController extends Controller
 
         return new InvoiceResource($invoice);
     }
+
+    public function fineInvoice(int $memberId): JsonResponse
+    {
+        $invoice = $this->invoiceService->fineInvoiceByMember($memberId);
+
+        if (! $invoice) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No unpaid fine invoice found for member.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => new InvoiceResource($invoice),
+        ]);
+    }
 }

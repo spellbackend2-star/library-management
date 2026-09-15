@@ -8,6 +8,7 @@ use App\Http\Requests\Publisher\UpdatePublisherRequest;
 use App\Http\Resources\PublisherResource;
 use App\Services\PublisherService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class PublisherController extends Controller
 {
@@ -15,11 +16,20 @@ class PublisherController extends Controller
         protected PublisherService $publisherService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return PublisherResource::collection(
-            $this->publisherService->getAll()
-        );
+        $filters = $request->only([
+            'search',
+            'name',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $result = $this->publisherService->getAll($filters);
+
+        return PublisherResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StorePublisherRequest $request): PublisherResource
@@ -31,13 +41,24 @@ class PublisherController extends Controller
         return new PublisherResource($publisher);
     }
 
-    public function show(int $publisher): PublisherResource
+    public function show(Request $request, int $publisher)
     {
-        $publisherData = $this->publisherService->getById($publisher);
+        $filters = $request->only([
+            'search',
+            'name',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
 
-        abort_if(!$publisherData, 404, 'Publisher not found.');
+        $filters['id'] = $publisher;
 
-        return new PublisherResource($publisherData);
+        $result = $this->publisherService->getAll($filters);
+
+        abort_if(empty($result['data']), 404, 'Publisher not found.');
+
+        return PublisherResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function update(

@@ -11,9 +11,9 @@ class CategoryService
         protected CategoryInterface $categoryRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->categoryRepository->all();
+        return $this->categoryRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Category

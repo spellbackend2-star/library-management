@@ -3,10 +3,18 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\BookEdition;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\BookEditionInterface;
 
-class BookEditionRepository implements BookEditionInterface
+class BookEditionRepository extends BaseRepository implements BookEditionInterface
 {
+    protected array $allowedFilters = [
+        'id' => [
+            'type' => 'exact',
+            'column' => 'id',
+        ],
+    ];
+
     public function all()
     {
         return BookEdition::with([
@@ -14,6 +22,25 @@ class BookEditionRepository implements BookEditionInterface
             'publisher',
             'copies.edition.book',
         ])->latest()->get();
+    }
+
+    public function getAll(array $filters = []): array
+    {
+        $query = BookEdition::with([
+            'book',
+            'publisher',
+            'copies.edition.book',
+        ]);
+
+        $paginator = $this->applyPagination(
+            $this->applyFilters($query, $filters),
+            $filters
+        );
+
+        return [
+            'data' => $paginator->items(),
+            'meta' => $this->paginationMeta($paginator),
+        ];
     }
 
     public function find(int $id): ?BookEdition

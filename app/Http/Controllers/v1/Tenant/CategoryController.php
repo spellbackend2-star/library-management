@@ -8,6 +8,7 @@ use App\Http\Requests\Category\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
 use App\Services\CategoryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
@@ -15,11 +16,38 @@ class CategoryController extends Controller
         protected CategoryService $categoryService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return CategoryResource::collection(
-            $this->categoryService->getAll()
-        );
+         $filters = $request->only([
+            'search',
+            'name',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $result = $this->categoryService->getAll($filters);
+        return CategoryResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
+    }
+    public function show(Request $request, int $category)
+    {
+        $filters = $request->only([
+            'search',
+            'name',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $filters['id'] = $category;
+
+        $result = $this->categoryService->getAll($filters);
+
+        abort_if(empty($result['data']), 404, 'Category not found.');
+
+        return CategoryResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreCategoryRequest $request): CategoryResource
@@ -29,15 +57,6 @@ class CategoryController extends Controller
         );
 
         return new CategoryResource($category);
-    }
-
-    public function show(int $category): CategoryResource
-    {
-        $categoryData = $this->categoryService->getById($category);
-
-        abort_if(!$categoryData, 404, 'Category not found.');
-
-        return new CategoryResource($categoryData);
     }
 
     public function update(

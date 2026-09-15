@@ -8,6 +8,8 @@ interface AuthorInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?Author;
 
     public function create(array $data): Author;

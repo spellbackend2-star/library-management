@@ -8,6 +8,7 @@ use App\Models\Payment;
 use App\Repositories\Interface\PaymentRepositoryInterface;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
+use App\Services\FineService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -18,6 +19,16 @@ class PaymentService
         protected KhaltiService $khaltiService,
         protected EsewaService $esewaService,
     ) {}
+
+    public function getAll(array $filters = [])
+    {
+        return $this->paymentRepo->getAll($filters);
+    }
+
+    public function findById(int $id)
+    {
+        return $this->paymentRepo->findById($id);
+    }
 
     /**
      * Create payment from booking.
@@ -247,10 +258,13 @@ class PaymentService
                 /*
              * Activate package only when invoice is fully paid
              */
-                if ($status === 'paid') {
-                    app(InvoiceService::class)
-                        ->activateMemberPackage($invoice);
-                }
+if ($status === 'paid') {
+                     app(InvoiceService::class)
+                         ->activateMemberPackage($invoice);
+
+                     app(FineService::class)
+                         ->syncFineStatusOnInvoicePaid($invoice);
+                 }
 
                 return $payment->fresh();
             }

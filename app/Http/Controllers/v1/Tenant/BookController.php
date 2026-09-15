@@ -109,18 +109,30 @@ class BookController extends Controller
         ], 201);
     }
 
-    public function listCopies(int $book): JsonResponse
+    public function listCopies(Request $request, int $book)
     {
         try {
-            $copies = $this->bookService->listCopies($book);
+            $copies = $this->bookService->listCopies(
+                $book,
+                (int) $request->input('per_page', 15)
+            );
         } catch (\Exception $e) {
             abort(404, $e->getMessage());
         }
 
-        return response()->json([
-            'book_id' => $book,
-            'copies' => CopyResource::collection($copies),
-        ]);
+        return CopyResource::collection($copies->items())
+            ->additional([
+                'meta' => [
+                    'total' => $copies->total(),
+                    'last_page' => $copies->lastPage(),
+                    'current_page' => $copies->currentPage(),
+                    'per_page' => $copies->perPage(),
+                    'first_page_url' => $copies->url(1),
+                    'last_page_url' => $copies->url($copies->lastPage()),
+                    'next_page_url' => $copies->nextPageUrl(),
+                    'prev_page_url' => $copies->previousPageUrl(),
+                ],
+            ]);
     }
 
     public function showCopy(int $book, int $copy): CopyResource

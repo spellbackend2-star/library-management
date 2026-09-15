@@ -9,6 +9,7 @@ use App\Http\Resources\RoomResource;
 use App\Services\RoomService;
 use App\Models\Room;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class RoomController extends Controller
 {
@@ -16,11 +17,13 @@ class RoomController extends Controller
         protected RoomService $roomService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return RoomResource::collection(
-            $this->roomService->getAll()
-        );
+        $filters = $request->only(['per_page']);
+        $result = $this->roomService->getAll($filters);
+
+        return RoomResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreRoomRequest $request): RoomResource
@@ -32,9 +35,17 @@ class RoomController extends Controller
         return new RoomResource($room);
     }
 
-    public function show(Room $room): RoomResource
+    public function show(Request $request, int $room)
     {
-        return new RoomResource($room);
+        $filters = $request->only(['per_page']);
+        $filters['id'] = $room;
+
+        $result = $this->roomService->getAll($filters);
+
+        abort_if(empty($result['data']), 404, 'Room not found.');
+
+        return RoomResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function update(

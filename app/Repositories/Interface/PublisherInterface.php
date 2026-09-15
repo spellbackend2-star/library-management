@@ -8,6 +8,8 @@ interface PublisherInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?Publisher;
 
     public function create(array $data): Publisher;

@@ -11,9 +11,9 @@ class BookAuthorService
         protected BookAuthorInterface $bookAuthorRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->bookAuthorRepository->all();
+        return $this->bookAuthorRepository->getAll($filters);
     }
 
     public function getById(int $id): ?BookAuthor

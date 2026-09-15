@@ -8,6 +8,8 @@ interface CategoryInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?Category;
 
     public function create(array $data): Category;

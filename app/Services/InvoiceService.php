@@ -8,6 +8,7 @@ use App\Models\Member;
 use App\Models\Payment;
 use App\Repositories\Interface\InvoiceInterface;
 use App\Repositories\Interface\PaymentRepositoryInterface;
+use App\Services\FineService;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,11 @@ class InvoiceService
     public function findByMember(int $memberId): ?Invoice
     {
         return $this->invoiceRepository->findByMember($memberId);
+    }
+
+    public function fineInvoiceByMember(int $memberId): ?Invoice
+    {
+        return $this->invoiceRepository->fineInvoiceByMember($memberId);
     }
 
     public function create(array $data): Invoice
@@ -64,6 +70,7 @@ class InvoiceService
             return $this->invoiceRepository->create([
                 'member_id' => $memberId,
                 'invoice_number' => $invoiceNumber,
+                'invoice_type' => $data['invoice_type'] ?? 'booking',
                 'total_amount' => $totalAmount,
                 'coupon_discount' => $couponDiscount,
                 'paid_amount' => 0,
@@ -225,6 +232,8 @@ class InvoiceService
 
             if ($newStatus === 'paid') {
                 $this->activateMemberPackage($invoice);
+
+                app(FineService::class)->syncFineStatusOnInvoicePaid($invoice);
             }
 
             return $payment;

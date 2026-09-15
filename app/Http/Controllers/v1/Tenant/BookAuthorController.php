@@ -8,6 +8,7 @@ use App\Http\Requests\BookAuthor\UpdateBookAuthorRequest;
 use App\Http\Resources\BookAuthorResource;
 use App\Services\BookAuthorService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class BookAuthorController extends Controller
 {
@@ -15,11 +16,13 @@ class BookAuthorController extends Controller
         protected BookAuthorService $bookAuthorService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return BookAuthorResource::collection(
-            $this->bookAuthorService->getAll()
-        );
+        $filters = $request->only(['per_page']);
+        $result = $this->bookAuthorService->getAll($filters);
+
+        return BookAuthorResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreBookAuthorRequest $request): BookAuthorResource
@@ -31,13 +34,17 @@ class BookAuthorController extends Controller
         return new BookAuthorResource($bookAuthor);
     }
 
-    public function show(int $book_author): BookAuthorResource
+    public function show(Request $request, int $book_author)
     {
-        $bookAuthorData = $this->bookAuthorService->getById($book_author);
+        $filters = $request->only(['per_page']);
+        $filters['id'] = $book_author;
 
-        abort_if(!$bookAuthorData, 404, 'Book author not found.');
+        $result = $this->bookAuthorService->getAll($filters);
 
-        return new BookAuthorResource($bookAuthorData);
+        abort_if(empty($result['data']), 404, 'Book author not found.');
+
+        return BookAuthorResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function update(

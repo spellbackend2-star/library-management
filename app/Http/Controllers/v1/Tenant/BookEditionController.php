@@ -8,6 +8,7 @@ use App\Http\Requests\BookEdition\UpdateBookEditionRequest;
 use App\Http\Resources\BookEditionResource;
 use App\Services\BookEditionService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class BookEditionController extends Controller
 {
@@ -15,11 +16,13 @@ class BookEditionController extends Controller
         protected BookEditionService $bookEditionService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return BookEditionResource::collection(
-            $this->bookEditionService->getAll()
-        );
+        $filters = $request->only(['per_page']);
+        $result = $this->bookEditionService->getAll($filters);
+
+        return BookEditionResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreBookEditionRequest $request): BookEditionResource
@@ -31,13 +34,17 @@ class BookEditionController extends Controller
         return new BookEditionResource($edition);
     }
 
-    public function show(int $book_edition): BookEditionResource
+    public function show(Request $request, int $book_edition)
     {
-        $editionData = $this->bookEditionService->getById($book_edition);
+        $filters = $request->only(['per_page']);
+        $filters['id'] = $book_edition;
 
-        abort_if(!$editionData, 404, 'Book edition not found.');
+        $result = $this->bookEditionService->getAll($filters);
 
-        return new BookEditionResource($editionData);
+        abort_if(empty($result['data']), 404, 'Book edition not found.');
+
+        return BookEditionResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function update(

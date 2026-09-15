@@ -3,13 +3,36 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Copy;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\CopyInterface;
 
-class CopyRepository implements CopyInterface
+class CopyRepository extends BaseRepository implements CopyInterface
 {
+    protected array $allowedFilters = [
+        'id' => [
+            'type' => 'exact',
+            'column' => 'id',
+        ],
+    ];
+
     public function all()
     {
         return Copy::with(['edition.book'])->latest()->get();
+    }
+
+    public function getAll(array $filters = []): array
+    {
+        $query = Copy::with(['edition.book']);
+
+        $paginator = $this->applyPagination(
+            $this->applyFilters($query, $filters),
+            $filters
+        );
+
+        return [
+            'data' => $paginator->items(),
+            'meta' => $this->paginationMeta($paginator),
+        ];
     }
 
     public function find(int $id): ?Copy

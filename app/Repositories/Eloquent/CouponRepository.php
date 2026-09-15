@@ -3,9 +3,10 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Coupon;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\CouponInterface;
 
-class CouponRepository implements CouponInterface
+class CouponRepository extends BaseRepository implements CouponInterface
 {
     public function all()
     {

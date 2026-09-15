@@ -8,6 +8,8 @@ interface BookEditionInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?BookEdition;
 
     public function create(array $data): BookEdition;

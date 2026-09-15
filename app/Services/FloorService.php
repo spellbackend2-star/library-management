@@ -11,9 +11,9 @@ class FloorService
         protected FloorInterface $floorRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->floorRepository->all();
+        return $this->floorRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Floor

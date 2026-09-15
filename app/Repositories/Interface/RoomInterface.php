@@ -8,6 +8,8 @@ interface RoomInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?Room;
 
     public function create(array $data): Room;

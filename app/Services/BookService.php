@@ -388,7 +388,7 @@ class BookService
     /**
      * List all copies that belong to the book (across all editions).
      */
-    public function listCopies(int $bookId)
+    public function listCopies(int $bookId, int $perPage = 15)
     {
         $book = $this->bookRepository->findOrFail($bookId);
 
@@ -397,7 +397,8 @@ class BookService
                 $q->where('book_id', $book->id);
             })
             ->latest()
-            ->get();
+            ->paginate(min(max($perPage, 1), 100))
+            ->withQueryString();
     }
 
     /**

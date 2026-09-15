@@ -9,6 +9,7 @@ use App\Http\Resources\FloorResource;
 use App\Services\FloorService;
 use App\Models\Floor;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class FloorController extends Controller
 {
@@ -16,11 +17,13 @@ class FloorController extends Controller
         protected FloorService $floorService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return FloorResource::collection(
-            $this->floorService->getAll()
-        );
+        $filters = $request->only(['per_page']);
+        $result = $this->floorService->getAll($filters);
+
+        return FloorResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreFloorRequest $request): FloorResource
@@ -32,9 +35,17 @@ class FloorController extends Controller
         return new FloorResource($floor);
     }
 
-    public function show(Floor $floor): FloorResource
+    public function show(Request $request, int $floor)
     {
-        return new FloorResource($floor);
+        $filters = $request->only(['per_page']);
+        $filters['id'] = $floor;
+
+        $result = $this->floorService->getAll($filters);
+
+        abort_if(empty($result['data']), 404, 'Floor not found.');
+
+        return FloorResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function update(

@@ -8,6 +8,7 @@ use App\Http\Requests\Copy\UpdateCopyRequest;
 use App\Http\Resources\CopyResource;
 use App\Services\CopyService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CopyController extends Controller
 {
@@ -15,11 +16,13 @@ class CopyController extends Controller
         protected CopyService $copyService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return CopyResource::collection(
-            $this->copyService->getAll()
-        );
+        $filters = $request->only(['per_page']);
+        $result = $this->copyService->getAll($filters);
+
+        return CopyResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreCopyRequest $request): CopyResource
@@ -31,13 +34,17 @@ class CopyController extends Controller
         return new CopyResource($copy);
     }
 
-    public function show(int $copy): CopyResource
+    public function show(Request $request, int $copy)
     {
-        $copyData = $this->copyService->getById($copy);
+        $filters = $request->only(['per_page']);
+        $filters['id'] = $copy;
 
-        abort_if(!$copyData, 404, 'Copy not found.');
+        $result = $this->copyService->getAll($filters);
 
-        return new CopyResource($copyData);
+        abort_if(empty($result['data']), 404, 'Copy not found.');
+
+        return CopyResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function update(

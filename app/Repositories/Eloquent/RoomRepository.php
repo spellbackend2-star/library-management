@@ -3,13 +3,34 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Room;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\RoomInterface;
 
-class RoomRepository implements RoomInterface
+class RoomRepository extends BaseRepository implements RoomInterface
 {
+    protected array $allowedFilters = [
+        'id' => [
+            'type' => 'exact',
+            'column' => 'id',
+        ],
+    ];
+
     public function all()
     {
         return Room::latest()->get();
+    }
+
+    public function getAll(array $filters = []): array
+    {
+        $paginator = $this->applyPagination(
+            $this->applyFilters(Room::query(), $filters),
+            $filters
+        );
+
+        return [
+            'data' => $paginator->items(),
+            'meta' => $this->paginationMeta($paginator),
+        ];
     }
 
     public function find(int $id): ?Room

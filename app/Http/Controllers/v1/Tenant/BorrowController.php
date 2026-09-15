@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Borrow\StoreBorrowRequest;
 use App\Http\Requests\Borrow\UpdateBorrowRequest;
 use App\Http\Resources\BorrowResource;
-use App\Services\BorrowService;
 use App\Models\Borrow;
+use App\Services\BorrowService;
 use Illuminate\Http\JsonResponse;
 
 class BorrowController extends Controller

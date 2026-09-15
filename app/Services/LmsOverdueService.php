@@ -4,18 +4,16 @@ namespace App\Services;
 
 use App\Models\BookingSeat;
 use App\Models\Borrow;
-use App\Models\Fine;
 use App\Models\LockerAssignment;
 use App\Models\Tenant;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class LmsOverdueService
 {
     /**
      * Run all overdue checks across all tenants.
-     *
-     * Returns a summary array used by the command for logging.
      *
      * @return array<string, int>
      */
@@ -29,9 +27,7 @@ class LmsOverdueService
             'locker_assignments_expired' => 0,
         ];
 
-        // Always read tenant list from the central connection, otherwise
-        // once tenancy is initialized for the first tenant the model's
-        // default connection points at the tenant DB and we see zero rows.
+        // Always get tenants from the central database.
         $tenants = Tenant::on('mysql')->get();
 
         foreach ($tenants as $tenant) {
@@ -40,12 +36,13 @@ class LmsOverdueService
 
                 $result = $this->runForCurrentTenant();
 
-                foreach ($result as $k => $v) {
-                    $summary[$k] += $v;
+                foreach ($result as $key => $value) {
+                    $summary[$key] += $value;
                 }
+
                 $summary['tenants']++;
             } catch (\Throwable $e) {
-                \Log::warning('LMS overdue skipped tenant', [
+                Log::warning('LMS overdue check skipped tenant', [
                     'tenant' => $tenant->id,
                     'error' => $e->getMessage(),
                 ]);
@@ -55,9 +52,10 @@ class LmsOverdueService
                         tenancy()->end();
                     }
                 } catch (\Throwable $e) {
-                    // FilesystemTenancyBootstrapper can warn on revert
-                    // in local env; safe to ignore so the scheduler
-                    // continues to the next tenant.
+                    Log::warning('Failed to end tenancy after overdue check', [
+                        'tenant' => $tenant->id,
+                        'error' => $e->getMessage(),
+                    ]);
                 }
             }
         }
@@ -66,9 +64,7 @@ class LmsOverdueService
     }
 
     /**
-     * Run overdue checks for the currently active tenant.
-     *
-     * Must be called inside `tenancy()->initialize($tenant)`.
+     * Run overdue checks for the currently initialized tenant.
      *
      * @return array<string, int>
      */
@@ -83,16 +79,20 @@ class LmsOverdueService
     }
 
     /**
-     * Mark active borrows past their due_date as 'overdue'.
+     * Mark active borrows as overdue when their due date has passed.
+     *
+     * No fine is created here.
+     * The final fine is calculated when the book is returned.
      */
-    public function processOverdueBorrows(): int
+    protected function processOverdueBorrows(): int
     {
         return DB::transaction(function () {
             $now = Carbon::now();
 
-            return Borrow::whereIn('status', ['active'])
+            return Borrow::query()
+                ->where('status', 'active')
                 ->whereNotNull('due_date')
-                ->where('due_date', '<', $now->toDateString())
+                ->whereDate('due_date', '<', $now->toDateString())
                 ->update([
                     'status' => 'overdue',
                     'updated_at' => $now,
@@ -101,107 +101,101 @@ class LmsOverdueService
     }
 
     /**
-     * Create a fine for every overdue borrow that doesn't already have one.
-     * Fine amount is taken from the member's package (or a default of 5.00).
+     * Mark expired seat bookings as completed.
+     *
+     * Fine calculation is handled separately by FineService
+     * when the seat booking is actually completed/released.
      */
-    public function createOverdueFines(): int
+    protected function expireSeatBookings(): int
     {
         $now = Carbon::now();
 
-        $overdue = Borrow::where('status', 'overdue')->get();
-
-        $created = 0;
-
-        foreach ($overdue as $borrow) {
-            $exists = Fine::where('borrow_id', $borrow->id)->exists();
-
-            if ($exists) {
-                continue;
-            }
-
-            Fine::create([
-                'borrow_id' => $borrow->id,
-                'member_id' => $borrow->member_id,
-                'amount' => $this->fineAmountForBorrow($borrow),
-                'reason' => 'overdue',
-                'issued_date' => $now->toDateString(),
-                'status' => 'unpaid',
-            ]);
-
-            $created++;
-        }
-
-        return $created;
-    }
-
-    /**
-     * Cancel seat-bookings whose end_at has passed without being completed.
-     */
-    public function expireSeatBookings(): int
-    {
-        $now = Carbon::now();
-
-        return BookingSeat::whereIn('status', ['booked', 'active'])
+        return BookingSeat::query()
+            ->whereIn('status', ['booked', 'active'])
             ->whereNotNull('end_at')
             ->where('end_at', '<', $now)
             ->update([
                 'status' => 'completed',
+                'updated_at' => $now,
             ]);
     }
 
     /**
-     * Mark locker assignments as 'expired' once their expiry_date is past.
+     * Mark active locker assignments as expired.
+     *
+     * No fine is created here.
+     * FineService calculates the final locker overdue fine
+     * when the locker is actually returned.
      */
-    public function expireLockerAssignments(): int
+    protected function expireLockerAssignments(): int
     {
-        $now = Carbon::now()->toDateString();
+        $today = Carbon::today()->toDateString();
 
-        $expired = LockerAssignment::where('status', 'active')
-            ->whereNotNull('expiry_date')
-            ->where('expiry_date', '<', $now)
-            ->get();
-
-        if ($expired->isEmpty()) {
-            return 0;
-        }
-
-        DB::transaction(function () use ($expired, $now) {
-            foreach ($expired as $assignment) {
-                $assignment->update([
+        return DB::transaction(function () use ($today) {
+            return LockerAssignment::query()
+                ->where('status', 'active')
+                ->whereNotNull('expiry_date')
+                ->whereDate('expiry_date', '<', $today)
+                ->update([
                     'status' => 'expired',
+                    'updated_at' => Carbon::now(),
                 ]);
-
-                if (!Fine::where('locker_assignment_id', $assignment->id)->exists()) {
-                    Fine::create([
-                        'locker_assignment_id' => $assignment->id,
-                        'member_id' => $assignment->member_id,
-                        'amount' => 5.00,
-                        'reason' => 'locker_overdue',
-                        'issued_date' => $now,
-                        'status' => 'unpaid',
-                    ]);
-                }
-            }
         });
-
-        return $expired->count();
     }
 
     /**
-     * Resolve the fine amount for an overdue borrow.
+     * Create overdue fines for borrows, seat bookings, and locker assignments
+     * that are past their due date and do not yet have a fine.
      */
-    protected function fineAmountForBorrow(Borrow $borrow): float
+    protected function createOverdueFines(): int
     {
-        $member = $borrow->member;
+        $created = 0;
 
-        $perDay = 5.00;
+        $fineService = app(FineService::class);
 
-        if ($member && $member->package && $member->package->overdue_fine_per_day) {
-            $perDay = (float) $member->package->overdue_fine_per_day;
+        // Book borrows that are overdue and not yet returned
+        $overdueBorrows = Borrow::query()
+            ->where('status', 'overdue')
+            ->whereNull('return_date')
+            ->with('member')
+            ->get();
+
+        foreach ($overdueBorrows as $borrow) {
+            $fine = $fineService->fineForBorrowOnReturn($borrow);
+
+            if ($fine) {
+                $created++;
+            }
         }
 
-        $days = max(1, Carbon::now()->diffInDays(Carbon::parse($borrow->due_date)));
+        // Seat bookings that expired and are now completed
+        $expiredSeats = BookingSeat::query()
+            ->where('status', 'completed')
+            ->with('member')
+            ->get();
 
-        return round($perDay * $days, 2);
+        foreach ($expiredSeats as $seat) {
+            $fine = $fineService->fineForBookingSeatOnComplete($seat);
+
+            if ($fine) {
+                $created++;
+            }
+        }
+
+        // Locker assignments that expired and were returned
+        $expiredLockers = LockerAssignment::query()
+            ->where('status', 'expired')
+            ->with('member')
+            ->get();
+
+        foreach ($expiredLockers as $assignment) {
+            $fine = $fineService->fineForLockerOnReturn($assignment);
+
+            if ($fine) {
+                $created++;
+            }
+        }
+
+        return $created;
     }
 }

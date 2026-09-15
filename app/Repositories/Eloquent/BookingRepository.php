@@ -3,9 +3,10 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Booking;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\BookingInterface;
 
-class BookingRepository implements BookingInterface
+class BookingRepository extends BaseRepository implements BookingInterface
 {
     public function all()
     {

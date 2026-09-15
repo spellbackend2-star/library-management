@@ -8,6 +8,7 @@ use App\Http\Requests\Author\UpdateAuthorRequest;
 use App\Http\Resources\AuthorResource;
 use App\Services\AuthorService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class AuthorController extends Controller
 {
@@ -15,11 +16,13 @@ class AuthorController extends Controller
         protected AuthorService $authorService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return AuthorResource::collection(
-            $this->authorService->getAll()
-        );
+        $filters = $request->only(['per_page']);
+        $result = $this->authorService->getAll($filters);
+
+        return AuthorResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function store(StoreAuthorRequest $request): AuthorResource
@@ -31,13 +34,17 @@ class AuthorController extends Controller
         return new AuthorResource($author);
     }
 
-    public function show(int $author): AuthorResource
+    public function show(Request $request, int $author)
     {
-        $authorData = $this->authorService->getById($author);
+        $filters = $request->only(['per_page']);
+        $filters['id'] = $author;
 
-        abort_if(!$authorData, 404, 'Author not found.');
+        $result = $this->authorService->getAll($filters);
 
-        return new AuthorResource($authorData);
+        abort_if(empty($result['data']), 404, 'Author not found.');
+
+        return AuthorResource::collection($result['data'])
+            ->additional(['meta' => $result['meta']]);
     }
 
     public function update(

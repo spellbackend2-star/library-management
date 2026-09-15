@@ -11,9 +11,9 @@ class RoomService
         protected RoomInterface $roomRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->roomRepository->all();
+        return $this->roomRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Room

@@ -13,6 +13,7 @@ class InvoiceResource extends JsonResource
             'id' => $this->id,
             'member_id' => $this->member_id,
             'invoice_number' => $this->invoice_number,
+            'invoice_type' => $this->invoice_type,
             'total_amount' => $this->total_amount,
             'coupon_discount' => $this->coupon_discount,
             'paid_amount' => $this->paid_amount,
@@ -29,6 +30,7 @@ class InvoiceResource extends JsonResource
                 'phone' => $this->member?->phone,
             ],
             'payments' => PaymentResource::collection($this->whenLoaded('payments')),
+            'fines' => FineResource::collection($this->whenLoaded('fines')),
         ];
     }
 }

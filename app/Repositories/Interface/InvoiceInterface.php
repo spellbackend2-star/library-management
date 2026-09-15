@@ -19,4 +19,6 @@ interface InvoiceInterface
     public function findByMember(int $memberId): ?Invoice;
 
     public function findByNumber(string $invoiceNumber): ?Invoice;
+
+    public function fineInvoiceByMember(int $memberId): ?Invoice;
 }

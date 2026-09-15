@@ -3,13 +3,43 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Category;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\CategoryInterface;
 
-class CategoryRepository implements CategoryInterface
+class CategoryRepository extends BaseRepository implements CategoryInterface
 {
+    protected array $allowedSorts = [
+        'id',
+        'name',
+        'created_at',
+        'updated_at',
+    ];
+
+    protected array $allowedFilters = [
+        'id' => [
+            'type' => 'exact',
+            'column' => 'id',
+        ],
+        'search' => [
+            'type' => 'like',
+            'column' => 'name',
+        ],
+        'name' => [
+            'type' => 'like',
+            'column' => 'name',
+        ],
+    ];
+
     public function all()
     {
         return Category::latest()->get();
+    }
+
+    public function getAll(array $filters = []): array
+    {
+        $query = Category::query();
+
+        return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?Category

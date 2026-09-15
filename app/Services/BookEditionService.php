@@ -11,9 +11,9 @@ class BookEditionService
         protected BookEditionInterface $bookEditionRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->bookEditionRepository->all();
+        return $this->bookEditionRepository->getAll($filters);
     }
 
     public function getById(int $id): ?BookEdition

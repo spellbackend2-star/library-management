@@ -42,15 +42,21 @@ class BorrowService
 
             $borrow = $this->borrowRepository->update($id, $data);
 
-            // Trigger fine creation if status transitions to a terminal
-            // "done" state ('returned' or 'lost') and the actual return
-            // date is past the due date.
-            if (in_array($newStatus, ['returned', 'lost'], true)) {
-                $returnDate = $data['return_date']
-                    ?? $borrow->return_date
-                    ?? Carbon::now()->toDateString();
+            $borrow->refresh();
 
-                $borrow->refresh();
+            /*
+             * Create overdue fine only when the book is actually returned.
+             *
+             * The scheduler only changes:
+             *
+             * active → overdue
+             *
+             * It does NOT create a fine every day.
+             */
+            if ($newStatus === 'returned') {
+                $returnDate = $borrow->return_date
+                    ? Carbon::parse($borrow->return_date)->toDateString()
+                    : Carbon::now()->toDateString();
 
                 $this->fineService->fineForBorrowOnReturn(
                     borrow: $borrow,

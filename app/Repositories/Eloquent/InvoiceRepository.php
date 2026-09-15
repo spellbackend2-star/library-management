@@ -14,7 +14,7 @@ class InvoiceRepository implements InvoiceInterface
 
     public function find(int $id): ?Invoice
     {
-        return Invoice::with(['member', 'payments'])->find($id);
+        return Invoice::with(['member', 'payments', 'fines'])->find($id);
     }
 
     public function create(array $data): Invoice
@@ -45,6 +45,16 @@ class InvoiceRepository implements InvoiceInterface
 
     public function findByNumber(string $invoiceNumber): ?Invoice
     {
-        return Invoice::with(['member', 'payments'])->where('invoice_number', $invoiceNumber)->first();
+        return Invoice::with(['member', 'payments', 'fines'])->where('invoice_number', $invoiceNumber)->first();
+    }
+
+    public function fineInvoiceByMember(int $memberId): ?Invoice
+    {
+        return Invoice::with(['member', 'payments', 'fines'])
+            ->where('member_id', $memberId)
+            ->where('invoice_type', 'fine')
+            ->where('status', '!=', 'paid')
+            ->orderByDesc('id')
+            ->first();
     }
 }

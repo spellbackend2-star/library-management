@@ -14,6 +14,7 @@ use App\Http\Controllers\v1\Tenant\BorrowController;
 use App\Http\Controllers\v1\Tenant\CategoryController;
 use App\Http\Controllers\v1\Tenant\CopyController;
 use App\Http\Controllers\v1\Tenant\CouponController;
+use App\Http\Controllers\v1\Tenant\FineController;
 use App\Http\Controllers\v1\Tenant\FloorController;
 use App\Http\Controllers\v1\Tenant\InvoiceController;
 use App\Http\Controllers\v1\Tenant\LockerAssigmentsController;
@@ -184,6 +185,31 @@ Route::middleware([
         // Borrows
         Route::apiResource('borrows', BorrowController::class);
 
+        // Fines
+        Route::apiResource('fines', FineController::class)->only([
+            'index',
+            'show',
+            'destroy',
+        ]);
+
+        // Create fine for borrow
+        Route::post(
+            'borrows/{borrow}/fine',
+            [FineController::class, 'createFineForBorrow']
+        );
+
+        // Create fine for seat booking
+        Route::post(
+            'booking-seats/{bookingSeat}/fine',
+            [FineController::class, 'createFineForBookingSeat']
+        );
+
+        // Create fine for locker assignment
+        Route::post(
+            'locker-assignments/{lockerAssignment}/fine',
+            [FineController::class, 'createFineForLocker']
+        );
+
         /*
         |--------------------------------------------------------------------------
         | Bookings
@@ -263,6 +289,12 @@ Route::middleware([
         Route::get(
             'members/{member}/invoice',
             [InvoiceController::class, 'byMember']
+        );
+
+        // Get member fine invoice
+        Route::get(
+            'members/{member}/fine-invoice',
+            [InvoiceController::class, 'fineInvoice']
         );
 
         /*

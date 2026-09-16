@@ -20,9 +20,9 @@ abstract class BaseRepository
         Builder $query,
         array $filters = []
     ) {
-        $perPage = min(
-            (int) ($filters['per_page'] ?? 15),
-            100
+        $perPage = max(
+            1,
+            min((int) ($filters['per_page'] ?? 15), 100)
         );
 
         return $query

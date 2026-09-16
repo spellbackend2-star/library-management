@@ -7,64 +7,83 @@ use App\Http\Requests\BookEdition\StoreBookEditionRequest;
 use App\Http\Requests\BookEdition\UpdateBookEditionRequest;
 use App\Http\Resources\BookEditionResource;
 use App\Services\BookEditionService;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class BookEditionController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
         protected BookEditionService $bookEditionService
     ) {}
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['per_page']);
+        $filters = $request->only([
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
         $result = $this->bookEditionService->getAll($filters);
 
-        return BookEditionResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            BookEditionResource::collection($result['data']),
+            'Book editions retrieved successfully.',
+            200,
+            $result['meta']
+        );
     }
 
-    public function store(StoreBookEditionRequest $request): BookEditionResource
+    public function store(StoreBookEditionRequest $request): JsonResponse
     {
         $edition = $this->bookEditionService->create(
             $request->validated()
         );
 
-        return new BookEditionResource($edition);
+        return $this->successResponse(
+            new BookEditionResource($edition),
+            'Book edition created successfully.',
+            201
+        );
     }
 
-    public function show(Request $request, int $book_edition)
+    public function show(int $book_edition): JsonResponse
     {
-        $filters = $request->only(['per_page']);
-        $filters['id'] = $book_edition;
+        $editionData = $this->bookEditionService->getById($book_edition);
 
-        $result = $this->bookEditionService->getAll($filters);
+        abort_if(!$editionData, 404, 'Book edition not found.');
 
-        abort_if(empty($result['data']), 404, 'Book edition not found.');
-
-        return BookEditionResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            new BookEditionResource($editionData),
+            'Book edition retrieved successfully.'
+        );
     }
 
     public function update(
         UpdateBookEditionRequest $request,
         int $book_edition
-    ): BookEditionResource {
+    ): JsonResponse {
         $editionData = $this->bookEditionService->update(
             $book_edition,
             $request->validated()
         );
 
-        return new BookEditionResource($editionData);
+        return $this->successResponse(
+            new BookEditionResource($editionData),
+            'Book edition updated successfully.'
+        );
     }
 
     public function destroy(int $book_edition): JsonResponse
     {
         $this->bookEditionService->delete($book_edition);
 
-        return response()->json([
-            'message' => 'Book edition deleted successfully.',
-        ]);
+        return $this->successResponse(
+            null,
+            'Book edition deleted successfully.'
+        );
     }
 }

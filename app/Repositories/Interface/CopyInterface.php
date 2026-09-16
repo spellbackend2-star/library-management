@@ -10,6 +10,8 @@ interface CopyInterface
 
     public function getAll(array $filters = []): array;
 
+    public function getForBook(int $bookId, array $filters = []): array;
+
     public function find(int $id): ?Copy;
 
     public function create(array $data): Copy;

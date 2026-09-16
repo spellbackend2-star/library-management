@@ -11,9 +11,9 @@ class SeatCategoryService
         protected SeatCategoryInterface $seatCategoryRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->seatCategoryRepository->all();
+        return $this->seatCategoryRepository->getAll($filters);
     }
 
     public function getById(int $id): ?SeatCategory

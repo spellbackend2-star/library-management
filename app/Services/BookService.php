@@ -41,6 +41,18 @@ class BookService
         return $this->bookRepository->findWithRelations($id);
     }
 
+    public function create(array $data): Book
+    {
+        return $this->bookRepository->create($data);
+    }
+
+    public function update(int $id, array $data): Book
+    {
+        $book = $this->bookRepository->findOrFail($id);
+
+        return $this->bookRepository->updateBook($book, $data);
+    }
+
     /**
      * Create book with authors, categories, editions and copies.
      */
@@ -388,17 +400,11 @@ class BookService
     /**
      * List all copies that belong to the book (across all editions).
      */
-    public function listCopies(int $bookId, int $perPage = 15)
+    public function listCopies(int $bookId, array $filters = []): array
     {
         $book = $this->bookRepository->findOrFail($bookId);
 
-        return Copy::with(['edition'])
-            ->whereHas('edition', function ($q) use ($book) {
-                $q->where('book_id', $book->id);
-            })
-            ->latest()
-            ->paginate(min(max($perPage, 1), 100))
-            ->withQueryString();
+        return $this->copyRepository->getForBook($book->id, $filters);
     }
 
     /**

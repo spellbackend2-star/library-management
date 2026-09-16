@@ -8,6 +8,8 @@ interface SeatInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?Seat;
 
     public function create(array $data): Seat;

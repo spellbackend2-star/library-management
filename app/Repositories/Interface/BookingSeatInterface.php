@@ -8,6 +8,8 @@ interface BookingSeatInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?BookingSeat;
 
     public function create(array $data): BookingSeat;
@@ -16,5 +18,5 @@ interface BookingSeatInterface
 
     public function delete(int $id): bool;
 
-    public function byBooking(int $bookingId);
+    public function byBooking(int $bookingId): array;
 }

@@ -8,126 +8,126 @@ use App\Http\Requests\Staff\StoreStaffRequest;
 use App\Http\Requests\Staff\UpdateStaffRequest;
 use App\Http\Resources\StaffResource;
 use App\Services\StaffService;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class StaffController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
         protected StaffService $staffService
     ) {}
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $filters = $request->only([
-            'search',
-            'role',
-            'status',
-            'sort_by',
-            'sort_order',
-            'per_page',
-        ]);
+        $result = $this->staffService->getAll($request->all());
 
-        $result = $this->staffService->getAll($filters);
-
-        return StaffResource::collection(collect($result['data']))
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            StaffResource::collection($result['data']),
+            'Staff retrieved successfully.',
+            200,
+            $result['meta']
+        );
     }
 
-    public function store(StoreStaffRequest $request): StaffResource|JsonResponse
+    public function store(StoreStaffRequest $request): JsonResponse
     {
-        try {
-            $staff = $this->staffService->create(
-                $request->validated()
-            );
+        $staff = $this->staffService->create(
+            $request->validated()
+        );
 
-            return new StaffResource($staff);
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-            ], 500);
-        }
+        return $this->successResponse(
+            new StaffResource($staff),
+            'Staff created successfully.',
+            201
+        );
     }
 
-    public function show(int $staff): StaffResource
+    public function show(int $staff): JsonResponse
     {
         $staffData = $this->staffService->getById($staff);
 
-        abort_if(!$staffData, 404, 'Staff not found.');
+        abort_if(
+            ! $staffData,
+            404,
+            'Staff not found.'
+        );
 
-        return new StaffResource($staffData);
+        return $this->successResponse(
+            new StaffResource($staffData),
+            'Staff retrieved successfully.'
+        );
     }
 
     public function update(
         UpdateStaffRequest $request,
         int $staff
-    ): StaffResource {
+    ): JsonResponse {
         $staffData = $this->staffService->update(
             $staff,
             $request->validated()
         );
 
-        return new StaffResource($staffData);
+        return $this->successResponse(
+            new StaffResource($staffData),
+            'Staff updated successfully.'
+        );
     }
 
     public function destroy(int $staff): JsonResponse
     {
         $this->staffService->delete($staff);
 
-        return response()->json([
-            'message' => 'Staff deleted successfully.',
-        ]);
+        return $this->successResponse(
+            null,
+            'Staff deleted successfully.'
+        );
     }
 
-    public function activate(int $staff): StaffResource
+    public function activate(int $staff): JsonResponse
     {
         $staffData = $this->staffService->activate($staff);
 
-        return new StaffResource($staffData);
+        return $this->successResponse(
+            new StaffResource($staffData),
+            'Staff activated successfully.'
+        );
     }
 
-    public function deactivate(int $staff): StaffResource
+    public function deactivate(int $staff): JsonResponse
     {
         $staffData = $this->staffService->deactivate($staff);
 
-        return new StaffResource($staffData);
+        return $this->successResponse(
+            new StaffResource($staffData),
+            'Staff deactivated successfully.'
+        );
     }
 
     public function assignRole(
         AssignRoleRequest $request,
         int $staff
-    ): StaffResource {
+    ): JsonResponse {
         $staffData = $this->staffService->assignRole(
             $staff,
             $request->validated('role')
         );
 
-        return new StaffResource($staffData);
+        return $this->successResponse(
+            new StaffResource($staffData),
+            'Staff role assigned successfully.'
+        );
     }
 
-    public function setupOwner(): StaffResource
-    {
-        $user = auth('api')->user();
+    // public function setupOwner(): JsonResponse
+    // {
+    //     $staff = $this->staffService->setupOwner();
 
-        abort_if(!$user, 401, 'Unauthenticated.');
-
-        $staff = $user->staff;
-
-        if (!$staff) {
-            $nameParts = explode(' ', $user->name, 2);
-
-            $staff = $user->staff()->create([
-                'first_name' => $nameParts[0] ?? $user->name,
-                'last_name' => $nameParts[1] ?? '',
-                'email' => $user->email,
-            ]);
-        }
-
-        $user->syncRoles(['admin']);
-
-        return new StaffResource($staff->fresh());
-    }
+    //     return $this->successResponse(
+    //         new StaffResource($staff),
+    //         'Owner staff setup successfully.'
+    //     );
+    // }
 }

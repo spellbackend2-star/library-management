@@ -11,9 +11,9 @@ class LockerService
         protected LockerInterface $lockerRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->lockerRepository->all();
+        return $this->lockerRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Locker

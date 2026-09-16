@@ -17,58 +17,74 @@ class StaffRepository extends BaseRepository implements StaffInterface
         'hire_date',
         'is_active',
         'created_at',
+        'updated_at',
     ];
 
     public function all()
     {
-        return Staff::latest()->get();
+        return Staff::with('user.roles')
+            ->latest()
+            ->get();
     }
 
     public function getAll(array $filters = [])
     {
-        $query = Staff::query()->with('user.roles');
+        $query = Staff::query()
+            ->with('user.roles');
 
-        if (isset($filters['search']) && $filters['search'] !== '') {
+        /*
+        |--------------------------------------------------------------------------
+        | Search
+        |--------------------------------------------------------------------------
+        */
+        if (! empty($filters['search'])) {
             $search = $filters['search'];
 
-            $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', '%'. $search .'%')
-                    ->orWhere('last_name', 'like', '%'. $search .'%')
-                    ->orWhere('email', 'like', '%'. $search .'%')
-                   
-                ;
+            $query->where(function ($query) use ($search) {
+                $query->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+
+                if (is_numeric($search)) {
+                    $query->orWhere('id', (int) $search);
+                }
             });
         }
 
-        if (isset($filters['role']) && $filters['role'] !== '') {
-            $query->whereHas('user.roles', function ($q) use ($filters) {
-                $q->where('name', $filters['role']);
+        /*
+        |--------------------------------------------------------------------------
+        | Role Filter
+        |--------------------------------------------------------------------------
+        */
+        if (! empty($filters['role'])) {
+            $query->whereHas('user.roles', function ($query) use ($filters) {
+                $query->where('name', $filters['role']);
             });
         }
 
-        if (isset($filters['status']) && $filters['status'] !== '') {
-            $value = strtolower($filters['status']);
+        /*
+        |--------------------------------------------------------------------------
+        | Status Filter
+        |--------------------------------------------------------------------------
+        */
+        if (! empty($filters['status'])) {
+            $status = strtolower($filters['status']);
 
-            if (in_array($value, ['active', '1', 'true', 'yes'], true)) {
+            if (in_array($status, ['active', '1', 'true', 'yes'], true)) {
                 $query->where('is_active', true);
-            } elseif (in_array($value, ['inactive', '0', 'false', 'no'], true)) {
+            } elseif (in_array($status, ['inactive', '0', 'false', 'no'], true)) {
                 $query->where('is_active', false);
             }
         }
 
-        $query = $this->applySorting($query, $filters);
-
-        $paginator = $this->applyPagination($query, $filters);
-
-        return [
-            'data' => $paginator->items(),
-            'meta' => $this->paginationMeta($paginator),
-        ];
+        return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?Staff
     {
-        return Staff::find($id);
+        return Staff::with('user.roles')
+            ->find($id);
     }
 
     public function create(array $data): Staff
@@ -82,7 +98,9 @@ class StaffRepository extends BaseRepository implements StaffInterface
 
         $staff->update($data);
 
-        return $staff->fresh();
+        return $staff->fresh([
+            'user.roles',
+        ]);
     }
 
     public function delete(int $id): bool

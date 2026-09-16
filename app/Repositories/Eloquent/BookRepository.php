@@ -16,6 +16,39 @@ class BookRepository extends BaseRepository implements BookInterface
         'created_at',
     ];
 
+    protected array $allowedFilters = [
+        'search' => [
+            'type' => 'like',
+            'column' => 'title',
+        ],
+        'title' => [
+            'type' => 'like',
+            'column' => 'title',
+        ],
+        'subtitle' => [
+            'type' => 'like',
+            'column' => 'subtitle',
+        ],
+        'description' => [
+            'type' => 'like',
+            'column' => 'description',
+        ],
+        'language' => [
+            'type' => 'exact',
+            'column' => 'language',
+        ],
+        'category_id' => [
+            'type' => 'exact',
+            'column' => 'id',
+            'relation' => 'categories',
+        ],
+        'author_id' => [
+            'type' => 'exact',
+            'column' => 'id',
+            'relation' => 'authors',
+        ],
+    ];
+
     public function all()
     {
         return Book::with([
@@ -29,7 +62,7 @@ class BookRepository extends BaseRepository implements BookInterface
             ->get();
     }
 
-    public function getAll(array $filters = [])
+    public function getAll(array $filters = []): array
     {
         $query = Book::query()->with([
             'authors',
@@ -39,36 +72,7 @@ class BookRepository extends BaseRepository implements BookInterface
             'editions.copies.edition.book',
         ]);
 
-        // Search by title
-        if (isset($filters['search']) && $filters['search'] !== '') {
-            $search = $filters['search'];
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', '%' . $search . '%')
-                    ->orWhere('subtitle', 'like', '%' . $search . '%')
-                    ->orWhere('description', 'like', '%' . $search . '%');
-            });
-        }
-
-        // Filter by category
-        if (isset($filters['category_id']) && $filters['category_id'] !== '') {
-            $query->whereHas('categories', function ($q) use ($filters) {
-                $q->where('categories.id', $filters['category_id']);
-            });
-        }
-
-        // Filter by author
-        if (isset($filters['author_id']) && $filters['author_id'] !== '') {
-            $query->whereHas('authors', function ($q) use ($filters) {
-                $q->where('authors.id', $filters['author_id']);
-            });
-        }
-
-        // Filter by language
-        if (isset($filters['language']) && $filters['language'] !== '') {
-            $query->where('language', $filters['language']);
-        }
-
-        // Filter by status (availability based on copies)
+        // Filter by status (availability based on copies) - custom logic not covered by BaseRepository
         if (isset($filters['status']) && $filters['status'] !== '') {
             $status = strtolower($filters['status']);
             if ($status === 'available') {
@@ -84,14 +88,7 @@ class BookRepository extends BaseRepository implements BookInterface
             }
         }
 
-        $query = $this->applySorting($query, $filters);
-
-        $paginator = $this->applyPagination($query, $filters);
-
-        return [
-            'data' => $paginator->items(),
-            'meta' => $this->paginationMeta($paginator),
-        ];
+        return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?Book

@@ -14,9 +14,9 @@ class LockerAssignmentService
         protected FineService $fineService,
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->lockerAssignmentRepository->all();
+        return $this->lockerAssignmentRepository->getAll($filters);
     }
 
     public function getById(int $id): ?LockerAssignment

@@ -7,54 +7,89 @@ use App\Http\Requests\Seat\StoreSeatRequest;
 use App\Http\Requests\Seat\UpdateSeatRequest;
 use App\Http\Resources\SeatResource;
 use App\Services\SeatService;
-use App\Models\Seat;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class SeatController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
         protected SeatService $seatService
     ) {}
 
-    public function index()
+    public function index(Request $request): JsonResponse
     {
-        return SeatResource::collection(
-            $this->seatService->getAll()
+        $filters = $request->only([
+            'room_id',
+            'category_id',
+            'status',
+            'has_power_outlet',
+            'is_accessible',
+            'search',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
+        $result = $this->seatService->getAll($filters);
+
+        return $this->successResponse(
+            SeatResource::collection($result['data']),
+            'Seats retrieved successfully.',
+            200,
+            $result['meta']
         );
     }
 
-    public function store(StoreSeatRequest $request): SeatResource
+    public function store(StoreSeatRequest $request): JsonResponse
     {
         $seat = $this->seatService->create(
             $request->validated()
         );
 
-        return new SeatResource($seat);
+        return $this->successResponse(
+            new SeatResource($seat),
+            'Seat created successfully.',
+            201
+        );
     }
 
-    public function show(Seat $seat): SeatResource
+    public function show(int $seat): JsonResponse
     {
-        return new SeatResource($seat);
+        $seatData = $this->seatService->getById($seat);
+
+        abort_if(!$seatData, 404, 'Seat not found.');
+
+        return $this->successResponse(
+            new SeatResource($seatData),
+            'Seat retrieved successfully.'
+        );
     }
 
     public function update(
         UpdateSeatRequest $request,
-        Seat $seat
-    ): SeatResource {
+        int $seat
+    ): JsonResponse {
         $seatData = $this->seatService->update(
-            $seat->id,
+            $seat,
             $request->validated()
         );
 
-        return new SeatResource($seatData);
+        return $this->successResponse(
+            new SeatResource($seatData),
+            'Seat updated successfully.'
+        );
     }
 
-    public function destroy(Seat $seat): JsonResponse
+    public function destroy(int $seat): JsonResponse
     {
-        $this->seatService->delete($seat->id);
+        $this->seatService->delete($seat);
 
-        return response()->json([
-            'message' => 'Seat deleted successfully.',
-        ]);
+        return $this->successResponse(
+            null,
+            'Seat deleted successfully.'
+        );
     }
 }

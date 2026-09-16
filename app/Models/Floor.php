@@ -22,4 +22,9 @@ class Floor extends Model
     {
         return $this->hasMany(Locker::class);
     }
+
+    public function hasRoom(): bool
+    {
+        return $this->rooms()->exists();
+    }
 }

@@ -26,40 +26,110 @@ class PackageRepository extends BaseRepository implements PackageInterface
 
     public function getAll(array $filters = [])
     {
-        $query = Package::orderBy('id', 'desc');
+        $query = Package::query();
 
-        if (isset($filters['search']) && $filters['search'] !== '') {
-            $query->where('name', 'like', '%'. $filters['search'] .'%');
+        /*
+        |--------------------------------------------------------------------------
+        | Search
+        |--------------------------------------------------------------------------
+        */
+        if (
+            isset($filters['search'])
+            && $filters['search'] !== ''
+        ) {
+            $query->where(function ($q) use ($filters) {
+                $q->where(
+                    'name',
+                    'like',
+                    '%' . $filters['search'] . '%'
+                )
+                ->orWhere(
+                    'description',
+                    'like',
+                    '%' . $filters['search'] . '%'
+                );
+            });
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Active Status
+        |--------------------------------------------------------------------------
+        */
         if (
             array_key_exists('is_active', $filters)
             && $filters['is_active'] !== null
             && $filters['is_active'] !== ''
         ) {
-            $query->where('is_active', $this->toBool($filters['is_active']));
+            $query->where(
+                'is_active',
+                $this->toBool($filters['is_active'])
+            );
         }
 
-        if (isset($filters['duration_unit']) && $filters['duration_unit'] !== '') {
-            $query->where('duration_unit', $filters['duration_unit']);
+        /*
+        |--------------------------------------------------------------------------
+        | Duration Unit
+        |--------------------------------------------------------------------------
+        */
+        if (
+            isset($filters['duration_unit'])
+            && $filters['duration_unit'] !== ''
+        ) {
+            $query->where(
+                'duration_unit',
+                $filters['duration_unit']
+            );
         }
 
-        if (isset($filters['min_price']) && $filters['min_price'] !== '') {
-            $query->where('price', '>=', (float) $filters['min_price']);
+        /*
+        |--------------------------------------------------------------------------
+        | Minimum Price
+        |--------------------------------------------------------------------------
+        */
+        if (
+            isset($filters['min_price'])
+            && $filters['min_price'] !== ''
+        ) {
+            $query->where(
+                'price',
+                '>=',
+                (float) $filters['min_price']
+            );
         }
 
-        if (isset($filters['max_price']) && $filters['max_price'] !== '') {
-            $query->where('price', '<=', (float) $filters['max_price']);
+        /*
+        |--------------------------------------------------------------------------
+        | Maximum Price
+        |--------------------------------------------------------------------------
+        */
+        if (
+            isset($filters['max_price'])
+            && $filters['max_price'] !== ''
+        ) {
+            $query->where(
+                'price',
+                '<=',
+                (float) $filters['max_price']
+            );
         }
 
-        $query = $this->applySorting($query, $filters);
+        if (
+            !isset($filters['sort_by'])
+            || !in_array($filters['sort_by'], $this->allowedSorts, true)
+        ) {
+            $query->latest('id');
+        }
 
-        $paginator = $this->applyPagination($query, $filters);
-
-        return [
-            'data' => $paginator->items(),
-            'meta' => $this->paginationMeta($paginator),
-        ];
+        /*
+        |--------------------------------------------------------------------------
+        | Pagination
+        |--------------------------------------------------------------------------
+        */
+        return $this->getPaginated(
+            $query,
+            $filters
+        );
     }
 
     protected function toBool($value): bool
@@ -68,7 +138,10 @@ class PackageRepository extends BaseRepository implements PackageInterface
             return $value;
         }
 
-        return filter_var($value, FILTER_VALIDATE_BOOLEAN);
+        return filter_var(
+            $value,
+            FILTER_VALIDATE_BOOLEAN
+        );
     }
 
     public function find(int $id): ?Package
@@ -81,8 +154,10 @@ class PackageRepository extends BaseRepository implements PackageInterface
         return Package::create($data);
     }
 
-    public function update(int $id, array $data): Package
-    {
+    public function update(
+        int $id,
+        array $data
+    ): Package {
         $package = Package::findOrFail($id);
 
         $package->update($data);

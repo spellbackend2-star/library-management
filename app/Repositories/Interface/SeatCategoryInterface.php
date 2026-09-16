@@ -8,6 +8,8 @@ interface SeatCategoryInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
     public function find(int $id): ?SeatCategory;
 
     public function create(array $data): SeatCategory;

@@ -11,9 +11,9 @@ class SeatService
         protected SeatInterface $seatRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->seatRepository->all();
+        return $this->seatRepository->getAll($filters);
     }
 
     public function getById(int $id): ?Seat

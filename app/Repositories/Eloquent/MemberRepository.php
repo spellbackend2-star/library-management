@@ -25,21 +25,48 @@ class MemberRepository extends BaseRepository implements MemberInterface
 
     public function all()
     {
-        return Member::with('package')->latest()->get();
+        return Member::with('package')
+            ->latest()
+            ->get();
     }
 
     public function getAll(array $filters = [])
     {
-        $query = Member::query()->with('package');
+        $query = Member::query()
+            ->with('package');
 
-        if (isset($filters['search']) && $filters['search'] !== '') {
+        /*
+        |--------------------------------------------------------------------------
+        | Search
+        |--------------------------------------------------------------------------
+        */
+        if (
+            isset($filters['search'])
+            && $filters['search'] !== ''
+        ) {
             $search = $filters['search'];
 
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', '%'. $search .'%')
-                    ->orWhere('last_name', 'like', '%'. $search .'%')
-                    ->orWhere('email', 'like', '%'. $search .'%')
-                    ->orWhere('phone', 'like', '%'. $search .'%');
+                $q->where(
+                    'first_name',
+                    'like',
+                    '%' . $search . '%'
+                )
+                ->orWhere(
+                    'last_name',
+                    'like',
+                    '%' . $search . '%'
+                )
+                ->orWhere(
+                    'email',
+                    'like',
+                    '%' . $search . '%'
+                )
+                ->orWhere(
+                    'phone',
+                    'like',
+                    '%' . $search . '%'
+                );
 
                 if (is_numeric($search)) {
                     $q->orWhere('id', $search);
@@ -47,35 +74,67 @@ class MemberRepository extends BaseRepository implements MemberInterface
             });
         }
 
-        if (isset($filters['status']) && $filters['status'] !== '') {
-            $query->where('status', $filters['status']);
+        /*
+        |--------------------------------------------------------------------------
+        | Status
+        |--------------------------------------------------------------------------
+        */
+        if (
+            isset($filters['status'])
+            && $filters['status'] !== ''
+        ) {
+            $query->where(
+                'status',
+                $filters['status']
+            );
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Package
+        |--------------------------------------------------------------------------
+        */
         if (
             array_key_exists('package_id', $filters)
             && $filters['package_id'] !== null
             && $filters['package_id'] !== ''
         ) {
-            $query->where('package_id', $filters['package_id']);
+            $query->where(
+                'package_id',
+                $filters['package_id']
+            );
         }
 
-        if (isset($filters['gender']) && $filters['gender'] !== '') {
-            $query->where('gender', $filters['gender']);
+        /*
+        |--------------------------------------------------------------------------
+        | Gender
+        |--------------------------------------------------------------------------
+        */
+        if (
+            isset($filters['gender'])
+            && $filters['gender'] !== ''
+        ) {
+            $query->where(
+                'gender',
+                $filters['gender']
+            );
         }
 
-        $query = $this->applySorting($query, $filters);
-
-        $paginator = $this->applyPagination($query, $filters);
-
-        return [
-            'data' => $paginator->items(),
-            'meta' => $this->paginationMeta($paginator),
-        ];
+        /*
+        |--------------------------------------------------------------------------
+        | Sorting + Pagination
+        |--------------------------------------------------------------------------
+        */
+        return $this->getPaginated(
+            $query,
+            $filters
+        );
     }
 
     public function find(int $id): ?Member
     {
-        return Member::with('package')->find($id);
+        return Member::with('package')
+            ->find($id);
     }
 
     public function create(array $data): Member
@@ -83,8 +142,10 @@ class MemberRepository extends BaseRepository implements MemberInterface
         return Member::create($data);
     }
 
-    public function update(int $id, array $data): Member
-    {
+    public function update(
+        int $id,
+        array $data
+    ): Member {
         $member = Member::findOrFail($id);
 
         $member->update($data);
@@ -94,6 +155,7 @@ class MemberRepository extends BaseRepository implements MemberInterface
 
     public function delete(int $id): bool
     {
-        return Member::findOrFail($id)->delete();
+        return Member::findOrFail($id)
+            ->delete();
     }
 }

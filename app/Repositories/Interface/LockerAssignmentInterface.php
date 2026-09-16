@@ -8,6 +8,9 @@ interface LockerAssignmentInterface
 {
     public function all();
 
+    public function getAll(array $filters = []): array;
+
+    public function find(int $id): ?LockerAssignment;
 
     public function create(array $data): LockerAssignment;
 
@@ -15,5 +18,5 @@ interface LockerAssignmentInterface
 
     public function delete(int $id): bool;
 
-    public function byBooking(int $bookingId);
+    public function byBooking(int $bookingId, array $filters = []): array;
 }

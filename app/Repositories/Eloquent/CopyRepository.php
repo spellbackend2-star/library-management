@@ -35,6 +35,22 @@ class CopyRepository extends BaseRepository implements CopyInterface
         ];
     }
 
+    public function getForBook(int $bookId, array $filters = []): array
+    {
+        $query = Copy::with(['edition'])
+            ->whereHas('edition', function ($query) use ($bookId) {
+                $query->where('book_id', $bookId);
+            })
+            ->latest();
+
+        $paginator = $this->applyPagination($query, $filters);
+
+        return [
+            'data' => $paginator->items(),
+            'meta' => $this->paginationMeta($paginator),
+        ];
+    }
+
     public function find(int $id): ?Copy
     {
         return Copy::with(['edition.book'])->find($id);

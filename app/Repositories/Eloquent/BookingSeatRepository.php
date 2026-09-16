@@ -3,13 +3,46 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\BookingSeat;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\BookingSeatInterface;
 
-class BookingSeatRepository implements BookingSeatInterface
+class BookingSeatRepository extends BaseRepository implements BookingSeatInterface
 {
+    protected array $allowedSorts = [
+        'id',
+        'booking_id',
+        'seat_id',
+        'start_at',
+        'end_at',
+        'status',
+        'created_at',
+    ];
+
+    protected array $allowedFilters = [
+        'booking_id' => [
+            'type' => 'exact',
+            'column' => 'booking_id',
+        ],
+        'seat_id' => [
+            'type' => 'exact',
+            'column' => 'seat_id',
+        ],
+        'status' => [
+            'type' => 'exact',
+            'column' => 'status',
+        ],
+    ];
+
     public function all()
     {
         return BookingSeat::with(['booking', 'seat'])->latest()->get();
+    }
+
+    public function getAll(array $filters = []): array
+    {
+        $query = BookingSeat::with(['booking', 'seat']);
+
+        return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?BookingSeat
@@ -36,11 +69,11 @@ class BookingSeatRepository implements BookingSeatInterface
         return BookingSeat::findOrFail($id)->delete();
     }
 
-    public function byBooking(int $bookingId)
+    public function byBooking(int $bookingId, array $filters = []): array
     {
-        return BookingSeat::with(['seat'])
-            ->where('booking_id', $bookingId)
-            ->latest()
-            ->get();
+        $query = BookingSeat::with(['seat'])
+            ->where('booking_id', $bookingId);
+
+        return $this->getPaginated($query, $filters);
     }
 }

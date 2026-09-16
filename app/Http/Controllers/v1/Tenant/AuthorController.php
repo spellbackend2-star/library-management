@@ -7,64 +7,83 @@ use App\Http\Requests\Author\StoreAuthorRequest;
 use App\Http\Requests\Author\UpdateAuthorRequest;
 use App\Http\Resources\AuthorResource;
 use App\Services\AuthorService;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AuthorController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
         protected AuthorService $authorService
     ) {}
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['per_page']);
+        $filters = $request->only([
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
         $result = $this->authorService->getAll($filters);
 
-        return AuthorResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            AuthorResource::collection($result['data']),
+            'Authors retrieved successfully.',
+            200,
+            $result['meta']
+        );
     }
 
-    public function store(StoreAuthorRequest $request): AuthorResource
+    public function store(StoreAuthorRequest $request): JsonResponse
     {
         $author = $this->authorService->create(
             $request->validated()
         );
 
-        return new AuthorResource($author);
+        return $this->successResponse(
+            new AuthorResource($author),
+            'Author created successfully.',
+            201
+        );
     }
 
-    public function show(Request $request, int $author)
+    public function show(int $author): JsonResponse
     {
-        $filters = $request->only(['per_page']);
-        $filters['id'] = $author;
+        $authorData = $this->authorService->getById($author);
 
-        $result = $this->authorService->getAll($filters);
+        abort_if(!$authorData, 404, 'Author not found.');
 
-        abort_if(empty($result['data']), 404, 'Author not found.');
-
-        return AuthorResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            new AuthorResource($authorData),
+            'Author retrieved successfully.'
+        );
     }
 
     public function update(
         UpdateAuthorRequest $request,
         int $author
-    ): AuthorResource {
+    ): JsonResponse {
         $authorData = $this->authorService->update(
             $author,
             $request->validated()
         );
 
-        return new AuthorResource($authorData);
+        return $this->successResponse(
+            new AuthorResource($authorData),
+            'Author updated successfully.'
+        );
     }
 
     public function destroy(int $author): JsonResponse
     {
         $this->authorService->delete($author);
 
-        return response()->json([
-            'message' => 'Author deleted successfully.',
-        ]);
+        return $this->successResponse(
+            null,
+            'Author deleted successfully.'
+        );
     }
 }

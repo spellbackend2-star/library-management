@@ -8,64 +8,83 @@ use App\Http\Requests\Floor\UpdateFloorRequest;
 use App\Http\Resources\FloorResource;
 use App\Services\FloorService;
 use App\Models\Floor;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class FloorController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
         protected FloorService $floorService
     ) {}
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $filters = $request->only(['per_page']);
+        $filters = $request->only([
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+
         $result = $this->floorService->getAll($filters);
 
-        return FloorResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            FloorResource::collection($result['data']),
+            'Floors retrieved successfully.',
+            200,
+            $result['meta']
+        );
     }
 
-    public function store(StoreFloorRequest $request): FloorResource
+    public function store(StoreFloorRequest $request): JsonResponse
     {
         $floor = $this->floorService->create(
             $request->validated()
         );
 
-        return new FloorResource($floor);
+        return $this->successResponse(
+            new FloorResource($floor),
+            'Floor created successfully.',
+            201
+        );
     }
 
-    public function show(Request $request, int $floor)
+    public function show(int $floor): JsonResponse
     {
-        $filters = $request->only(['per_page']);
-        $filters['id'] = $floor;
+        $floorData = $this->floorService->getById($floor);
 
-        $result = $this->floorService->getAll($filters);
+        abort_if(!$floorData, 404, 'Floor not found.');
 
-        abort_if(empty($result['data']), 404, 'Floor not found.');
-
-        return FloorResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            new FloorResource($floorData),
+            'Floor retrieved successfully.'
+        );
     }
 
     public function update(
         UpdateFloorRequest $request,
         Floor $floor
-    ): FloorResource {
+    ): JsonResponse {
         $floorData = $this->floorService->update(
             $floor->id,
             $request->validated()
         );
 
-        return new FloorResource($floorData);
+        return $this->successResponse(
+            new FloorResource($floorData),
+            'Floor updated successfully.'
+        );
     }
 
     public function destroy(Floor $floor): JsonResponse
     {
         $this->floorService->delete($floor->id);
 
-        return response()->json([
-            'message' => 'Floor deleted successfully.',
-        ]);
+        return $this->successResponse(
+            null,
+            'Floor deleted successfully.'
+        );
     }
 }

@@ -10,35 +10,31 @@ use App\Http\Requests\Book\UpdateCopyForBookRequest;
 use App\Http\Resources\BookResource;
 use App\Http\Resources\CopyResource;
 use App\Services\BookService;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class BookController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
         protected BookService $bookService
     ) {}
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $filters = $request->only([
-            'search',
-            'category_id',
-            'author_id',
-            'language',
-            'status',
-            'sort_by',
-            'sort_order',
-            'per_page',
-        ]);
+        $result = $this->bookService->getAll($request->all());
 
-        $result = $this->bookService->getAll($filters);
-
-        return BookResource::collection(collect($result['data']))
-            ->additional(['meta' => $result['meta']]);
+        return $this->successResponse(
+            BookResource::collection($result['data']),
+            'Books retrieved successfully.',
+            200,
+            $result['meta']
+        );
     }
 
-    public function store(StoreBookRequest $request): BookResource
+    public function store(StoreBookRequest $request): JsonResponse
     {
         $payload = $request->validated();
 
@@ -50,22 +46,29 @@ class BookController extends Controller
             ? $this->bookService->createWithRelations($payload)
             : $this->bookService->create($payload);
 
-        return new BookResource($book);
+        return $this->successResponse(
+            new BookResource($book),
+            'Book created successfully.',
+            201
+        );
     }
 
-    public function show(int $book): BookResource
+    public function show(int $book): JsonResponse
     {
         $bookData = $this->bookService->getByIdWithRelations($book);
 
         abort_if(!$bookData, 404, 'Book not found.');
 
-        return new BookResource($bookData);
+        return $this->successResponse(
+            new BookResource($bookData),
+            'Book retrieved successfully.'
+        );
     }
 
     public function update(
         UpdateBookRequest $request,
         int $book
-    ): BookResource {
+    ): JsonResponse {
         $payload = $request->validated();
 
         $hasNested = isset($payload['author_ids'])
@@ -76,7 +79,10 @@ class BookController extends Controller
             ? $this->bookService->updateWithRelations($book, $payload)
             : $this->bookService->update($book, $payload);
 
-        return new BookResource($bookData);
+        return $this->successResponse(
+            new BookResource($bookData),
+            'Book updated successfully.'
+        );
     }
 
     public function destroy(int $book): JsonResponse
@@ -85,9 +91,10 @@ class BookController extends Controller
 
         abort_if(!$deleted, 404, 'Book not found.');
 
-        return response()->json([
-            'message' => 'Book, all its editions, copies, and pivot links were permanently deleted.',
-        ]);
+        return $this->successResponse(
+            null,
+            'Book, all its editions, copies, and pivot links were permanently deleted.'
+        );
     }
 
     public function addCopies(
@@ -102,40 +109,36 @@ class BookController extends Controller
             copies: $payload['copies'],
         );
 
-        return response()->json([
-            'message' => count($result['created_copies']) . ' copy/copies added successfully.',
-            'book' => new BookResource($result['book']),
-            'created_copies' => CopyResource::collection(collect($result['created_copies'])),
-        ], 201);
+        return $this->successResponse(
+            [
+                'book' => new BookResource($result['book']),
+                'created_copies' => CopyResource::collection(collect($result['created_copies'])),
+            ],
+            count($result['created_copies']) . ' copy/copies added successfully.',
+            201
+        );
     }
 
-    public function listCopies(Request $request, int $book)
+    public function listCopies(Request $request, int $book): JsonResponse
     {
         try {
-            $copies = $this->bookService->listCopies(
+            $result = $this->bookService->listCopies(
                 $book,
-                (int) $request->input('per_page', 15)
+                $request->only(['per_page'])
             );
         } catch (\Exception $e) {
             abort(404, $e->getMessage());
         }
 
-        return CopyResource::collection($copies->items())
-            ->additional([
-                'meta' => [
-                    'total' => $copies->total(),
-                    'last_page' => $copies->lastPage(),
-                    'current_page' => $copies->currentPage(),
-                    'per_page' => $copies->perPage(),
-                    'first_page_url' => $copies->url(1),
-                    'last_page_url' => $copies->url($copies->lastPage()),
-                    'next_page_url' => $copies->nextPageUrl(),
-                    'prev_page_url' => $copies->previousPageUrl(),
-                ],
-            ]);
+        return $this->successResponse(
+            CopyResource::collection($result['data']),
+            'Copies retrieved successfully.',
+            200,
+            $result['meta']
+        );
     }
 
-    public function showCopy(int $book, int $copy): CopyResource
+    public function showCopy(int $book, int $copy): JsonResponse
     {
         try {
             $row = $this->bookService->getCopy($book, $copy);
@@ -143,14 +146,17 @@ class BookController extends Controller
             abort(404, $e->getMessage());
         }
 
-        return new CopyResource($row);
+        return $this->successResponse(
+            new CopyResource($row),
+            'Copy retrieved successfully.'
+        );
     }
 
     public function updateCopy(
         UpdateCopyForBookRequest $request,
         int $book,
         int $copy
-    ): CopyResource {
+    ): JsonResponse {
         try {
             $updated = $this->bookService->updateCopy(
                 bookId: $book,
@@ -161,7 +167,10 @@ class BookController extends Controller
             abort(404, $e->getMessage());
         }
 
-        return new CopyResource($updated);
+        return $this->successResponse(
+            new CopyResource($updated),
+            'Copy updated successfully.'
+        );
     }
 
     public function deleteCopy(int $book, int $copy): JsonResponse
@@ -175,10 +184,9 @@ class BookController extends Controller
             abort(404, $e->getMessage());
         }
 
-        return response()->json([
-            'message' => $deleted
-                ? 'Copy deleted successfully.'
-                : 'Copy could not be deleted.',
-        ]);
+        return $this->successResponse(
+            null,
+            $deleted ? 'Copy deleted successfully.' : 'Copy could not be deleted.'
+        );
     }
 }

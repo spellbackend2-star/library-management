@@ -11,6 +11,9 @@ Route::prefix('central')->group(function () {
     Route::middleware('auth:api')->group(function () {
         Route::post('/tenants', [CentralAuthController::class, 'register']);
         Route::get('/me', [CentralAuthController::class, 'me']);
+        Route::get('/profile', [CentralAuthController::class, 'profile']);
+        Route::put('/profile', [CentralAuthController::class, 'update']);
+        Route::post('/profile/change-password', [CentralAuthController::class, 'changePassword']);
     });
 
 });

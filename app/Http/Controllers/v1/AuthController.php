@@ -92,4 +92,116 @@ class AuthController extends Controller
             'data' => $result,
         ], 200);
     }
+
+    public function profile(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $staff = $user->staff;
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
+            'staff' => $staff ? [
+                'id' => $staff->id,
+                'first_name' => $staff->first_name,
+                'last_name' => $staff->last_name,
+                'phone' => $staff->phone,
+                'email' => $staff->email,
+                'is_active' => $staff->is_active,
+                'hire_date' => $staff->hire_date,
+            ] : null,
+        ]);
+    }
+
+    public function update(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'max:255'],
+            'email' => ['sometimes', 'string', 'email', 'max:255'],
+            'first_name' => ['sometimes', 'string', 'max:255'],
+            'last_name' => ['sometimes', 'string', 'max:255'],
+            'phone' => ['sometimes', 'string', 'max:255'],
+        ]);
+
+        $user->update([
+            'name' => $data['name'] ?? $user->name,
+            'email' => $data['email'] ?? $user->email,
+        ]);
+
+        if ($user->staff) {
+            $staffData = array_filter([
+                'first_name' => $data['first_name'] ?? null,
+                'last_name' => $data['last_name'] ?? null,
+                'phone' => $data['phone'] ?? null,
+            ], fn($v) => $v !== null);
+
+            if (!empty($staffData)) {
+                $user->staff->update($staffData);
+            }
+        }
+
+        $staff = $user->fresh()->staff;
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
+            'staff' => $staff ? [
+                'id' => $staff->id,
+                'first_name' => $staff->first_name,
+                'last_name' => $staff->last_name,
+                'phone' => $staff->phone,
+                'email' => $staff->email,
+                'is_active' => $staff->is_active,
+                'hire_date' => $staff->hire_date,
+            ] : null,
+        ]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', 'string', 'min:8'],
+        ]);
+
+        if (!Hash::check($data['current_password'], $user->password)) {
+            return response()->json([
+                'message' => 'Current password is incorrect.',
+            ], 422);
+        }
+
+        $user->update([
+            'password' => bcrypt($data['new_password']),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully.',
+        ]);
+    }
 }

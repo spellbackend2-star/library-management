@@ -73,6 +73,11 @@ Route::middleware([
 
     Route::middleware('auth:api')->group(function () {
 
+        // Profile
+        Route::get('/profile', [AuthController::class, 'profile']);
+        Route::put('/profile', [AuthController::class, 'update']);
+        Route::post('/profile/change-password', [AuthController::class, 'changePassword']);
+
         // Members
         Route::apiResource('members', MemberController::class);
 

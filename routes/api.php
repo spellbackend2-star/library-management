@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\v1\Central\CentralAuthController;
+use App\Http\Controllers\v1\Central\CentralSubscriptionPaymentController;
 use App\Http\Controllers\v1\Tenant\SubscriptionController;
 use App\Http\Controllers\v1\Tenant\SubscriptionPlanController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,10 @@ Route::prefix('central')->group(function () {
         Route::put('/profile', [CentralAuthController::class, 'update']);
         Route::post('/profile/change-password', [CentralAuthController::class, 'changePassword']);
         Route::post('/logout', [CentralAuthController::class, 'logout']);
+
+        Route::post('/subscription-payments', [CentralSubscriptionPaymentController::class, 'store']);
+        Route::get('/subscription-payments/{payment}', [CentralSubscriptionPaymentController::class, 'show']);
+        Route::patch('/subscription-payments/{payment}/complete', [CentralSubscriptionPaymentController::class, 'complete']);
     });
 
 });

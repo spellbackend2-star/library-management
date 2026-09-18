@@ -18,6 +18,12 @@ return new class extends Migration
                 ->constrained('subscriptions')
                 ->cascadeOnDelete();
 
+            $table->string('tenant_id', 36)->nullable();
+            $table->foreign('tenant_id')
+                ->references('id')
+                ->on('tenants')
+                ->nullOnDelete();
+
             $table->decimal('amount', 12, 2);
 
             $table->enum('payment_method', [

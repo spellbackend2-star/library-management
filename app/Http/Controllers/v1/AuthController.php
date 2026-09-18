@@ -46,6 +46,12 @@ class AuthController extends Controller
             ], 404);
         }
 
+        if ($tenant->status !== 'active') {
+            return response()->json([
+                'message' => 'Tenant is inactive. Complete subscription payment first.'
+            ], 403);
+        }
+
         if ($user->staff && !$user->staff->is_active) {
             return response()->json([
                 'message' => 'Staff account is inactive'

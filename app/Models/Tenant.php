@@ -16,6 +16,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'company_name',
         'tenant_code',
         'owner_email',
+        'status',
         'passport_client_id',
         'passport_client_secret',
     ];
@@ -27,6 +28,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
             'company_name',
             'tenant_code',
             'owner_email',
+            'status',
             'passport_client_id',
             'passport_client_secret',
         ];

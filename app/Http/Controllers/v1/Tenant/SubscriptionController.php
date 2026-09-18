@@ -26,10 +26,13 @@ class SubscriptionController extends Controller
             $request->all()
         );
 
+        $items = new \Illuminate\Database\Eloquent\Collection($result['data'] ?? []);
+        $items = $items->loadMissing(['plan', 'tenant']);
+
         return response()->json([
             'success' => true,
             'message' => 'Subscriptions retrieved successfully.',
-            'data' => SubscriptionResource::collection($result['data']),
+            'data' => SubscriptionResource::collection($items),
             'meta' => $result['meta'],
         ]);
     }
@@ -49,7 +52,7 @@ class SubscriptionController extends Controller
 
     public function show(Subscription $subscription): JsonResponse
     {
-        $subscription->load(['plan', 'payments']);
+        $subscription->load(['plan', 'tenant', 'payments']);
 
         return $this->successResponse(
             new SubscriptionResource($subscription),

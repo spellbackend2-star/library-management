@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\Subscription;
+use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
 use App\Models\User;
+use Carbon\Carbon;
 use App\Repositories\Interface\TenantInterface;
 use Database\Seeders\Tenant\RolePermissionSeeder;
 use GuzzleHttp\Psr7\Response;
@@ -165,9 +167,7 @@ class CentralAuthService
             'company_name' => $data['company_name'],
             'tenant_code' => $data['subdomain'],
             'owner_email' => $data['email'],
-
-            // Use this only if your tenants table has this column.
-            'is_active' => false,
+            'status' => 'inactive',
         ]);
 
         /*
@@ -276,6 +276,17 @@ class CentralAuthService
                 'expires_at' => null,
                 'status' => 'pending',
             ]);
+
+            SubscriptionPayment::create([
+                'subscription_id' => $subscription->id,
+                'tenant_id' => $tenant->id,
+                'amount' => $subscription->amount,
+                'payment_method' => 'CASH',
+                'status' => 'PENDING',
+                'transaction_id' => null,
+                'gateway_response' => null,
+                'paid_at' => null,
+            ]);
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 'Failed to create tenant: ' . $e->getMessage()
@@ -287,5 +298,56 @@ class CentralAuthService
             'domain' => $domain->domain,
             'subscription' => $subscription->load('plan'),
         ];
+    }
+
+    public function completeCentralCashPayment(SubscriptionPayment $payment): SubscriptionPayment
+    {
+        return DB::transaction(function () use ($payment) {
+            $subscription = $payment->subscription()->first();
+
+            if (! $subscription) {
+                throw new \RuntimeException('Subscription not found for this payment.');
+            }
+
+            $plan = $subscription->plan()->first();
+
+            if (! $plan) {
+                throw new \RuntimeException('Subscription plan not found for this payment.');
+            }
+
+            $payment->update([
+                'status' => 'SUCCESS',
+                'paid_at' => now(),
+            ]);
+
+            $startDate = now();
+            $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
+                'day' => $startDate->copy()->addDays((int) $plan->duration),
+                'month' => $startDate->copy()->addMonths((int) $plan->duration),
+                'year' => $startDate->copy()->addYears((int) $plan->duration),
+                default => $startDate->copy()->addMonths((int) $plan->duration),
+            };
+
+            $subscription->update([
+                'status' => 'active',
+                'starts_at' => $startDate->toDateString(),
+                'expires_at' => $expiresAt->toDateString(),
+            ]);
+
+            $tenant = $payment->tenant()->first() ?? $subscription->tenant()->first();
+
+            if ($tenant) {
+                $tenant->update([
+                    'status' => 'active',
+                ]);
+            }
+
+            return $payment->fresh()->load(['subscription.plan', 'tenant']);
+        });
+    }
+
+    public function activateSubscriptionPayment(SubscriptionPayment $payment): SubscriptionPayment
+    {
+        return $this->completeCentralCashPayment($payment);
     }
 }

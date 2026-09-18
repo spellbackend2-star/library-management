@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Subscription;
+use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Repositories\Interface\TenantInterface;
@@ -14,7 +16,6 @@ use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Psr\Http\Message\ServerRequestInterface;
 use Spatie\Permission\Models\Role;
-use Stancl\Tenancy\Exceptions\TenantCouldNotBeIdentified;
 
 class CentralAuthService
 {
@@ -69,12 +70,6 @@ class CentralAuthService
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Verify central Passport client
-        |--------------------------------------------------------------------------
-        */
-
         $client = DB::table('oauth_clients')
             ->where('id', $clientId)
             ->where('revoked', false)
@@ -85,12 +80,6 @@ class CentralAuthService
                 'Central Passport client not found.'
             );
         }
-
-        /*
-        |--------------------------------------------------------------------------
-        | Issue token
-        |--------------------------------------------------------------------------
-        */
 
         $tokenRequest = $serverRequest->withParsedBody([
             'grant_type' => 'password',
@@ -134,25 +123,58 @@ class CentralAuthService
     }
 
     /**
-     * Register a new tenant.
+     * Register a new tenant with a pending subscription.
      *
      * Flow:
-     *   1. Create central tenant row + domain.
-     *   2. Initialize tenancy to provision the tenant DB and run migrations.
-     *   3. Inside the tenant context: create the owner, seed
-     *      RolePermissionSeeder, assign the admin role, create the
-     *      per-tenant Passport client, persist client credentials
-     *      on the central tenant row.
-     *
-     * @return array{tenant: Tenant, domain: string}
+     * 1. Select subscription plan.
+     * 2. Create tenant.
+     * 3. Create tenant domain.
+     * 4. Provision tenant database.
+     * 5. Create tenant owner.
+     * 6. Create pending subscription.
+     * 7. Create tenant Passport client.
+     * 8. Payment happens separately.
+     * 9. Tenant is activated only after successful payment.
      */
     public function registerTenant(array $data): array
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Get selected subscription plan from CENTRAL database
+        |--------------------------------------------------------------------------
+        */
+
+        $plan = SubscriptionPlan::query()
+            ->where('id', $data['subscription_plan_id'])
+            ->where('is_active', true)
+            ->first();
+
+        if (!$plan) {
+            throw new \RuntimeException(
+                'Selected subscription plan is not available.'
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create central tenant
+        |--------------------------------------------------------------------------
+        */
+
         $tenant = Tenant::create([
             'company_name' => $data['company_name'],
             'tenant_code' => $data['subdomain'],
             'owner_email' => $data['email'],
+
+            // Use this only if your tenants table has this column.
+            'is_active' => false,
         ]);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Create tenant domain
+        |--------------------------------------------------------------------------
+        */
 
         $domain = $tenant->domains()->create([
             'domain' => $data['subdomain']
@@ -161,17 +183,45 @@ class CentralAuthService
         ]);
 
         try {
-            $tenant->run(function () use ($data, $tenant) {
+            /*
+            |--------------------------------------------------------------------------
+            | Initialize tenant
+            |--------------------------------------------------------------------------
+            */
+
+            $tenant->run(function () use (
+                $data,
+                $tenant,
+                $plan
+            ) {
+                /*
+                |--------------------------------------------------------------------------
+                | Create tenant owner
+                |--------------------------------------------------------------------------
+                */
+
                 $owner = User::create([
                     'name' => $data['owner'],
                     'email' => $data['email'],
                     'password' => bcrypt($data['password']),
                 ]);
 
+                /*
+                |--------------------------------------------------------------------------
+                | Seed roles and permissions
+                |--------------------------------------------------------------------------
+                */
+
                 Artisan::call('db:seed', [
                     '--class' => RolePermissionSeeder::class,
                     '--force' => true,
                 ]);
+
+                /*
+                |--------------------------------------------------------------------------
+                | Assign admin role
+                |--------------------------------------------------------------------------
+                */
 
                 $adminRole = Role::where('name', 'admin')
                     ->where('guard_name', 'api')
@@ -181,6 +231,12 @@ class CentralAuthService
                     $owner->assignRole($adminRole->name);
                 }
 
+                /*
+                |--------------------------------------------------------------------------
+                | Create tenant Passport client
+                |--------------------------------------------------------------------------
+                */
+
                 $client = app(ClientRepository::class)
                     ->createPasswordGrantClient(
                         name: $data['company_name']
@@ -189,11 +245,37 @@ class CentralAuthService
                         confidential: true,
                     );
 
+                /*
+                |--------------------------------------------------------------------------
+                | Save Passport credentials on central tenant
+                |--------------------------------------------------------------------------
+                */
+
                 $tenant->update([
                     'passport_client_id' => $client->id,
                     'passport_client_secret' => $client->plainSecret,
                 ]);
             });
+
+            /*
+            |--------------------------------------------------------------------------
+            | Create PENDING subscription in CENTRAL database
+            |--------------------------------------------------------------------------
+            |
+            | IMPORTANT:
+            | Subscription belongs to the central tenant.
+            | Therefore this must be created outside $tenant->run().
+            |
+            */
+
+            $subscription = Subscription::create([
+                'tenant_id' => $tenant->id,
+                'subscription_plan_id' => $plan->id,
+                'amount' => $plan->price,
+                'starts_at' => null,
+                'expires_at' => null,
+                'status' => 'pending',
+            ]);
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 'Failed to create tenant: ' . $e->getMessage()
@@ -203,6 +285,7 @@ class CentralAuthService
         return [
             'tenant' => $tenant->fresh(),
             'domain' => $domain->domain,
+            'subscription' => $subscription->load('plan'),
         ];
     }
 }

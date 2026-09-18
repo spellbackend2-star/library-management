@@ -95,11 +95,30 @@ class CentralAuthController extends Controller
             'company_name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', 'min:8'],
-            'subdomain' => ['required', 'string', 'max:255'],
+            'subdomain' => ['required', 'string', 'max:255', 'unique:tenants,tenant_code'],
+            'subscription_plan_id' => [
+                'required',
+                'integer',
+                'exists:subscription_plans,id',
+            ],
+        ], [
+            'subdomain.unique' => 'This subdomain is already taken. Please choose another one.',
         ]);
 
         try {
             $result = $this->centralAuthService->registerTenant($data);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if (str_contains($e->getMessage(), 'Duplicate entry') || str_contains($e->getMessage(), '1062')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'This subdomain is already taken. Please choose another one.',
+                ], 422);
+            }
+
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to register tenant. Please try again.',
+            ], 500);
         } catch (\RuntimeException $e) {
             return response()->json([
                 'status' => 'error',

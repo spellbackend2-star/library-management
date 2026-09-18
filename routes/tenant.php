@@ -77,6 +77,7 @@ Route::middleware([
         Route::get('/profile', [AuthController::class, 'profile']);
         Route::put('/profile', [AuthController::class, 'update']);
         Route::post('/profile/change-password', [AuthController::class, 'changePassword']);
+        Route::post('/logout', [AuthController::class, 'logout']);
 
         // Members
         Route::apiResource('members', MemberController::class);

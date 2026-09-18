@@ -26,7 +26,10 @@ use App\Repositories\Eloquent\SeatCategoryRepository;
 use App\Repositories\Eloquent\SeatRepository;
 use App\Repositories\Eloquent\SettingRepository;
 use App\Repositories\Eloquent\StaffRepository;
-use App\Repositories\Eloquent\TenantRepository;use App\Repositories\Interface\AuthorInterface;
+use App\Repositories\Eloquent\SubscriptionPlanRepository;
+use App\Repositories\Eloquent\SubscriptionRepository;
+use App\Repositories\Eloquent\TenantRepository;
+use App\Repositories\Interface\AuthorInterface;
 use App\Repositories\Interface\BookAuthorInterface;
 use App\Repositories\Interface\BookCategoryInterface;
 use App\Repositories\Interface\BookEditionInterface;
@@ -50,6 +53,8 @@ use App\Repositories\Interface\SeatCategoryInterface;
 use App\Repositories\Interface\SeatInterface;
 use App\Repositories\Interface\SettingInterface;
 use App\Repositories\Interface\StaffInterface;
+use App\Repositories\Interface\SubscriptionInterface;
+use App\Repositories\Interface\SubscriptionPlanInterface;
 use App\Repositories\Interface\TenantInterface;
 use App\Repositories\Interface\InvoiceInterface;
 use Illuminate\Support\ServiceProvider;
@@ -113,6 +118,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             PackageInterface::class,
             PackageRepository::class
+        );
+        $this->app->bind(
+            SubscriptionPlanInterface::class,
+            SubscriptionPlanRepository::class
+        );
+        $this->app->bind(
+            SubscriptionInterface::class,
+            SubscriptionRepository::class
         );
         $this->app->bind(
             FloorInterface::class,

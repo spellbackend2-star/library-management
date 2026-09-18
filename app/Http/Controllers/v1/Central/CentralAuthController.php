@@ -195,4 +195,30 @@ class CentralAuthController extends Controller
             'message' => 'Password changed successfully.',
         ]);
     }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user) {
+            $token = $user->currentAccessToken();
+
+            if ($token && $token->revoke()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Logged out successfully.',
+                ]);
+            }
+
+            $user->tokens()
+                ->where('revoked', false)
+                ->get()
+                ->each(fn ($token) => $token->revoke());
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Logged out successfully.',
+        ]);
+    }
 }

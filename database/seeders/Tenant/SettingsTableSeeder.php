@@ -4,99 +4,92 @@ namespace Database\Seeders\Tenant;
 
 use App\Models\Setting;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Schema;
 
 class SettingsTableSeeder extends Seeder
 {
+    /**
+     * Run the database seeds.
+     */
     public function run(): void
     {
-        $defaults = [
+        if (! Schema::hasTable('settings')) {
+            return;
+        }
+
+        $settings = [
             [
-                'group' => 'auth',
-                'key' => 'default_staff_role',
-                'value' => 'manager',
+                'group' => 'general',
+                'key' => 'logo',
+                'value' => null,
                 'type' => 'string',
-                'description' => 'Default role assigned to newly created staff.',
-            ],
-            [
-                'group' => 'auth',
-                'key' => 'default_user_role',
-                'value' => 'member',
-                'type' => 'string',
-                'description' => 'Default role assigned to newly registered users/members.',
-            ],
-            [
-                'group' => 'auth',
-                'key' => 'user_roles_permissions',
-                'value' => [
-                    'admin' => ['staff.view', 'staff.create', 'staff.update', 'staff.delete', 'staff.assign-role'],
-                    'manager' => ['staff.view', 'staff.create', 'staff.update'],
-                    'librarian' => ['staff.view'],
-                    'clerk' => ['staff.view'],
-                ],
-                'type' => 'json',
-                'description' => 'Mapping of user roles to their permissions.',
+                'description' => 'Library logo.',
+                'is_locked' => false,
             ],
             [
                 'group' => 'general',
-                'key' => 'library_name',
+                'key' => 'favicon',
+                'value' => null,
+                'type' => 'string',
+                'description' => 'Library favicon.',
+                'is_locked' => false,
+            ],
+            [
+                'group' => 'general',
+                'key' => 'company_name',
                 'value' => 'Library',
                 'type' => 'string',
-                'description' => 'Display name of the library.',
+                'description' => 'Company or library name.',
+                'is_locked' => false,
             ],
             [
                 'group' => 'general',
-                'key' => 'default_email',
+                'key' => 'email',
                 'value' => 'info@library.test',
                 'type' => 'string',
-                'description' => 'Default contact email for the library.',
+                'description' => 'Default contact email.',
+                'is_locked' => false,
+            ],
+            [
+                'group' => 'general',
+                'key' => 'address',
+                'value' => '',
+                'type' => 'string',
+                'description' => 'Company or library address.',
+                'is_locked' => false,
+            ],
+            [
+                'group' => 'general',
+                'key' => 'phone',
+                'value' => '',
+                'type' => 'string',
+                'description' => 'Company or library phone number.',
+                'is_locked' => false,
+            ],
+            [
+                'group' => 'general',
+                'key' => 'date_format',
+                'value' => 'Y-m-d',
+                'type' => 'string',
+                'description' => 'Default date format.',
+                'is_locked' => false,
             ],
             [
                 'group' => 'general',
                 'key' => 'currency',
                 'value' => 'NPR',
                 'type' => 'string',
-                'description' => 'Default currency code for billing.',
-            ],
-            [
-                'group' => 'payment',
-                'key' => 'enabled_methods',
-                'value' => ['CASH', 'KHALTI', 'ESEWA'],
-                'type' => 'json',
-                'description' => 'Payment methods enabled for the library.',
-            ],
-            [
-                'group' => 'payment',
-                'key' => 'khalti_enabled',
-                'value' => true,
-                'type' => 'boolean',
-                'description' => 'Enable Khalti as a payment gateway.',
-            ],
-            [
-                'group' => 'payment',
-                'key' => 'esewa_enabled',
-                'value' => true,
-                'type' => 'boolean',
-                'description' => 'Enable eSewa as a payment gateway.',
-            ],
-            [
-                'group' => 'booking',
-                'key' => 'advance_booking_days',
-                'value' => 7,
-                'type' => 'integer',
-                'description' => 'Maximum days in advance a member can book a seat.',
-            ],
-            [
-                'group' => 'booking',
-                'key' => 'allow_loyalty_points',
-                'value' => true,
-                'type' => 'boolean',
-                'description' => 'Allow loyalty points as a payment method.',
+                'description' => 'Default currency.',
+                'is_locked' => false,
             ],
         ];
 
-        foreach ($defaults as $setting) {
+        foreach ($settings as $setting) {
             Setting::updateOrCreate(
-                ['group' => $setting['group'], 'key' => $setting['key']],
+                [
+                    'group' => $setting['group'],
+                    'key' => $setting['key'],
+                ],
                 $setting
             );
         }

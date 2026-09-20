@@ -40,13 +40,13 @@ class StoreMemberRequest extends FormRequest
             ],
 
             'phone' => [
-                'nullable',
+                'required',
                 'string',
                 'max:30',
             ],
 
             'address' => [
-                'nullable',
+                'required',
                 'string',
                 'max:255',
             ],
@@ -57,7 +57,7 @@ class StoreMemberRequest extends FormRequest
             ],
 
             'membership_start' => [
-                'nullable',
+                'required',
                 'date',
             ],
 
@@ -73,7 +73,7 @@ class StoreMemberRequest extends FormRequest
             ],
 
             'gender' => [
-                'nullable',
+                'required',
                 'string',
                 'max:20',
                 'in:male,female,other',

@@ -43,7 +43,7 @@ class MemberController extends Controller
     {
         $data = $request->validated();
 
-        $withInvoice = $data['with_invoice'] ?? false;
+        $withInvoice = $data['with_invoice'] ?? true;
 
         [$member, $invoice] = DB::transaction(
             function () use ($data, $withInvoice) {

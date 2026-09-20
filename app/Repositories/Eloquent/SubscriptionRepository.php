@@ -30,7 +30,7 @@ class SubscriptionRepository extends BaseRepository implements SubscriptionInter
 
         if (isset($filters['search']) && $filters['search'] !== '') {
             $query->where(function ($q) use ($filters) {
-                $q->where('status', 'like', '%' . $filters['search'] . '%');
+                $q->where('status', 'like', '%'.$filters['search'].'%');
             });
         }
 
@@ -42,6 +42,10 @@ class SubscriptionRepository extends BaseRepository implements SubscriptionInter
             $query->where('subscription_plan_id', $filters['subscription_plan_id']);
         }
 
+        if (isset($filters['tenant_id']) && $filters['tenant_id'] !== '') {
+            $query->where('tenant_id', $filters['tenant_id']);
+        }
+
         if (isset($filters['min_amount']) && $filters['min_amount'] !== '') {
             $query->where('amount', '>=', (float) $filters['min_amount']);
         }
@@ -50,7 +54,7 @@ class SubscriptionRepository extends BaseRepository implements SubscriptionInter
             $query->where('amount', '<=', (float) $filters['max_amount']);
         }
 
-        if (!isset($filters['sort_by']) || !in_array($filters['sort_by'], $this->allowedSorts, true)) {
+        if (! isset($filters['sort_by']) || ! in_array($filters['sort_by'], $this->allowedSorts, true)) {
             $query->latest('id');
         }
 

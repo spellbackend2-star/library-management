@@ -13,7 +13,6 @@ class SubscriptionResource extends JsonResource
             'id' => $this->id,
             'tenant_id' => $this->tenant_id,
             'subscription_plan_id' => $this->subscription_plan_id,
-            'amount' => $this->amount,
             'starts_at' => $this->starts_at,
             'expires_at' => $this->expires_at,
             'status' => $this->status,

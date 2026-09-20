@@ -67,9 +67,9 @@ class UpdatePackageRequest extends FormRequest
             'max_seat_hours_per_day' => [
                 'nullable',
                 'required_if:seat_access_allowed,true',
-                'numeric',
-                'gt:0',
-                'max:24',
+                'integer',
+                'min:1',
+                'max:4',
             ],
 
             'locker_allowed' => [
@@ -88,9 +88,9 @@ class UpdatePackageRequest extends FormRequest
             'max_locker_hours_per_day' => [
                 'nullable',
                 'required_if:locker_allowed,true',
-                'numeric',
-                'gt:0',
-                'max:24',
+                'integer',
+                'min:1',
+                'max:4',
             ],
 
             'is_active' => [

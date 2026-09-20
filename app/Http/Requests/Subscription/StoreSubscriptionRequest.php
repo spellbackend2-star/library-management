@@ -19,11 +19,6 @@ class StoreSubscriptionRequest extends FormRequest
                 'integer',
                 'exists:subscription_plans,id',
             ],
-            'amount' => [
-                'required',
-                'numeric',
-                'min:0',
-            ],
             'starts_at' => [
                 'nullable',
                 'date',

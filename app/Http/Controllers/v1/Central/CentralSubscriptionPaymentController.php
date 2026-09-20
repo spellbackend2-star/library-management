@@ -15,6 +15,44 @@ class CentralSubscriptionPaymentController extends Controller
         protected CentralAuthService $centralAuthService
     ) {}
 
+    public function index(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'tenant_id' => ['nullable', 'string'],
+            'subscription_id' => ['nullable', 'integer'],
+            'status' => ['nullable', 'string', 'in:PENDING,SUCCESS,FAILED'],
+            'payment_method' => ['nullable', 'string', 'in:CASH,KHALTI,ESEWA'],
+        ]);
+
+        $query = SubscriptionPayment::query();
+
+        if (! empty($validated['tenant_id'])) {
+            $query->where('tenant_id', $validated['tenant_id']);
+        }
+
+        if (! empty($validated['subscription_id'])) {
+            $query->where('subscription_id', $validated['subscription_id']);
+        }
+
+        if (! empty($validated['status'])) {
+            $query->where('status', $validated['status']);
+        }
+
+        if (! empty($validated['payment_method'])) {
+            $query->where('payment_method', $validated['payment_method']);
+        }
+
+        $payments = $query->with(['subscription.plan', 'tenant'])
+            ->latest('id')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Subscription payments retrieved successfully.',
+            'data' => $payments,
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([

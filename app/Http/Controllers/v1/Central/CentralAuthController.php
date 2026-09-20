@@ -4,9 +4,9 @@ namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
 use App\Services\CentralAuthService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -66,7 +66,7 @@ class CentralAuthController extends Controller
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
@@ -107,7 +107,7 @@ class CentralAuthController extends Controller
 
         try {
             $result = $this->centralAuthService->registerTenant($data);
-        } catch (\Illuminate\Database\QueryException $e) {
+        } catch (QueryException $e) {
             if (str_contains($e->getMessage(), 'Duplicate entry') || str_contains($e->getMessage(), '1062')) {
                 return response()->json([
                     'status' => 'error',
@@ -131,6 +131,8 @@ class CentralAuthController extends Controller
             'message' => 'Tenant registered successfully',
             'tenant' => $result['tenant'],
             'domain' => $result['domain'],
+            'subscription' => $result['subscription'] ?? null,
+            'subscription_payment' => $result['subscription_payment'] ?? null,
         ], 201);
     }
 
@@ -138,7 +140,7 @@ class CentralAuthController extends Controller
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
@@ -164,7 +166,7 @@ class CentralAuthController extends Controller
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
@@ -190,7 +192,7 @@ class CentralAuthController extends Controller
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
@@ -199,7 +201,7 @@ class CentralAuthController extends Controller
             'new_password' => ['required', 'string', 'min:8'],
         ]);
 
-        if (!Hash::check($data['current_password'], $user->password)) {
+        if (! Hash::check($data['current_password'], $user->password)) {
             return response()->json([
                 'message' => 'Current password is incorrect.',
             ], 422);

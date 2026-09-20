@@ -7,7 +7,6 @@ use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
 use App\Models\User;
-use Carbon\Carbon;
 use App\Repositories\Interface\TenantInterface;
 use Database\Seeders\Tenant\RolePermissionSeeder;
 use GuzzleHttp\Psr7\Response;
@@ -36,8 +35,8 @@ class CentralAuthService
         $centralUser = User::where('email', $email)->first();
 
         if (
-            !$centralUser ||
-            !Hash::check($password, $centralUser->password)
+            ! $centralUser ||
+            ! Hash::check($password, $centralUser->password)
         ) {
             throw new \RuntimeException('Invalid credentials.');
         }
@@ -66,7 +65,7 @@ class CentralAuthService
         $clientId = config('passport.central_client_id');
         $clientSecret = config('passport.central_client_secret');
 
-        if (!$clientId || !$clientSecret) {
+        if (! $clientId || ! $clientSecret) {
             throw new \RuntimeException(
                 'Central Passport client credentials are not configured.'
             );
@@ -77,7 +76,7 @@ class CentralAuthService
             ->where('revoked', false)
             ->first();
 
-        if (!$client) {
+        if (! $client) {
             throw new \RuntimeException(
                 'Central Passport client not found.'
             );
@@ -95,7 +94,7 @@ class CentralAuthService
         $passportResponse = app(AccessTokenController::class)
             ->issueToken(
                 $tokenRequest,
-                new Response()
+                new Response
             );
 
         $token = json_decode(
@@ -103,7 +102,7 @@ class CentralAuthService
             true
         );
 
-        if (!is_array($token) || isset($token['error'])) {
+        if (! is_array($token) || isset($token['error'])) {
             throw new \RuntimeException(
                 $token['error_description']
                     ?? $token['message']
@@ -151,7 +150,7 @@ class CentralAuthService
             ->where('is_active', true)
             ->first();
 
-        if (!$plan) {
+        if (! $plan) {
             throw new \RuntimeException(
                 'Selected subscription plan is not available.'
             );
@@ -178,8 +177,8 @@ class CentralAuthService
 
         $domain = $tenant->domains()->create([
             'domain' => $data['subdomain']
-                . '.'
-                . config('tenancy.central_domains')[0],
+                .'.'
+                .config('tenancy.central_domains')[0],
         ]);
 
         try {
@@ -191,8 +190,8 @@ class CentralAuthService
 
             $tenant->run(function () use (
                 $data,
-                $tenant,
-                $plan
+                $tenant
+
             ) {
                 /*
                 |--------------------------------------------------------------------------
@@ -240,7 +239,7 @@ class CentralAuthService
                 $client = app(ClientRepository::class)
                     ->createPasswordGrantClient(
                         name: $data['company_name']
-                            . ' Password Grant Client',
+                            .' Password Grant Client',
                         provider: 'users',
                         confidential: true,
                     );
@@ -271,25 +270,25 @@ class CentralAuthService
             $subscription = Subscription::create([
                 'tenant_id' => $tenant->id,
                 'subscription_plan_id' => $plan->id,
-                'amount' => $plan->price,
                 'starts_at' => null,
                 'expires_at' => null,
                 'status' => 'pending',
             ]);
 
-            SubscriptionPayment::create([
+            $subscriptionPayment = SubscriptionPayment::create([
                 'subscription_id' => $subscription->id,
                 'tenant_id' => $tenant->id,
-                'amount' => $subscription->amount,
+                'amount' => (float) $plan->price,
                 'payment_method' => 'CASH',
                 'status' => 'PENDING',
                 'transaction_id' => null,
                 'gateway_response' => null,
                 'paid_at' => null,
             ]);
+
         } catch (\Throwable $e) {
             throw new \RuntimeException(
-                'Failed to create tenant: ' . $e->getMessage()
+                'Failed to create tenant: '.$e->getMessage()
             );
         }
 
@@ -297,6 +296,7 @@ class CentralAuthService
             'tenant' => $tenant->fresh(),
             'domain' => $domain->domain,
             'subscription' => $subscription->load('plan'),
+            'subscription_payment' => $subscriptionPayment,
         ];
     }
 

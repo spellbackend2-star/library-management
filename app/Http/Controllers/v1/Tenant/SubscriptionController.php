@@ -39,9 +39,14 @@ class SubscriptionController extends Controller
 
     public function store(StoreSubscriptionRequest $request): JsonResponse
     {
-        $subscription = $this->subscriptionService->create(
-            $request->validated()
-        );
+        $data = $request->validated();
+        $tenant = tenant();
+
+        if ($tenant && isset($tenant->id)) {
+            $data['tenant_id'] = $tenant->id;
+        }
+
+        $subscription = $this->subscriptionService->create($data);
 
         return $this->successResponse(
             new SubscriptionResource($subscription->load(['plan', 'payments'])),

@@ -23,9 +23,13 @@ Route::prefix('central')->group(function () {
         Route::post('/profile/change-password', [CentralAuthController::class, 'changePassword']);
         Route::post('/logout', [CentralAuthController::class, 'logout']);
 
+        Route::get('/subscription-payments', [CentralSubscriptionPaymentController::class, 'index']);
         Route::post('/subscription-payments', [CentralSubscriptionPaymentController::class, 'store']);
         Route::get('/subscription-payments/{payment}', [CentralSubscriptionPaymentController::class, 'show']);
         Route::patch('/subscription-payments/{payment}/complete', [CentralSubscriptionPaymentController::class, 'complete']);
+        Route::post('/subscription-payments/{payment}/verify-khalti', [CentralSubscriptionPaymentController::class, 'verifyKhalti']);
+        Route::post('/subscription-payments/{payment}/verify-esewa', [CentralSubscriptionPaymentController::class, 'verifyEsewa']);
+        Route::patch('/subscription-payments/{payment}/fail', [CentralSubscriptionPaymentController::class, 'fail']);
     });
 
 });

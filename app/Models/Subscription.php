@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'tenant_id',
     'subscription_plan_id',
+    'amount',
     'starts_at',
     'expires_at',
     'status',

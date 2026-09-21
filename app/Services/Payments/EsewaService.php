@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\Payment;
+use App\Models\SubscriptionPayment;
 use Illuminate\Support\Facades\Http;
 
 class EsewaService
@@ -74,6 +75,68 @@ class EsewaService
         ];
     }
 
+    public function initiateSubscription(SubscriptionPayment $payment): array
+    {
+        $subscription = $payment->subscription;
+
+        if (! $subscription) {
+            throw new \Exception('Subscription not found for this payment.');
+        }
+
+        $plan = $subscription->plan;
+
+        if (! $plan) {
+            throw new \Exception('Subscription plan not found.');
+        }
+
+        // Generate transaction_id if not set
+        if (! $payment->transaction_id) {
+            $payment->update([
+                'transaction_id' => 'SUB-'.$payment->id.'-'.uniqid(),
+            ]);
+        }
+
+        $totalAmount = number_format(
+            (float) $payment->amount,
+            2,
+            '.',
+            ''
+        );
+
+        $signature = $this->generateSignature(
+            $totalAmount,
+            $payment->transaction_id
+        );
+
+        return [
+            'payment_url' => "{$this->baseUrl}/main/v2/form",
+
+            'params' => [
+                'amount' => $totalAmount,
+                'tax_amount' => '0',
+                'total_amount' => $totalAmount,
+                'product_service_charge' => '0',
+                'product_delivery_charge' => '0',
+
+                'transaction_uuid' => $payment->transaction_id,
+                'product_code' => $this->productCode,
+
+                'success_url' => route(
+                    'central.subscription-payments.verify-esewa',
+                    ['payment' => $payment->id]
+                ),
+                'failure_url' => route(
+                    'central.subscription-payments.verify-esewa',
+                    ['payment' => $payment->id]
+                ),
+
+                'signed_field_names' => 'total_amount,transaction_uuid,product_code',
+
+                'signature' => $signature,
+            ],
+        ];
+    }
+
     private function generateSignature(
         string $totalAmount,
         string $transactionUuid
@@ -127,6 +190,14 @@ class EsewaService
             'transaction_id',
             $transactionUuid
         )->first();
+
+        if (! $payment) {
+            // Try SubscriptionPayment
+            $payment = SubscriptionPayment::where(
+                'transaction_id',
+                $transactionUuid
+            )->first();
+        }
 
         if (! $payment) {
             throw new \Exception(
@@ -187,12 +258,6 @@ class EsewaService
             'status' => 'SUCCESS',
             'paid_at' => now(),
             'gateway_reference' => $verify['transaction_code'] ?? null,
-        ]);
-
-        // Confirm booking
-        $payment->booking?->update([
-            'status' => 'CONFIRMED',
-            'payment_status' => 'PAID',
         ]);
 
         return [

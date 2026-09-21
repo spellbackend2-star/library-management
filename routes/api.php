@@ -15,6 +15,10 @@ Route::prefix('central')->group(function () {
 
     Route::post('/login', [CentralAuthController::class, 'login']);
 
+    // Public callback routes for payment gateways (no auth required)
+    Route::get('/subscription-payments/{payment}/verify-khalti', [CentralSubscriptionPaymentController::class, 'verifyKhalti'])->name('central.subscription-payments.verify-khalti');
+    Route::get('/subscription-payments/{payment}/verify-esewa', [CentralSubscriptionPaymentController::class, 'verifyEsewa'])->name('central.subscription-payments.verify-esewa');
+
     Route::middleware('auth:api')->group(function () {
         Route::post('/tenants', [CentralAuthController::class, 'register']);
         Route::get('/me', [CentralAuthController::class, 'me']);
@@ -25,10 +29,10 @@ Route::prefix('central')->group(function () {
 
         Route::get('/subscription-payments', [CentralSubscriptionPaymentController::class, 'index']);
         Route::post('/subscription-payments', [CentralSubscriptionPaymentController::class, 'store']);
+        Route::post('/subscription-payments/initiate-from-plan', [CentralSubscriptionPaymentController::class, 'initiateFromPlan']);
         Route::get('/subscription-payments/{payment}', [CentralSubscriptionPaymentController::class, 'show']);
         Route::patch('/subscription-payments/{payment}/complete', [CentralSubscriptionPaymentController::class, 'complete']);
-        Route::post('/subscription-payments/{payment}/verify-khalti', [CentralSubscriptionPaymentController::class, 'verifyKhalti']);
-        Route::post('/subscription-payments/{payment}/verify-esewa', [CentralSubscriptionPaymentController::class, 'verifyEsewa']);
+        Route::post('/subscription-payments/{payment}/complete-and-create-tenant', [CentralSubscriptionPaymentController::class, 'completeAndCreateTenant']);
         Route::patch('/subscription-payments/{payment}/fail', [CentralSubscriptionPaymentController::class, 'fail']);
     });
 

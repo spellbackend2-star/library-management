@@ -3,6 +3,7 @@
 namespace App\Services\Payments;
 
 use App\Models\Payment;
+use App\Models\SubscriptionPayment;
 use Illuminate\Support\Facades\Http;
 
 class KhaltiService
@@ -18,7 +19,7 @@ class KhaltiService
     }
 
     /**
-     * Initiate Khalti payment.
+     * Initiate Khalti payment for tenant invoice.
      */
     public function initiate(Payment $payment): array
     {
@@ -63,6 +64,70 @@ class KhaltiService
                 'purchase_order_id' => $invoice->invoice_number,
 
                 'purchase_order_name' => 'Invoice #'.$invoice->invoice_number,
+            ]
+        );
+
+        if ($response->failed()) {
+            throw new \Exception(
+                'Khalti initiation failed: '.
+                    $response->body()
+            );
+        }
+
+        $result = $response->json();
+
+        if (empty($result['pidx'])) {
+            throw new \Exception(
+                'Khalti did not return a payment ID.'
+            );
+        }
+
+        $payment->update([
+            'transaction_id' => $result['pidx'],
+        ]);
+
+        return $result;
+    }
+
+    /**
+     * Initiate Khalti payment for central subscription.
+     */
+    public function initiateSubscription(SubscriptionPayment $payment): array
+    {
+        $subscription = $payment->subscription;
+
+        if (! $subscription) {
+            throw new \Exception('Subscription not found for this payment.');
+        }
+
+        $plan = $subscription->plan;
+
+        if (! $plan) {
+            throw new \Exception('Subscription plan not found.');
+        }
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Key '.$this->secretKey,
+            'Content-Type' => 'application/json',
+        ])->post(
+            rtrim($this->baseUrl, '/').'/epayment/initiate/',
+            [
+                'return_url' => route(
+                    'central.subscription-payments.verify-khalti',
+                    [
+                        'payment' => $payment->id,
+                    ]
+                ),
+
+                'website_url' => config('app.url'),
+
+                'amount' => (int) round(
+                    $payment->amount * 100
+                ),
+
+                'purchase_order_id' => 'SUB-'.$payment->id,
+
+                'purchase_order_name' => 'Subscription #'.$payment->id,
             ]
         );
 

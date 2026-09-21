@@ -6,6 +6,7 @@ use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Member;
 use App\Models\Payment;
+use App\Models\Setting;
 use App\Repositories\Interface\InvoiceInterface;
 use App\Repositories\Interface\PaymentRepositoryInterface;
 use App\Services\FineService;
@@ -263,10 +264,34 @@ class InvoiceService
 
     protected function generateInvoiceNumber(): string
     {
+        $prefix = Setting::where('group', 'invoice')
+            ->where('key', 'invoice_prefix')
+            ->value('value') ?? 'INV';
+
+        $startNumber = (int) (Setting::where('group', 'invoice')
+            ->where('key', 'invoice_start_number')
+            ->value('value') ?? 1000);
+
+        $format = Setting::where('group', 'invoice')
+            ->where('key', 'invoice_number_format')
+            ->value('value') ?? '{PREFIX}-{YEAR}-{NUMBER}';
+
         $last = Invoice::orderByDesc('id')->first();
+        $next = $last ? ((int) $last->id + 1) : $startNumber;
 
-        $next = $last ? ((int) $last->id + 1) : 1;
+        if ($next < $startNumber) {
+            $next = $startNumber;
+        }
 
-        return 'INV-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT);
+        $year = now()->format('Y');
+        $number = (string) $next;
+
+        $formatted = str_replace(
+            ['{PREFIX}', '{YEAR}', '{NUMBER}'],
+            [strtoupper((string) $prefix), $year, $number],
+            $format
+        );
+
+        return $formatted;
     }
 }

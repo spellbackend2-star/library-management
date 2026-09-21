@@ -270,6 +270,7 @@ class CentralAuthService
             $subscription = Subscription::create([
                 'tenant_id' => $tenant->id,
                 'subscription_plan_id' => $plan->id,
+                'amount' => (float) $plan->price,
                 'starts_at' => null,
                 'expires_at' => null,
                 'status' => 'pending',
@@ -343,6 +344,105 @@ class CentralAuthService
             }
 
             return $payment->fresh()->load(['subscription.plan', 'tenant']);
+        });
+    }
+
+    public function completePaymentAndCreateTenant(SubscriptionPayment $payment, array $data): array
+    {
+        $subscription = $payment->subscription()->first();
+
+        if (! $subscription) {
+            throw new \RuntimeException('Subscription not found for this payment.');
+        }
+
+        $plan = $subscription->plan()->first();
+
+        if (! $plan) {
+            throw new \RuntimeException('Subscription plan not found for this payment.');
+        }
+
+        $tenant = Tenant::create([
+            'company_name' => $data['company_name'],
+            'tenant_code' => $data['subdomain'],
+            'owner_email' => $data['email'],
+            'status' => 'inactive',
+        ]);
+
+        $domain = $tenant->domains()->create([
+            'domain' => $data['subdomain']
+                .'.'
+                .config('tenancy.central_domains')[0],
+        ]);
+
+        $tenant->run(function () use ($data, $tenant) {
+            $owner = User::create([
+                'name' => $data['owner'],
+                'email' => $data['email'],
+                'password' => bcrypt($data['password']),
+            ]);
+
+            Artisan::call('db:seed', [
+                '--class' => RolePermissionSeeder::class,
+                '--force' => true,
+            ]);
+
+            $adminRole = Role::where('name', 'admin')
+                ->where('guard_name', 'api')
+                ->first();
+
+            if ($adminRole) {
+                $owner->assignRole($adminRole->name);
+            }
+
+            $client = app(ClientRepository::class)
+                ->createPasswordGrantClient(
+                    name: $data['company_name']
+                        .' Password Grant Client',
+                    provider: 'users',
+                    confidential: true,
+                );
+
+            $tenant->update([
+                'passport_client_id' => $client->id,
+                'passport_client_secret' => $client->plainSecret,
+            ]);
+        });
+
+        return DB::transaction(function () use ($payment, $subscription, $plan, $tenant, $domain) {
+            $payment->update([
+                'status' => 'SUCCESS',
+                'paid_at' => now(),
+            ]);
+
+            $startDate = now();
+            $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
+                'day' => $startDate->copy()->addDays((int) $plan->duration),
+                'month' => $startDate->copy()->addMonths((int) $plan->duration),
+                'year' => $startDate->copy()->addYears((int) $plan->duration),
+                default => $startDate->copy()->addMonths((int) $plan->duration),
+            };
+
+            $subscription->update([
+                'status' => 'active',
+                'starts_at' => $startDate->toDateString(),
+                'expires_at' => $expiresAt->toDateString(),
+                'tenant_id' => $tenant->id,
+            ]);
+
+            $tenant->update([
+                'status' => 'active',
+            ]);
+
+            $payment->update([
+                'tenant_id' => $tenant->id,
+            ]);
+
+            return [
+                'tenant' => $tenant->fresh(),
+                'domain' => $domain->domain,
+                'subscription' => $subscription->fresh()->load('plan'),
+                'subscription_payment' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+            ];
         });
     }
 

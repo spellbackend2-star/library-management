@@ -121,6 +121,22 @@ Route::middleware([
         Route::apiResource('packages', PackageController::class);
 
         // Settings
+        Route::get('/settings/company', [SettingController::class, 'company']);
+        Route::put('/settings/company', [SettingController::class, 'updateCompany']);
+
+        Route::get('/settings/appearance', [SettingController::class, 'appearance']);
+        Route::put('/settings/appearance', [SettingController::class, 'updateAppearance']);
+
+        Route::get('/settings/invoice', [SettingController::class, 'invoice']);
+        Route::put('/settings/invoice', [SettingController::class, 'updateInvoice']);
+
+        Route::prefix('api/v1')->group(function () {
+            Route::get('/settings/appearance', [SettingController::class, 'appearance']);
+            Route::put('/settings/appearance', [SettingController::class, 'updateAppearance']);
+            Route::get('/settings/invoice', [SettingController::class, 'invoice']);
+            Route::put('/settings/invoice', [SettingController::class, 'updateInvoice']);
+        });
+
         Route::apiResource('settings', SettingController::class);
 
         // Authors

@@ -22,7 +22,7 @@ class StorePaymentRequest extends FormRequest
             'amount' => [
                 'required',
                 'numeric',
-                'min:0',
+                'min:0.01',
             ],
             'currency' => [
                 'nullable',

@@ -20,8 +20,7 @@ return new class extends Migration
             // Personal Information
             $table->string('first_name', 100);
             $table->string('last_name', 100);
-            $table->string('email', 255)
-                ->unique();
+            $table->string('email', 255);
 
             $table->string('phone', 30)
                 ->nullable();

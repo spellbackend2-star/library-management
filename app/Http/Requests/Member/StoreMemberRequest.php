@@ -31,12 +31,10 @@ class StoreMemberRequest extends FormRequest
                 'string',
                 'max:100',
             ],
-
             'email' => [
                 'required',
                 'email',
                 'max:255',
-                'unique:members,email',
             ],
 
             'phone' => [
@@ -57,7 +55,7 @@ class StoreMemberRequest extends FormRequest
             ],
 
             'membership_start' => [
-                'required',
+                'nullable',
                 'date',
             ],
 
@@ -83,8 +81,22 @@ class StoreMemberRequest extends FormRequest
                 'nullable',
                 'boolean',
             ],
+
+            'coupon_id' => [
+                'nullable',
+                'integer',
+                'exists:coupons,id',
+            ],
         ];
 
         return $rules;
+    }
+
+    public function messages(): array
+    {
+        return [
+            'email.required' => 'The email field is required.',
+            'email.email' => 'The email must be a valid email address.',
+        ];
     }
 }

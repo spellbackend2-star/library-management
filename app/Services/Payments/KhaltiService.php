@@ -34,7 +34,7 @@ class KhaltiService
         }
 
         // Verify remaining balance before initiating
-        $maxPayable = round((float) $invoice->total_amount - (float) $invoice->coupon_discount, 2);
+        $maxPayable = round((float) $invoice->total_amount, 2);
         $paidAmount = round((float) $invoice->paid_amount, 2);
         $remaining = max(0, $maxPayable - $paidAmount);
 

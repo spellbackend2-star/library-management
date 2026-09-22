@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\v1\Central\CentralAuthController;
+use App\Http\Controllers\v1\Central\CentralDashboardController;
 use App\Http\Controllers\v1\Central\CentralSubscriptionPaymentController;
 use App\Http\Controllers\v1\Tenant\SubscriptionController;
 use App\Http\Controllers\v1\Tenant\SubscriptionPlanController;
@@ -26,6 +27,9 @@ Route::prefix('central')->group(function () {
         Route::put('/profile', [CentralAuthController::class, 'update']);
         Route::post('/profile/change-password', [CentralAuthController::class, 'changePassword']);
         Route::post('/logout', [CentralAuthController::class, 'logout']);
+
+        // Central Dashboard
+        Route::get('/dashboard', [CentralDashboardController::class, 'index']);
 
         Route::get('/subscription-payments', [CentralSubscriptionPaymentController::class, 'index']);
         Route::post('/subscription-payments', [CentralSubscriptionPaymentController::class, 'store']);

@@ -105,8 +105,7 @@ class PaymentService
 
         $remaining = round(
             (float) $invoice->total_amount
-                - (float) $invoice->paid_amount
-                - (float) $invoice->coupon_discount,
+                - (float) $invoice->paid_amount,
             2
         );
 
@@ -234,15 +233,9 @@ class PaymentService
 
                 $paidAmount = round((float) $paidAmount, 2);
 
-                $payableAmount = round(
-                    (float) $invoice->total_amount
-                        - (float) $invoice->coupon_discount,
-                    2
-                );
-
                 $remainingAmount = max(
                     0,
-                    $payableAmount - $paidAmount
+                    (float) $invoice->total_amount - $paidAmount
                 );
 
                 $status = $remainingAmount <= 0

@@ -65,7 +65,7 @@ class InvoiceController extends Controller
                     'total_amount' => $invoice->total_amount,
                     'coupon_discount' => $invoice->coupon_discount,
                     'paid_amount' => $invoice->paid_amount,
-                    'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount - (float) $invoice->coupon_discount, 2, '.', ''),
+                    'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount, 2, '.', ''),
                     'status' => $invoice->status,
                 ],
             ], 200);
@@ -77,7 +77,7 @@ class InvoiceController extends Controller
 
             // Calculate effective remaining including this pending payment
             $effectivePaidAmount = (float) $invoice->paid_amount + (float) $payment->amount;
-            $effectiveRemaining = max(0, (float) $invoice->total_amount - $effectivePaidAmount - (float) $invoice->coupon_discount);
+            $effectiveRemaining = max(0, (float) $invoice->total_amount - $effectivePaidAmount);
 
             return response()->json([
                 'success' => true,
@@ -113,7 +113,7 @@ class InvoiceController extends Controller
                 'total_amount' => $invoice->total_amount,
                 'coupon_discount' => $invoice->coupon_discount,
                 'paid_amount' => $invoice->paid_amount,
-                'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount - (float) $invoice->coupon_discount, 2, '.', ''),
+                'remaining_amount' => number_format((float) $invoice->total_amount - (float) $invoice->paid_amount, 2, '.', ''),
                 'status' => $invoice->status,
             ],
         ], 201);

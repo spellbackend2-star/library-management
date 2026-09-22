@@ -42,6 +42,11 @@ class AddPaymentRequest extends FormRequest
                 'nullable',
                 'date',
             ],
+            'extra_discount' => [
+                'nullable',
+                'numeric',
+                'min:0',
+            ],
         ];
     }
 }

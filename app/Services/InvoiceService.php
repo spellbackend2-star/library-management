@@ -13,6 +13,7 @@ use App\Services\FineService;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class InvoiceService
 {
@@ -44,6 +45,7 @@ class InvoiceService
     public function create(array $data): Invoice
     {
         $memberId = (int) $data['member_id'];
+        $couponId = isset($data['coupon_id']) ? (int) $data['coupon_id'] : null;
         $totalAmount = round((float) ($data['total_amount'] ?? 0), 2);
 
         $existing = $this->invoiceRepository->findByMember($memberId);
@@ -59,23 +61,28 @@ class InvoiceService
             throw new \Exception('Member does not have a package assigned.');
         }
 
-        if ($totalAmount <= 0) {
-            $totalAmount = round((float) $package->price, 2);
-        }
+        // Add package price to total amount
+        $packagePrice = round((float) $package->price, 2);
+        $totalAmount += $packagePrice;
 
         $couponDiscount = $this->applyCouponIfProvided($data, $totalAmount);
 
+        if ($couponId && $couponDiscount > 0) {
+            $totalAmount = round($totalAmount - $couponDiscount, 2);
+        }
+
         $invoiceNumber = $this->generateInvoiceNumber();
 
-        return DB::transaction(function () use ($memberId, $totalAmount, $couponDiscount, $invoiceNumber, $data) {
+        return DB::transaction(function () use ($memberId, $couponId, $totalAmount, $couponDiscount, $invoiceNumber, $data) {
             return $this->invoiceRepository->create([
                 'member_id' => $memberId,
+                'coupon_id' => $couponId,
                 'invoice_number' => $invoiceNumber,
                 'invoice_type' => $data['invoice_type'] ?? 'booking',
                 'total_amount' => $totalAmount,
                 'coupon_discount' => $couponDiscount,
                 'paid_amount' => 0,
-                'remaining_amount' => round($totalAmount - $couponDiscount, 2),
+                'remaining_amount' => $totalAmount,
                 'status' => 'unpaid',
                 'due_date' => $data['due_date'] ?? now()->addDays(7)->toDateString(),
                 'notes' => $data['notes'] ?? null,
@@ -85,28 +92,48 @@ class InvoiceService
 
     private function applyCouponIfProvided(array $data, float $totalAmount): float
     {
-        $couponCode = $data['coupon_code'] ?? null;
+        $couponId = $data['coupon_id'] ?? null;
 
-        if (! $couponCode) {
+        if (! $couponId) {
             return 0;
         }
 
-        $coupon = Coupon::where('code', $couponCode)
-            ->where('is_active', true)
-            ->where('valid_from', '<=', now())
-            ->where('valid_until', '>=', now())
-            ->first();
+        $coupon = Coupon::find($couponId);
 
         if (! $coupon) {
-            throw new \Exception('Invalid or expired coupon code.');
+            throw ValidationException::withMessages([
+                'coupon_id' => ['The selected coupon is invalid.'],
+            ]);
         }
 
-        if ($totalAmount < (float) $coupon->min_order_value) {
-            throw new \Exception('Minimum order value not met for this coupon.');
+        if (! $coupon->is_active) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['This coupon is inactive.'],
+            ]);
+        }
+
+        if ($coupon->valid_from && now() < $coupon->valid_from) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['This coupon is not yet valid.'],
+            ]);
+        }
+
+        if ($coupon->valid_until && now() > $coupon->valid_until) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['This coupon has expired.'],
+            ]);
         }
 
         if ($coupon->max_uses !== null && (int) $coupon->used_count >= (int) $coupon->max_uses) {
-            throw new \Exception('Coupon usage limit reached.');
+            throw ValidationException::withMessages([
+                'coupon_id' => ['Coupon usage limit reached.'],
+            ]);
+        }
+
+        if ($totalAmount < (float) $coupon->min_order_value) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['Minimum order value not met for this coupon.'],
+            ]);
         }
 
         $discount = match ($coupon->discount_type) {
@@ -156,8 +183,8 @@ class InvoiceService
         $extraDiscount = round((float) ($paymentData['extra_discount'] ?? 0), 2);
         $paymentMethod = strtoupper($paymentData['payment_method'] ?? 'CASH');
 
-        // Maximum payable = total - coupon discount
-        $maxPayable = round((float) $invoice->total_amount - (float) $invoice->coupon_discount, 2);
+        // Maximum payable = total_amount (coupon already applied to total_amount)
+        $maxPayable = round((float) $invoice->total_amount, 2);
         // Already paid (only SUCCESS payments)
         $paidAmount = round((float) $invoice->paid_amount, 2);
         // Remaining balance
@@ -217,7 +244,7 @@ class InvoiceService
             }
 
             $newPaidAmount = round((float) $invoice->paid_amount + $amount, 2);
-            $newRemainingAmount = round((float) $invoice->total_amount - $newPaidAmount - (float) $invoice->coupon_discount, 2);
+            $newRemainingAmount = round((float) $invoice->total_amount - $newPaidAmount, 2);
             $newStatus = 'partially_paid';
 
             if ($newRemainingAmount <= 0) {
@@ -276,6 +303,8 @@ class InvoiceService
             ->where('key', 'invoice_number_format')
             ->value('value') ?? '{PREFIX}-{YEAR}-{NUMBER}';
 
+        $year = now()->format('Y');
+
         $last = Invoice::orderByDesc('id')->first();
         $next = $last ? ((int) $last->id + 1) : $startNumber;
 
@@ -283,14 +312,20 @@ class InvoiceService
             $next = $startNumber;
         }
 
-        $year = now()->format('Y');
-        $number = (string) $next;
-
         $formatted = str_replace(
             ['{PREFIX}', '{YEAR}', '{NUMBER}'],
-            [strtoupper((string) $prefix), $year, $number],
+            [strtoupper((string) $prefix), $year, (string) $next],
             $format
         );
+
+        while (Invoice::where('invoice_number', $formatted)->exists()) {
+            $next++;
+            $formatted = str_replace(
+                ['{PREFIX}', '{YEAR}', '{NUMBER}'],
+                [strtoupper((string) $prefix), $year, (string) $next],
+                $format
+            );
+        }
 
         return $formatted;
     }

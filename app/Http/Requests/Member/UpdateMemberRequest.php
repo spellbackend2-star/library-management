@@ -35,13 +35,13 @@ class UpdateMemberRequest extends FormRequest
                 'max:100',
             ],
 
+
             'email' => [
-                'sometimes',
+                'required',
                 'email',
                 'max:255',
-                Rule::unique('members', 'email')->ignore($memberId),
+                Rule::unique('members', 'email')->ignore($member->id),
             ],
-
             'phone' => [
                 'nullable',
                 'string',
@@ -82,5 +82,10 @@ class UpdateMemberRequest extends FormRequest
                 'in:male,female,other',
             ],
         ];
+    }
+
+    public function messages(): array
+    {
+        return [];
     }
 }

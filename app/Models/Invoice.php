@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 
 #[Fillable([
         'member_id',
+        'coupon_id',
         'invoice_number',
         'invoice_type',
         'total_amount',

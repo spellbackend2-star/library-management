@@ -70,6 +70,7 @@ class MemberController extends Controller
                 $invoice = $this->invoiceService->create([
                     'member_id' => $member->id,
                     'total_amount' => $package->price,
+                    'coupon_id' => $data['coupon_id'] ?? null,
                 ]);
 
                 return [$member, $invoice];

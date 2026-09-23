@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Subscription;
+use App\Models\SubscriptionInvoice;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
@@ -134,8 +135,10 @@ class CentralAuthService
      * 5. Create tenant owner.
      * 6. Create pending subscription.
      * 7. Create tenant Passport client.
-     * 8. Payment happens separately.
-     * 9. Tenant is activated only after successful payment.
+     * 8. Create subscription invoice (before payment).
+     * 9. Create pending payment linked to invoice.
+     * 10. Payment happens separately.
+     * 11. Tenant is activated only after successful payment.
      */
     public function registerTenant(array $data): array
     {
@@ -276,8 +279,15 @@ class CentralAuthService
                 'status' => 'pending',
             ]);
 
+            $invoice = $this->createSubscriptionInvoice(
+                $subscription,
+                $tenant->id,
+                (float) $plan->price
+            );
+
             $subscriptionPayment = SubscriptionPayment::create([
                 'subscription_id' => $subscription->id,
+                'invoice_id' => $invoice->id,
                 'tenant_id' => $tenant->id,
                 'amount' => (float) $plan->price,
                 'payment_method' => 'CASH',
@@ -297,8 +307,51 @@ class CentralAuthService
             'tenant' => $tenant->fresh(),
             'domain' => $domain->domain,
             'subscription' => $subscription->load('plan'),
-            'subscription_payment' => $subscriptionPayment,
+            'subscription_payment' => $subscriptionPayment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
+            'invoice' => $invoice,
         ];
+    }
+
+    /**
+     * Create a subscription invoice for a given subscription.
+     *
+     * The invoice amount is derived from the subscription amount.
+     * This method does NOT accept amount from external callers.
+     */
+    protected function createSubscriptionInvoice(
+        Subscription $subscription,
+        string $tenantId,
+        float $amount
+    ): SubscriptionInvoice {
+        $invoiceNumber = $this->generateSubscriptionInvoiceNumber();
+
+        return SubscriptionInvoice::create([
+            'tenant_id' => $tenantId,
+            'subscription_id' => $subscription->id,
+            'invoice_number' => $invoiceNumber,
+            'subtotal' => $amount,
+            'tax' => 0,
+            'discount' => 0,
+            'total_amount' => $amount,
+            'paid_amount' => 0,
+            'remaining_amount' => $amount,
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+            'notes' => null,
+        ]);
+    }
+
+    /**
+     * Generate a unique invoice number for subscription invoices.
+     */
+    protected function generateSubscriptionInvoiceNumber(): string
+    {
+        $prefix = 'SUB-INV';
+
+        $last = SubscriptionInvoice::orderByDesc('id')->first();
+        $next = $last ? ((int) $last->id + 1) : 1;
+
+        return $prefix.'-'.str_pad((string) $next, 6, '0', STR_PAD_LEFT);
     }
 
     public function completeCentralCashPayment(SubscriptionPayment $payment): SubscriptionPayment
@@ -343,7 +396,17 @@ class CentralAuthService
                 ]);
             }
 
-            return $payment->fresh()->load(['subscription.plan', 'tenant']);
+            // Mark the related invoice as PAID
+            $invoice = $payment->invoice()->first();
+            if ($invoice) {
+                $invoice->update([
+                    'status' => 'paid',
+                    'paid_amount' => $invoice->total_amount,
+                    'remaining_amount' => 0,
+                ]);
+            }
+
+            return $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']);
         });
     }
 
@@ -412,6 +475,7 @@ class CentralAuthService
             $payment->update([
                 'status' => 'SUCCESS',
                 'paid_at' => now(),
+                'tenant_id' => $tenant->id,
             ]);
 
             $startDate = now();
@@ -433,15 +497,25 @@ class CentralAuthService
                 'status' => 'active',
             ]);
 
-            $payment->update([
-                'tenant_id' => $tenant->id,
+            // Mark the existing invoice as PAID
+            $invoice = $payment->invoice()->first() ?? $this->createSubscriptionInvoice(
+                $subscription,
+                $tenant->id,
+                (float) $subscription->amount
+            );
+
+            $invoice->update([
+                'status' => 'paid',
+                'paid_amount' => $invoice->total_amount,
+                'remaining_amount' => 0,
             ]);
 
             return [
                 'tenant' => $tenant->fresh(),
                 'domain' => $domain->domain,
                 'subscription' => $subscription->fresh()->load('plan'),
-                'subscription_payment' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+                'subscription_payment' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
+                'invoice' => $invoice,
             ];
         });
     }

@@ -46,11 +46,13 @@ class InvoiceController extends Controller
 
     public function addPayment(int $id, AddPaymentRequest $request): JsonResponse
     {
+        $data = $request->validated();
         $result = $this->invoiceService->addPayment(
             $id,
-            $request->validated()
+            $data
         );
 
+        $result['return_url'] = $data['return_url'] ?? null;
         if (is_array($result) && ($result['status'] ?? null) === 'already_paid') {
             $payment = $result['payment'];
             $invoice = $payment->invoice;
@@ -83,7 +85,12 @@ class InvoiceController extends Controller
                 'success' => true,
                 'message' => 'Payment initiated. Redirect to payment URL.',
                 'payment' => new PaymentResource($payment),
-                'payment_url' => $payment->payment_url,
+                'url' => url('invoices/' . $invoice->id . '/paymentss'),
+                'data' => [
+                    'amount' => (int) $payment->amount,
+                    'payment_method' => $payment->payment_method,
+                    'return_url' => $data['return_url'] ?? null,
+                ],
                 'transaction_id' => $payment->gateway_reference,
                 'invoice' => [
                     'id' => $invoice->id,

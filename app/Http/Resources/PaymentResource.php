@@ -17,6 +17,8 @@ class PaymentResource extends JsonResource
             'payment_method' => $this->payment_method,
             'status' => $this->status,
             'paid_at' => $this->paid_at?->format('Y-m-d H:i:s'),
+            'payment_url' => $this->payment_url,
+            'return_url' => $this->return_url,
         ];
     }
 }

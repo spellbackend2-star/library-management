@@ -130,11 +130,22 @@ Route::middleware([
         Route::get('/settings/invoice', [SettingController::class, 'invoice']);
         Route::put('/settings/invoice', [SettingController::class, 'updateInvoice']);
 
+        Route::get('/settings/notification', [SettingController::class, 'notification']);
+        Route::put('/settings/notification', [SettingController::class, 'updateNotification']);
+
+        Route::get('/settings/smtp', [SettingController::class, 'smtp']);
+        Route::put('/settings/smtp', [SettingController::class, 'updateSmtp']);
+
         Route::prefix('api/v1')->group(function () {
             Route::get('/settings/appearance', [SettingController::class, 'appearance']);
             Route::put('/settings/appearance', [SettingController::class, 'updateAppearance']);
             Route::get('/settings/invoice', [SettingController::class, 'invoice']);
             Route::put('/settings/invoice', [SettingController::class, 'updateInvoice']);
+            Route::get('/settings/notification', [SettingController::class, 'notification']);
+            Route::put('/settings/notification', [SettingController::class, 'updateNotification']);
+
+            Route::get('/settings/smtp', [SettingController::class, 'smtp']);
+            Route::put('/settings/smtp', [SettingController::class, 'updateSmtp']);
         });
 
         Route::apiResource('settings', SettingController::class);
@@ -303,7 +314,7 @@ Route::middleware([
 
         // Add payment to invoice
         Route::post(
-            'invoices/{invoice}/payments',
+            'invoices/{invoice}/paymentss',
             [InvoiceController::class, 'addPayment']
         );
 

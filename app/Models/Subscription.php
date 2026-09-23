@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'tenant_id',
@@ -36,5 +37,15 @@ class Subscription extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(SubscriptionPayment::class);
+    }
+
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(SubscriptionInvoice::class);
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(SubscriptionInvoice::class);
     }
 }

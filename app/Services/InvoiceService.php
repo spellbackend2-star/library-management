@@ -207,8 +207,9 @@ class InvoiceService
         }
 
         $isGateway = in_array($paymentMethod, ['KHALTI', 'ESEWA'], true);
+        $return_url= $paymentData['return_url'] ?? null;
 
-        return DB::transaction(function () use ($invoice, $paymentData, $amount, $extraDiscount, $paymentMethod, $isGateway) {
+        return DB::transaction(function () use ($invoice, $paymentData, $amount, $extraDiscount, $paymentMethod, $isGateway, $return_url) {
             $payment = $this->paymentRepository->create([
                 'invoice_id' => $invoice->id,
                 'member_id' => $invoice->member_id,
@@ -225,7 +226,7 @@ class InvoiceService
             if ($isGateway) {
                 if ($paymentMethod === 'KHALTI') {
                     $khaltiService = app(KhaltiService::class);
-                    $result = $khaltiService->initiate($payment);
+                    $result = $khaltiService->initiate($payment , $return_url);
                     $payment->update([
                         'payment_url' => $result['payment_url'] ?? null,
                         'gateway_reference' => $result['pidx'] ?? null,

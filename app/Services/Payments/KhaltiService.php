@@ -21,7 +21,7 @@ class KhaltiService
     /**
      * Initiate Khalti payment for tenant invoice.
      */
-    public function initiate(Payment $payment): array
+    public function initiate(Payment $payment , $return_url): array
     {
         $invoice = $payment->invoice;
 
@@ -41,19 +41,13 @@ class KhaltiService
         if ($payment->amount > $remaining) {
             throw new \Exception("Payment amount ({$payment->amount}) exceeds remaining balance ({$remaining}). Max payable: {$maxPayable}, Already paid: {$paidAmount}");
         }
-
         $response = Http::withHeaders([
             'Authorization' => 'Key '.$this->secretKey,
             'Content-Type' => 'application/json',
         ])->post(
             rtrim($this->baseUrl, '/').'/epayment/initiate/',
             [
-                'return_url' => route(
-                    'payments.khalti.verify',
-                    [
-                        'paymentId' => $payment->id,
-                    ]
-                ),
+                'return_url' => $return_url,
 
                 'website_url' => config('app.url'),
 

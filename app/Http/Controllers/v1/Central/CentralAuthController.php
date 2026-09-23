@@ -132,6 +132,7 @@ class CentralAuthController extends Controller
             'tenant' => $result['tenant'],
             'domain' => $result['domain'],
             'subscription' => $result['subscription'] ?? null,
+            'invoice' => $result['invoice'] ?? null,
             'subscription_payment' => $result['subscription_payment'] ?? null,
         ], 201);
     }

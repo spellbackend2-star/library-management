@@ -47,6 +47,10 @@ class AddPaymentRequest extends FormRequest
                 'numeric',
                 'min:0',
             ],
+            'return_url' => [
+                'required',
+                'url',
+            ],
         ];
     }
 }

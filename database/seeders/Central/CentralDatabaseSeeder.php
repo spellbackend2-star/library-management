@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\Central;
 
+use Database\Seeders\CentralRolePermissionSeeder;
 use Illuminate\Database\Seeder;
 
 class CentralDatabaseSeeder extends Seeder
@@ -11,6 +12,7 @@ class CentralDatabaseSeeder extends Seeder
         $this->call([
             CentralUserSeeder::class,
             CentralPassportSeeder::class,
+            CentralRolePermissionSeeder::class,
         ]);
     }
 }

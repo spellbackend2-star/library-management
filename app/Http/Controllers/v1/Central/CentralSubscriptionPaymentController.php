@@ -4,6 +4,7 @@ namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
 use App\Models\Subscription;
+use App\Models\SubscriptionInvoice;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Services\CentralAuthService;
@@ -48,7 +49,7 @@ class CentralSubscriptionPaymentController extends Controller
             $query->where('payment_method', $validated['payment_method']);
         }
 
-        $payments = $query->with(['subscription.plan', 'tenant'])
+        $payments = $query->with(['subscription.plan', 'tenant', 'invoice'])
             ->latest('id')
             ->get();
 
@@ -82,10 +83,28 @@ class CentralSubscriptionPaymentController extends Controller
             ], 422);
         }
 
+        $pricingPlan = (float) $subscription->plan->price;
+
+        $invoice = SubscriptionInvoice::create([
+            'tenant_id' => $subscription->tenant_id,
+            'subscription_id' => $subscription->id,
+            'invoice_number' => SubscriptionInvoice::generateInvoiceNumber(),
+            'invoice_type' => 'subscription',
+            'subtotal' => $pricingPlan,
+            'tax' => 0,
+            'discount' => 0,
+            'total_amount' => $pricingPlan,
+            'paid_amount' => 0,
+            'remaining_amount' => $pricingPlan,
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+        ]);
+
         $payment = SubscriptionPayment::create([
             'subscription_id' => $subscription->id,
+            'invoice_id' => $invoice->id,
             'tenant_id' => $subscription->tenant_id,
-            'amount' => (float) $subscription->plan->price,
+            'amount' => $pricingPlan,
             'payment_method' => strtoupper($data['payment_method']),
             'status' => 'PENDING',
         ]);
@@ -96,8 +115,8 @@ class CentralSubscriptionPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Subscription payment created successfully.',
-            'data' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+            'message' => 'Invoice and subscription payment created successfully.',
+            'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
         ], 201);
     }
 
@@ -135,10 +154,28 @@ class CentralSubscriptionPaymentController extends Controller
             'status' => 'pending',
         ]);
 
+        $pricingPlan = (float) $plan->price;
+
+        $invoice = SubscriptionInvoice::create([
+            'tenant_id' => null,
+            'subscription_id' => $subscription->id,
+            'invoice_number' => SubscriptionInvoice::generateInvoiceNumber(),
+            'invoice_type' => 'subscription',
+            'subtotal' => $pricingPlan,
+            'tax' => 0,
+            'discount' => 0,
+            'total_amount' => $pricingPlan,
+            'paid_amount' => 0,
+            'remaining_amount' => $pricingPlan,
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+        ]);
+
         $payment = SubscriptionPayment::create([
             'subscription_id' => $subscription->id,
+            'invoice_id' => $invoice->id,
             'tenant_id' => null,
-            'amount' => (float) $plan->price,
+            'amount' => $pricingPlan,
             'payment_method' => strtoupper($data['payment_method']),
             'status' => 'PENDING',
         ]);
@@ -148,10 +185,11 @@ class CentralSubscriptionPaymentController extends Controller
                 $result = $this->khaltiService->initiateSubscription($payment);
                 return response()->json([
                     'success' => true,
-                    'message' => 'Khalti payment initiated.',
+                    'message' => 'Invoice created and Khalti payment initiated.',
                     'data' => [
                         'subscription' => $subscription->load('plan'),
-                        'subscription_payment' => $payment->load('subscription.plan'),
+                        'invoice' => $invoice->load('subscription.plan'),
+                        'subscription_payment' => $payment->load(['subscription.plan', 'invoice']),
                         'khalti' => $result,
                     ],
                 ], 201);
@@ -168,10 +206,11 @@ class CentralSubscriptionPaymentController extends Controller
                 $result = $this->esewaService->initiateSubscription($payment);
                 return response()->json([
                     'success' => true,
-                    'message' => 'eSewa payment initiated.',
+                    'message' => 'Invoice created and eSewa payment initiated.',
                     'data' => [
                         'subscription' => $subscription->load('plan'),
-                        'subscription_payment' => $payment->load('subscription.plan'),
+                        'invoice' => $invoice->load('subscription.plan'),
+                        'subscription_payment' => $payment->load(['subscription.plan', 'invoice']),
                         'esewa' => $result,
                     ],
                 ], 201);
@@ -185,10 +224,11 @@ class CentralSubscriptionPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Subscription and payment created successfully. Proceed to payment.',
+            'message' => 'Invoice and subscription payment created successfully. Proceed to payment.',
             'data' => [
                 'subscription' => $subscription->load('plan'),
-                'subscription_payment' => $payment->load('subscription.plan'),
+                'invoice' => $invoice->load('subscription.plan'),
+                'subscription_payment' => $payment->load(['subscription.plan', 'invoice']),
             ],
         ], 201);
     }
@@ -233,7 +273,7 @@ class CentralSubscriptionPaymentController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => 'Payment already completed.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
                 ]);
             }
 
@@ -250,7 +290,7 @@ class CentralSubscriptionPaymentController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => 'Khalti payment completed successfully.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
                 ]);
             }
 
@@ -263,7 +303,7 @@ class CentralSubscriptionPaymentController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => 'Khalti payment is still pending.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
                 ]);
             }
 
@@ -299,7 +339,7 @@ class CentralSubscriptionPaymentController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => 'Payment already completed.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
                 ]);
             }
 
@@ -316,7 +356,7 @@ class CentralSubscriptionPaymentController extends Controller
                 return response()->json([
                     'success' => true,
                     'message' => 'eSewa payment completed successfully.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant']),
+                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
                 ]);
             }
 
@@ -342,7 +382,7 @@ class CentralSubscriptionPaymentController extends Controller
     {
         return response()->json([
             'success' => true,
-            'data' => $payment->load(['subscription', 'tenant']),
+            'data' => $payment->load(['subscription', 'tenant', 'invoice']),
         ]);
     }
 
@@ -353,7 +393,27 @@ class CentralSubscriptionPaymentController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Payment completed successfully.',
-            'data' => $payment->fresh()->load(['subscription', 'tenant']),
+            'data' => $payment->fresh()->load(['subscription', 'tenant', 'invoice']),
+        ]);
+    }
+
+    public function fail(SubscriptionPayment $payment): JsonResponse
+    {
+        if (in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot fail an already successful payment.',
+            ], 422);
+        }
+
+        $payment->update([
+            'status' => 'FAILED',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment marked as failed.',
+            'data' => $payment->fresh()->load(['subscription', 'tenant', 'invoice']),
         ]);
     }
 }

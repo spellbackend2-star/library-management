@@ -77,9 +77,18 @@ class PaymentController extends Controller
             );
         }
 
+        if (! $payment->transaction_id) {
+            return $this->errorResponse(
+                'Khalti transaction ID not found.',
+                400
+            );
+        }
+
         return $this->verifyGatewayPayment(
             $payment,
-            fn () => $this->khaltiService->verify($payment->transaction_id),
+            fn () => $this->khaltiService->verify(
+                $payment->transaction_id
+            ),
             'Khalti'
         );
     }
@@ -108,31 +117,78 @@ class PaymentController extends Controller
         string $gateway
     ) {
         try {
-            if (in_array($payment->status, ['COMPLETED', 'SUCCESS'], true)) {
-                return $this->successResponse(
-                    new PaymentResource($payment->fresh()),
-                    'Payment already completed.'
+            /*
+             * Prevent duplicate completion.
+             */
+            if ($payment->status === 'SUCCESS') {
+                return redirect()->away(
+                    config('app.frontend_url') .
+                    'admin/invoices/' .
+                    $payment->payment_id .
+                    '?payment=success'
                 );
             }
 
+            /*
+             * Ask the payment gateway for the real status.
+             */
             $result = $verification();
 
-            if (in_array($result['status'], ['Completed', 'SUCCESS'], true)) {
+            /*
+             * Payment successful.
+             */
+            if (in_array(
+                strtoupper($result['status'] ?? ''),
+                ['COMPLETED', 'SUCCESS'],
+                true
+            )) {
                 $payment->update([
                     'gateway_response' => $result['gateway_response'] ?? null,
                     'transaction_id' => $result['transaction_id']
                         ?? $payment->transaction_id,
                 ]);
 
-                $completedPayment = $this->paymentService->completePayment($payment);
+                /*
+                 * This should update:
+                 * - payment status
+                 * - invoice paid amount
+                 * - invoice remaining amount
+                 * - invoice status
+                 */
+                $completedPayment = $this->paymentService
+                    ->completePayment($payment);
 
+                /*
+                 * Khalti:
+                 * Backend verifies first, then redirects
+                 * the customer to frontend.
+                 */
+                if ($gateway === 'Khalti') {
+                    return redirect()->away(
+                        config('app.frontend_url') .
+                        '/invoices/' .
+                        $completedPayment->invoice_id .
+                        '?payment=success'
+                    );
+                }
+
+                /*
+                 * eSewa can continue with JSON response.
+                 */
                 return $this->successResponse([
-                    'payment' => new PaymentResource($completedPayment->fresh()),
-                    'invoice' => new InvoiceResource($completedPayment->invoice->fresh()),
+                    'payment' => new PaymentResource(
+                        $completedPayment->fresh()
+                    ),
+                    'invoice' => new InvoiceResource(
+                        $completedPayment->invoice->fresh()
+                    ),
                 ], "{$gateway} payment completed successfully.");
             }
 
-            if ($result['status'] === 'Pending') {
+            /*
+             * Payment is still pending.
+             */
+            if (strtoupper($result['status'] ?? '') === 'PENDING') {
                 $payment->update([
                     'status' => 'PENDING',
                     'gateway_response' => $result['gateway_response'] ?? null,
@@ -144,10 +200,26 @@ class PaymentController extends Controller
                 );
             }
 
+            /*
+             * Payment failed/cancelled.
+             */
             $payment->update([
                 'status' => 'FAILED',
                 'gateway_response' => $result['gateway_response'] ?? null,
             ]);
+
+            /*
+             * For Khalti, send the user back to frontend
+             * with failed status.
+             */
+            if ($gateway === 'Khalti') {
+                return redirect()->away(
+                    config('app.frontend_url') .
+                    '/invoices/' .
+                    $payment->payment_id .
+                    '?payment=failed'
+                );
+            }
 
             return $this->errorResponse(
                 "{$gateway} payment failed or was cancelled.",

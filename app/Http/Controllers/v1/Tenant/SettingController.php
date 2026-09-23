@@ -5,6 +5,8 @@ namespace App\Http\Controllers\v1\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Setting\StoreSettingRequest;
 use App\Http\Requests\Setting\UpdateSettingRequest;
+use App\Http\Requests\Setting\NotificationSettingsRequest;
+use App\Http\Requests\Setting\SmtpSettingsRequest;
 use App\Http\Resources\SettingResource;
 use App\Models\Setting;
 use App\Services\SettingService;
@@ -296,6 +298,143 @@ class SettingController extends Controller
         }
 
         return response()->json(array_merge($this->invoice()->getData(true), $payload));
+    }
+
+    public function notification()
+    {
+        $tableCheck = $this->ensureSettingsTableExists();
+        if ($tableCheck) {
+            return $tableCheck;
+        }
+
+        $notificationDefaults = [
+            'email_notification_enabled' => true,
+            'sms_notification_enabled' => false,
+            'invoice_notification_enabled' => true,
+            'payment_notification_enabled' => true,
+            'booking_notification_enabled' => true,
+            'overdue_notification_enabled' => true,
+            'fine_notification_enabled' => true,
+            'membership_expiry_notification_enabled' => true,
+        ];
+
+        $payload = [];
+
+        foreach ($notificationDefaults as $key => $default) {
+            $payload[$key] = $this->getStoredSetting('notification', $key, $default);
+        }
+
+        return response()->json($payload);
+    }
+
+    public function updateNotification(NotificationSettingsRequest $request)
+    {
+        $tableCheck = $this->ensureSettingsTableExists();
+        if ($tableCheck) {
+            return $tableCheck;
+        }
+
+        $settings = [
+            'email_notification_enabled' => 'Enable email notifications.',
+            'sms_notification_enabled' => 'Enable SMS notifications.',
+            'invoice_notification_enabled' => 'Enable invoice notifications.',
+            'payment_notification_enabled' => 'Enable payment notifications.',
+            'booking_notification_enabled' => 'Enable booking notifications.',
+            'overdue_notification_enabled' => 'Enable overdue notifications.',
+            'fine_notification_enabled' => 'Enable fine notifications.',
+            'membership_expiry_notification_enabled' => 'Enable membership expiry notifications.',
+        ];
+
+        $payload = [];
+
+        foreach ($settings as $key => $description) {
+            if ($request->exists($key)) {
+                $payload[$key] = $this->writeSetting('notification', $key, (bool) $request->input($key), $description);
+            }
+        }
+
+        if (empty($payload)) {
+            return $this->notification();
+        }
+
+        return response()->json(array_merge($this->notification()->getData(true), $payload));
+    }
+
+    public function smtp()
+    {
+        $tableCheck = $this->ensureSettingsTableExists();
+        if ($tableCheck) {
+            return $tableCheck;
+        }
+
+        $smtpDefaults = [
+            'smtp_host' => null,
+            'smtp_port' => 587,
+            'smtp_username' => null,
+            'smtp_password' => null,
+            'smtp_encryption' => 'tls',
+            'smtp_from_address' => null,
+            'smtp_from_name' => null,
+        ];
+
+        $payload = [];
+
+        foreach ($smtpDefaults as $key => $default) {
+            $value = $this->getStoredSetting('smtp', $key, $default);
+
+            if ($key === 'smtp_password' && $value) {
+                $value = '********';
+            }
+
+            $payload[$key] = $value;
+        }
+
+        return response()->json($payload);
+    }
+
+    public function updateSmtp(SmtpSettingsRequest $request)
+    {
+        $tableCheck = $this->ensureSettingsTableExists();
+        if ($tableCheck) {
+            return $tableCheck;
+        }
+
+        $settings = [
+            'smtp_host' => 'SMTP host.',
+            'smtp_port' => 'SMTP port.',
+            'smtp_username' => 'SMTP username.',
+            'smtp_password' => 'SMTP password.',
+            'smtp_encryption' => 'SMTP encryption.',
+            'smtp_from_address' => 'SMTP from address.',
+            'smtp_from_name' => 'SMTP from name.',
+        ];
+
+        $payload = [];
+
+        foreach ($settings as $key => $description) {
+            if ($request->exists($key)) {
+                $value = $request->input($key);
+
+                if ($key === 'smtp_port') {
+                    $value = (int) $value;
+                }
+
+                $payload[$key] = $this->writeSetting('smtp', $key, $value, $description);
+            }
+        }
+
+        if (empty($payload)) {
+            return $this->smtp();
+        }
+
+        $currentSettings = $this->smtp()->getData(true);
+        foreach ($currentSettings as $key => $value) {
+            if ($key === 'smtp_password' && isset($payload[$key])) {
+                $payload[$key] = '********';
+            }
+        }
+
+        return response()->json(array_merge($currentSettings, $payload));
     }
 
     public function updateAppearance(Request $request)

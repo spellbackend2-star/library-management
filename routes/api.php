@@ -6,7 +6,7 @@ use App\Http\Controllers\v1\Central\CentralSubscriptionPaymentController;
 use App\Http\Controllers\v1\Tenant\SubscriptionController;
 use App\Http\Controllers\v1\Tenant\SubscriptionPlanController;
 use Illuminate\Support\Facades\Route;
-
+Route::prefix('v1')->group(function () {
 Route::middleware('auth:api')->group(function () {
     Route::apiResource('subscription-plans', SubscriptionPlanController::class);
     Route::apiResource('subscriptions', SubscriptionController::class);
@@ -40,4 +40,5 @@ Route::prefix('central')->group(function () {
         Route::patch('/subscription-payments/{payment}/fail', [CentralSubscriptionPaymentController::class, 'fail']);
     });
 
+});
 });

@@ -9,26 +9,36 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('subscription_invoices', function (Blueprint $table) {
-            $table->string('tenant_id', 36)
-                ->nullable()
-                ->after('subscription_id')
-                ->references('id')
-                ->on('tenants')
-                ->nullOnDelete();
+            if (!Schema::hasColumn('subscription_invoices', 'tenant_id')) {
+                $table->string('tenant_id', 36)
+                    ->nullable()
+                    ->after('subscription_id')
+                    ->references('id')
+                    ->on('tenants')
+                    ->nullOnDelete();
+            }
 
-            $table->decimal('subtotal', 12, 2)
-                ->default(0)
-                ->after('total_amount');
+            if (!Schema::hasColumn('subscription_invoices', 'subtotal')) {
+                $table->decimal('subtotal', 12, 2)
+                    ->default(0)
+                    ->after('total_amount');
+            }
 
-            $table->decimal('tax', 12, 2)
-                ->default(0)
-                ->after('subtotal');
+            if (!Schema::hasColumn('subscription_invoices', 'tax')) {
+                $table->decimal('tax', 12, 2)
+                    ->default(0)
+                    ->after('subtotal');
+            }
 
-            $table->decimal('discount', 12, 2)
-                ->default(0)
-                ->after('tax');
+            if (!Schema::hasColumn('subscription_invoices', 'discount')) {
+                $table->decimal('discount', 12, 2)
+                    ->default(0)
+                    ->after('tax');
+            }
 
-            $table->index('tenant_id');
+            if (Schema::hasColumn('subscription_invoices', 'tenant_id') && !Schema::hasIndex('subscription_invoices', 'subscription_invoices_tenant_id_index')) {
+                $table->index('tenant_id');
+            }
         });
     }
 

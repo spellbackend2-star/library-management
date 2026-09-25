@@ -1,0 +1,92 @@
+{
+  "info": {
+    "name": "Subscription - Create",
+    "description": "Postman collection for creating a subscription for the current tenant.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "variables": [
+      {
+        "key": "base_url",
+        "value": "http://library-management.test/api",
+        "type": "string"
+      },
+      {
+        "key": "auth_token",
+        "value": "",
+        "type": "string"
+      }
+    ]
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "commonjs",
+        "exec": [
+          "pm.test('Status code is 201', function () {",
+          "    pm.expect(pm.response.code).to.eql(201);",
+          "});",
+          "",
+          "pm.test('Response has success flag', function () {",
+          "    const body = pm.response.json();",
+          "    pm.expect(body.success).to.eql(true);",
+          "});",
+          "",
+          "pm.test('Subscription id is returned', function () {",
+          "    const body = pm.response.json();",
+          "    pm.expect(body.data).to.have.property('id');",
+          "});"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Subscription",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "string"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{auth_token}}",
+            "type": "string"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/subscriptions",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "v1",
+            "subscriptions"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"subscription_plan_id\": 1,\n  \"starts_at\": \"2026-09-25\",\n  \"expires_at\": \"2026-10-25\",\n  \"status\": \"active\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    }
+  ]
+}

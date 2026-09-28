@@ -8,6 +8,29 @@ use App\Repositories\Interface\SubscriptionPlanInterface;
 
 class SubscriptionPlanRepository extends BaseRepository implements SubscriptionPlanInterface
 {
+    protected array $allowedFilters = [
+        'search' => [
+            'type' => 'like',
+            'columns' => ['name', 'description'],
+        ],
+        'is_active' => [
+            'type' => 'boolean',
+            'column' => 'is_active',
+        ],
+        'duration_unit' => [
+            'type' => 'exact',
+            'column' => 'duration_unit',
+        ],
+        'min_price' => [
+            'type' => 'min',
+            'column' => 'price',
+        ],
+        'max_price' => [
+            'type' => 'max',
+            'column' => 'price',
+        ],
+    ];
+
     protected array $allowedSorts = [
         'id',
         'name',
@@ -29,67 +52,6 @@ class SubscriptionPlanRepository extends BaseRepository implements SubscriptionP
         $query = SubscriptionPlan::query();
 
         if (
-            isset($filters['search'])
-            && $filters['search'] !== ''
-        ) {
-            $query->where(function ($q) use ($filters) {
-                $q->where(
-                    'name',
-                    'like',
-                    '%' . $filters['search'] . '%'
-                )
-                ->orWhere(
-                    'description',
-                    'like',
-                    '%' . $filters['search'] . '%'
-                );
-            });
-        }
-
-        if (
-            array_key_exists('is_active', $filters)
-            && $filters['is_active'] !== null
-            && $filters['is_active'] !== ''
-        ) {
-            $query->where(
-                'is_active',
-                $this->toBool($filters['is_active'])
-            );
-        }
-
-        if (
-            isset($filters['duration_unit'])
-            && $filters['duration_unit'] !== ''
-        ) {
-            $query->where(
-                'duration_unit',
-                $filters['duration_unit']
-            );
-        }
-
-        if (
-            isset($filters['min_price'])
-            && $filters['min_price'] !== ''
-        ) {
-            $query->where(
-                'price',
-                '>=',
-                (float) $filters['min_price']
-            );
-        }
-
-        if (
-            isset($filters['max_price'])
-            && $filters['max_price'] !== ''
-        ) {
-            $query->where(
-                'price',
-                '<=',
-                (float) $filters['max_price']
-            );
-        }
-
-        if (
             !isset($filters['sort_by'])
             || !in_array($filters['sort_by'], $this->allowedSorts, true)
         ) {
@@ -99,18 +61,6 @@ class SubscriptionPlanRepository extends BaseRepository implements SubscriptionP
         return $this->getPaginated(
             $query,
             $filters
-        );
-    }
-
-    protected function toBool($value): bool
-    {
-        if (is_bool($value)) {
-            return $value;
-        }
-
-        return filter_var(
-            $value,
-            FILTER_VALIDATE_BOOLEAN
         );
     }
 

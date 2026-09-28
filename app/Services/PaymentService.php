@@ -251,7 +251,7 @@ class PaymentService
                 /*
              * Activate package only when invoice is fully paid
              */
-if ($status === 'paid') {
+             if ($status === 'paid') {
                      app(InvoiceService::class)
                          ->activateMemberPackage($invoice);
 

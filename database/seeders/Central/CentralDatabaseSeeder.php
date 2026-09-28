@@ -13,6 +13,7 @@ class CentralDatabaseSeeder extends Seeder
             CentralUserSeeder::class,
             CentralPassportSeeder::class,
             CentralRolePermissionSeeder::class,
+            CentralSettingsTableSeeder::class,
         ]);
     }
 }

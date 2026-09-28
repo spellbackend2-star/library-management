@@ -71,7 +71,7 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
-    Route::middleware('auth:api')->group(function () {
+    Route::middleware('auth:api')->prefix('api/v1')->group(function () {
 
         // Profile
         Route::get('/profile', [AuthController::class, 'profile']);

@@ -57,16 +57,17 @@ abstract class BaseRepository
             $value = $filters[$filter];
             $type = $config['type'] ?? 'exact';
             $column = $config['column'] ?? $filter;
+            $columns = $config['columns'] ?? [$column];
             $relation = $config['relation'] ?? null;
 
             switch ($type) {
                 case 'like':
                     if ($relation) {
-                        $query->whereHas($relation, function ($q) use ($column, $value) {
-                            $q->where($column, 'like', '%' . $value . '%');
+                        $query->whereHas($relation, function ($q) use ($columns, $value) {
+                            $this->applyLike($q, $columns, $value);
                         });
                     } else {
-                        $query->where($column, 'like', '%' . $value . '%');
+                        $this->applyLike($query, $columns, $value);
                     }
                     break;
                 case 'in':
@@ -77,6 +78,43 @@ abstract class BaseRepository
                         });
                     } else {
                         $query->whereIn($column, $values);
+                    }
+                    break;
+                case 'boolean':
+                    $boolean = filter_var(
+                        $value,
+                        FILTER_VALIDATE_BOOLEAN,
+                        FILTER_NULL_ON_FAILURE
+                    );
+
+                    if ($boolean === null) {
+                        break;
+                    }
+
+                    if ($relation) {
+                        $query->whereHas($relation, function ($q) use ($column, $boolean) {
+                            $q->where($column, $boolean);
+                        });
+                    } else {
+                        $query->where($column, $boolean);
+                    }
+                    break;
+                case 'min':
+                    if ($relation) {
+                        $query->whereHas($relation, function ($q) use ($column, $value) {
+                            $q->where($column, '>=', (float) $value);
+                        });
+                    } else {
+                        $query->where($column, '>=', (float) $value);
+                    }
+                    break;
+                case 'max':
+                    if ($relation) {
+                        $query->whereHas($relation, function ($q) use ($column, $value) {
+                            $q->where($column, '<=', (float) $value);
+                        });
+                    } else {
+                        $query->where($column, '<=', (float) $value);
                     }
                     break;
                 case 'exact':
@@ -93,6 +131,30 @@ abstract class BaseRepository
         }
 
         return $query;
+    }
+
+    /**
+     * Apply a "like" match across one or many columns as a single
+     * grouped OR condition.
+     */
+    protected function applyLike(
+        Builder $query,
+        array $columns,
+        mixed $value
+    ): void {
+        $needle = '%' . $value . '%';
+
+        if (count($columns) === 1) {
+            $query->where($columns[0], 'like', $needle);
+
+            return;
+        }
+
+        $query->where(function ($q) use ($columns, $needle) {
+            foreach ($columns as $column) {
+                $q->orWhere($column, 'like', $needle);
+            }
+        });
     }
 
     protected function getPaginated(

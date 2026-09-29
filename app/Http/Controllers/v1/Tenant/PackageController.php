@@ -34,6 +34,18 @@ class PackageController extends Controller
         ]);
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $packages = $this->packageService->getAllWithoutPagination(
+            $request->all()
+        );
+
+        return $this->successResponse(
+            PackageResource::collection($packages),
+            'Packages retrieved successfully.'
+        );
+    }
+
     public function store(StorePackageRequest $request): JsonResponse
     {
         $package = $this->packageService->create(

@@ -16,6 +16,11 @@ class FloorService
         return $this->floorRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination()
+    {
+        return $this->floorRepository->all();
+    }
+
     public function getById(int $id): ?Floor
     {
         return $this->floorRepository->find($id);

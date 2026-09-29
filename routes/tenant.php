@@ -80,6 +80,7 @@ Route::middleware([
         Route::post('/logout', [AuthController::class, 'logout']);
 
         // Members
+        Route::get('members/all', [MemberController::class, 'all']);
         Route::apiResource('members', MemberController::class);
 
         // Staff owner setup
@@ -115,9 +116,11 @@ Route::middleware([
         )->middleware('can:staff.assign-role');
 
         // Publishers
+        Route::get('publishers/all', [PublisherController::class, 'all']);
         Route::apiResource('publishers', PublisherController::class);
 
         // Packages
+        Route::get('packages/all', [PackageController::class, 'all']);
         Route::apiResource('packages', PackageController::class);
 
         // Settings
@@ -151,9 +154,11 @@ Route::middleware([
         Route::apiResource('settings', SettingController::class);
 
         // Authors
+        Route::get('authors/all', [AuthorController::class, 'all']);
         Route::apiResource('authors', AuthorController::class);
 
         // Categories
+        Route::get('categories/all', [CategoryController::class, 'all']);
         Route::apiResource('categories', CategoryController::class);
 
         // Books
@@ -337,6 +342,7 @@ Route::middleware([
         */
 
         // Floors
+        Route::get('floors/all', [FloorController::class, 'all']);
         Route::apiResource('floors', FloorController::class);
 
         // Rooms

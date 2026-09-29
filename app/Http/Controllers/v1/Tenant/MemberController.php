@@ -39,6 +39,18 @@ class MemberController extends Controller
         ]);
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $members = $this->memberService->getAllWithoutPagination(
+            $request->all()
+        );
+
+        return $this->successResponse(
+            MemberResource::collection($members),
+            'Members retrieved successfully.'
+        );
+    }
+
     public function store(StoreMemberRequest $request): JsonResponse
     {
         $data = $request->validated();

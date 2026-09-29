@@ -16,6 +16,11 @@ class PublisherService
         return $this->publisherRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination(array $filters = [])
+    {
+        return $this->publisherRepository->all();
+    }
+
     public function getById(int $id): ?Publisher
     {
         return $this->publisherRepository->find($id);

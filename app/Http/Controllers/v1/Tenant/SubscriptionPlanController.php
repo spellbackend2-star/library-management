@@ -34,6 +34,18 @@ class SubscriptionPlanController extends Controller
         ]);
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $subscriptionPlans = $this->subscriptionPlanService->getAllWithoutPagination(
+            $request->all()
+        );
+
+        return $this->successResponse(
+            SubscriptionPlanResource::collection($subscriptionPlans),
+            'Subscription plans retrieved successfully.'
+        );
+    }
+
     public function store(StoreSubscriptionPlanRequest $request): JsonResponse
     {
         $subscriptionPlan = $this->subscriptionPlanService->create(

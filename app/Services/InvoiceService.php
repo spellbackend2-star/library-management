@@ -61,10 +61,7 @@ class InvoiceService
             throw new \Exception('Member does not have a package assigned.');
         }
 
-        // Add package price to total amount
-        $packagePrice = round((float) $package->price, 2);
-        $totalAmount += $packagePrice;
-
+        // total_amount already includes package price from controller
         $couponDiscount = $this->applyCouponIfProvided($data, $totalAmount);
 
         if ($couponId && $couponDiscount > 0) {

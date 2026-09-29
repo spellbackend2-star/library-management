@@ -39,6 +39,18 @@ class CategoryController extends Controller
         );
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $categories = $this->categoryService->getAllWithoutPagination(
+            $request->all()
+        );
+
+        return $this->successResponse(
+            CategoryResource::collection($categories),
+            'Categories retrieved successfully.'
+        );
+    }
+
     public function store(StoreCategoryRequest $request): JsonResponse
     {
         $category = $this->categoryService->create(

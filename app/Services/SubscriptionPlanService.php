@@ -16,6 +16,11 @@ class SubscriptionPlanService
         return $this->subscriptionPlanRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination(array $filters = [])
+    {
+        return $this->subscriptionPlanRepository->all();
+    }
+
     public function getById(int $id): ?SubscriptionPlan
     {
         return $this->subscriptionPlanRepository->find($id);

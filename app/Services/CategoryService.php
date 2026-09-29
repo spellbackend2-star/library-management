@@ -16,6 +16,11 @@ class CategoryService
         return $this->categoryRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination(array $filters = [])
+    {
+        return $this->categoryRepository->all();
+    }
+
     public function getById(int $id): ?Category
     {
         return $this->categoryRepository->find($id);

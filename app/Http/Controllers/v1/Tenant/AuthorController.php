@@ -37,6 +37,18 @@ class AuthorController extends Controller
         );
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $authors = $this->authorService->getAllWithoutPagination(
+            $request->all()
+        );
+
+        return $this->successResponse(
+            AuthorResource::collection($authors),
+            'Authors retrieved successfully.'
+        );
+    }
+
     public function store(StoreAuthorRequest $request): JsonResponse
     {
         $author = $this->authorService->create(

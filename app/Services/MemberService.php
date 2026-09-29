@@ -18,6 +18,11 @@ class MemberService
         return $this->memberRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination()
+    {
+        return $this->memberRepository->all();
+    }
+
     public function getById(int $id): ?Member
     {
         return $this->memberRepository->find($id);

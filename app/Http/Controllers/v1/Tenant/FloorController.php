@@ -38,6 +38,18 @@ class FloorController extends Controller
         );
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $floors = $this->floorService->getAllWithoutPagination(
+            $request->all()
+        );
+
+        return $this->successResponse(
+            FloorResource::collection($floors),
+            'Floors retrieved successfully.'
+        );
+    }
+
     public function store(StoreFloorRequest $request): JsonResponse
     {
         $floor = $this->floorService->create(

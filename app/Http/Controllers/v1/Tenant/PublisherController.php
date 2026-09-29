@@ -39,6 +39,18 @@ class PublisherController extends Controller
         );
     }
 
+    public function all(Request $request): JsonResponse
+    {
+        $publishers = $this->publisherService->getAllWithoutPagination(
+            $request->all()
+        );
+
+        return $this->successResponse(
+            PublisherResource::collection($publishers),
+            'Publishers retrieved successfully.'
+        );
+    }
+
     public function store(StorePublisherRequest $request): JsonResponse
     {
         $publisher = $this->publisherService->create(

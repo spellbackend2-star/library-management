@@ -16,6 +16,11 @@ class PackageService
         return $this->packageRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination()
+    {
+        return $this->packageRepository->all();
+    }
+
     public function getById(int $id): ?Package
     {
         return $this->packageRepository->find($id);

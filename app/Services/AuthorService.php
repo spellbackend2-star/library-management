@@ -16,6 +16,11 @@ class AuthorService
         return $this->authorRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination(array $filters = [])
+    {
+        return $this->authorRepository->all();
+    }
+
     public function getById(int $id): ?Author
     {
         return $this->authorRepository->find($id);

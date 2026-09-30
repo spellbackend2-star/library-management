@@ -42,35 +42,46 @@ class InvoiceService
         return $this->invoiceRepository->fineInvoiceByMember($memberId);
     }
 
+    /**
+     * Create an invoice for a member.
+     *
+     * The package price is ALWAYS added by this service.
+     * $data['total_amount'] is treated as EXTRA charges only (default 0),
+     * so do not pass the package price from the controller.
+     */
     public function create(array $data): Invoice
     {
         $memberId = (int) $data['member_id'];
         $couponId = isset($data['coupon_id']) ? (int) $data['coupon_id'] : null;
-        $totalAmount = round((float) ($data['total_amount'] ?? 0), 2);
+        $extraAmount = round((float) ($data['total_amount'] ?? 0), 2);
 
-        $existing = $this->invoiceRepository->findByMember($memberId);
+        // Runs inside the caller's transaction if one exists (nested-safe).
+        return DB::transaction(function () use ($memberId, $couponId, $extraAmount, $data) {
+            $existing = $this->invoiceRepository->findByMember($memberId);
 
-        if ($existing) {
-            throw new \Exception('Member already has an unpaid invoice.');
-        }
+            if ($existing) {
+                throw new \Exception('Member already has an unpaid invoice.');
+            }
 
-        $member = Member::findOrFail($memberId);
-        $package = $member->package;
+            $member = Member::findOrFail($memberId);
+            $package = $member->package;
 
-        if (! $package) {
-            throw new \Exception('Member does not have a package assigned.');
-        }
+            if (! $package) {
+                throw new \Exception('Member does not have a package assigned.');
+            }
 
-        // total_amount already includes package price from controller
-        $couponDiscount = $this->applyCouponIfProvided($data, $totalAmount);
+            $totalAmount = round($extraAmount + (float) $package->price, 2);
 
-        if ($couponId && $couponDiscount > 0) {
-            $totalAmount = round($totalAmount - $couponDiscount, 2);
-        }
+            // Coupon is validated and consumed in the same transaction as the
+            // invoice, so a failure rolls the usage count back too.
+            $couponDiscount = $this->applyCouponIfProvided($couponId, $totalAmount);
 
-        $invoiceNumber = $this->generateInvoiceNumber();
+            if ($couponDiscount > 0) {
+                $totalAmount = round($totalAmount - $couponDiscount, 2);
+            }
 
-        return DB::transaction(function () use ($memberId, $couponId, $totalAmount, $couponDiscount, $invoiceNumber, $data) {
+            $invoiceNumber = $this->generateInvoiceNumber();
+
             return $this->invoiceRepository->create([
                 'member_id' => $memberId,
                 'coupon_id' => $couponId,
@@ -87,15 +98,14 @@ class InvoiceService
         });
     }
 
-    private function applyCouponIfProvided(array $data, float $totalAmount): float
+    private function applyCouponIfProvided(?int $couponId, float $totalAmount): float
     {
-        $couponId = $data['coupon_id'] ?? null;
-
         if (! $couponId) {
-            return 0;
+            return 0.0;
         }
 
-        $coupon = Coupon::find($couponId);
+        // Lock the row so two requests cannot both use the last remaining use.
+        $coupon = Coupon::lockForUpdate()->find($couponId);
 
         if (! $coupon) {
             throw ValidationException::withMessages([
@@ -133,9 +143,10 @@ class InvoiceService
             ]);
         }
 
-        $discount = match ($coupon->discount_type) {
+        $discount = match (strtoupper((string) $coupon->discount_type)) {
             'PERCENT' => round($totalAmount * ((float) $coupon->discount_value / 100), 2),
             'FLAT' => round((float) $coupon->discount_value, 2),
+            default => 0.0,
         };
 
         if ($coupon->max_discount !== null) {
@@ -173,9 +184,6 @@ class InvoiceService
             throw new \Exception('Invoice is not open for payment.');
         }
 
-        // Refresh invoice to get latest paid_amount
-        $invoice = $this->invoiceRepository->find($invoice->id);
-
         $amount = round((float) ($paymentData['amount'] ?? 0), 2);
         $extraDiscount = round((float) ($paymentData['extra_discount'] ?? 0), 2);
         $paymentMethod = strtoupper($paymentData['payment_method'] ?? 'CASH');
@@ -204,9 +212,9 @@ class InvoiceService
         }
 
         $isGateway = in_array($paymentMethod, ['KHALTI', 'ESEWA'], true);
-        $return_url= $paymentData['return_url'] ?? null;
+        $returnUrl = $paymentData['return_url'] ?? null;
 
-        return DB::transaction(function () use ($invoice, $paymentData, $amount, $extraDiscount, $paymentMethod, $isGateway, $return_url) {
+        return DB::transaction(function () use ($invoice, $paymentData, $amount, $extraDiscount, $paymentMethod, $isGateway, $returnUrl) {
             $payment = $this->paymentRepository->create([
                 'invoice_id' => $invoice->id,
                 'member_id' => $invoice->member_id,
@@ -222,16 +230,14 @@ class InvoiceService
 
             if ($isGateway) {
                 if ($paymentMethod === 'KHALTI') {
-                    $khaltiService = app(KhaltiService::class);
-                    $result = $khaltiService->initiate($payment , $return_url);
+                    $result = app(KhaltiService::class)->initiate($payment, $returnUrl);
                     $payment->update([
                         'payment_url' => $result['payment_url'] ?? null,
                         'gateway_reference' => $result['pidx'] ?? null,
                         'gateway_response' => $result,
                     ]);
                 } elseif ($paymentMethod === 'ESEWA') {
-                    $esewaService = app(EsewaService::class);
-                    $result = $esewaService->initiate($payment);
+                    $result = app(EsewaService::class)->initiate($payment);
                     $payment->update([
                         'payment_url' => $result['payment_url'] ?? null,
                         'gateway_response' => $result,
@@ -280,28 +286,48 @@ class InvoiceService
             return;
         }
 
+        $start = now();
+
+        $expiry = match ($package->duration_unit) {
+            'day' => $start->copy()->addDays((int) $package->duration),
+            'year' => $start->copy()->addYears((int) $package->duration),
+            default => $start->copy()->addMonths((int) $package->duration),
+        };
+
         $member->update([
             'status' => 'active',
-            'membership_start' => now()->toDateString(),
-            'membership_expiry' => now()->addDays((int) $package->duration)->toDateString(),
+            'membership_start' => $start->toDateString(),
+            'membership_expiry' => $expiry->toDateString(),
         ]);
     }
 
     protected function generateInvoiceNumber(): string
     {
-        $prefix = Setting::where('group', 'invoice')
+        $prefix = strtoupper((string) (Setting::where('group', 'invoice')
             ->where('key', 'invoice_prefix')
-            ->value('value') ?? 'INV';
+            ->value('value') ?: 'INV'));
 
         $startNumber = (int) (Setting::where('group', 'invoice')
             ->where('key', 'invoice_start_number')
-            ->value('value') ?? 1000);
+            ->value('value') ?: 1000);
 
-        $format = Setting::where('group', 'invoice')
+        $format = (string) (Setting::where('group', 'invoice')
             ->where('key', 'invoice_number_format')
-            ->value('value') ?? '{PREFIX}-{YEAR}-{NUMBER}';
+            ->value('value') ?: '{PREFIX}-{YEAR}-{NUMBER}');
+
+        // FIX: a format without {NUMBER} can never be unique, and made the
+        // while-loop below spin forever. Force the placeholder to exist.
+        if (! str_contains($format, '{NUMBER}')) {
+            $format .= '-{NUMBER}';
+        }
 
         $year = now()->format('Y');
+
+        $build = fn (int $number): string => str_replace(
+            ['{PREFIX}', '{YEAR}', '{NUMBER}'],
+            [$prefix, $year, (string) $number],
+            $format
+        );
 
         $last = Invoice::orderByDesc('id')->first();
         $next = $last ? ((int) $last->id + 1) : $startNumber;
@@ -310,19 +336,18 @@ class InvoiceService
             $next = $startNumber;
         }
 
-        $formatted = str_replace(
-            ['{PREFIX}', '{YEAR}', '{NUMBER}'],
-            [strtoupper((string) $prefix), $year, (string) $next],
-            $format
-        );
+        $formatted = $build($next);
+
+        // FIX: hard cap so this can never hang the request again.
+        $attempts = 0;
 
         while (Invoice::where('invoice_number', $formatted)->exists()) {
+            if (++$attempts > 1000) {
+                throw new \RuntimeException('Could not generate a unique invoice number.');
+            }
+
             $next++;
-            $formatted = str_replace(
-                ['{PREFIX}', '{YEAR}', '{NUMBER}'],
-                [strtoupper((string) $prefix), $year, (string) $next],
-                $format
-            );
+            $formatted = $build($next);
         }
 
         return $formatted;

@@ -41,11 +41,11 @@ class Subscription extends Model
 
     public function invoice(): HasOne
     {
-        return $this->hasOne(SubscriptionInvoice::class);
+        return $this->hasOne(CentralInvoice::class);
     }
 
     public function invoices(): HasMany
     {
-        return $this->hasMany(SubscriptionInvoice::class);
+        return $this->hasMany(CentralInvoice::class);
     }
 }

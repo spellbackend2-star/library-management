@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\CentralInvoice;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Subscription;
-use App\Models\SubscriptionInvoice;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
@@ -299,6 +299,8 @@ class CentralAuthService
                 'gateway_response' => null,
                 'paid_at' => null,
             ]);
+
+            $invoice->update(['subscription_payment_id' => $subscriptionPayment->id]);
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 'Failed to create tenant: ' . $e->getMessage()
@@ -324,36 +326,24 @@ class CentralAuthService
         Subscription $subscription,
         string $tenantId,
         float $amount
-    ): SubscriptionInvoice {
-        $invoiceNumber = $this->generateSubscriptionInvoiceNumber();
-
-        return SubscriptionInvoice::create([
+    ): CentralInvoice {
+        return CentralInvoice::create([
             'tenant_id' => $tenantId,
             'subscription_id' => $subscription->id,
-            'invoice_number' => $invoiceNumber,
+            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
+            'invoice_type' => 'subscription',
             'subtotal' => $amount,
             'tax' => 0,
             'discount' => 0,
             'total_amount' => $amount,
             'paid_amount' => 0,
             'remaining_amount' => $amount,
+            'currency' => 'NPR',
+            'currency_symbol' => 'Rs.',
             'status' => 'unpaid',
             'due_date' => now()->addDays(7)->toDateString(),
             'notes' => null,
         ]);
-    }
-
-    /**
-     * Generate a unique invoice number for subscription invoices.
-     */
-    protected function generateSubscriptionInvoiceNumber(): string
-    {
-        $prefix = 'SUB-INV';
-
-        $last = SubscriptionInvoice::orderByDesc('id')->first();
-        $next = $last ? ((int) $last->id + 1) : 1;
-
-        return $prefix . '-' . str_pad((string) $next, 6, '0', STR_PAD_LEFT);
     }
 
     public function completeCentralCashPayment(SubscriptionPayment $payment): SubscriptionPayment

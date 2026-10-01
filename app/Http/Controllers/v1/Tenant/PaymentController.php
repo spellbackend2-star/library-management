@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
 use App\Services\PaymentService;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class PaymentController extends Controller
@@ -135,11 +136,28 @@ class PaymentController extends Controller
          * Prevent duplicate completion.
          */
             if ($payment->status === 'SUCCESS') {
-                return redirect()->away(
-                    $this->frontendUrl()
-                        . '/admin/invoices/'
-                        . $payment->invoice_id
-                        . '?payment=success'
+
+                if ($gateway === 'Khalti') {
+                    return redirect()->away(
+                        $this->frontendUrl()
+                            . '/admin/invoices/'
+                            . $payment->invoice_id
+                            . '?payment=success'
+                            . '&payment_id=' . $payment->id
+                            . '&invoice_id=' . $payment->invoice_id
+                            . '&amount=' . $payment->amount
+                            . '&message=' . urlencode('Payment completed successfully.')
+                    );
+                }
+
+                return $this->successResponse(
+                    [
+                        'payment' => new PaymentResource($payment->fresh()),
+                        'invoice' => new InvoiceResource(
+                            $payment->invoice->fresh()
+                        ),
+                    ],
+                    "{$gateway} payment already completed successfully."
                 );
             }
 
@@ -170,9 +188,17 @@ class PaymentController extends Controller
                         ?? $payment->transaction_id,
                 ]);
 
+                Log::info('KHALTI PAYMENT COMPLETING', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $payment->invoice_id,
+                    'amount' => $payment->amount,
+                    'gateway_status' => $gatewayStatus,
+                ]);
+
                 /*
-             * This updates:
+             * Complete payment.
              *
+             * This updates:
              * Payment:
              *   PENDING -> SUCCESS
              *
@@ -185,17 +211,53 @@ class PaymentController extends Controller
                     ->completePayment($payment);
 
                 /*
+             * Refresh relationships/data after completion.
+             */
+                $completedPayment->refresh();
+                $completedPayment->load('invoice');
+
+                $invoice = $completedPayment->invoice;
+
+                Log::info('KHALTI PAYMENT COMPLETED', [
+                    'payment_id' => $completedPayment->id,
+                    'invoice_id' => $completedPayment->invoice_id,
+                    'amount' => $completedPayment->amount,
+                    'status' => $completedPayment->status,
+                    'invoice_status' => $invoice?->status,
+                    'paid_amount' => $invoice?->paid_amount,
+                    'remaining_amount' => $invoice?->remaining_amount,
+                ]);
+
+                /*
              * Khalti:
              * Backend verifies and saves first,
              * then redirects to frontend.
              */
                 if ($gateway === 'Khalti') {
-                    return redirect()->away(
+
+                    $frontendUrl =
                         $this->frontendUrl()
-                            . '/admin/invoices/'
-                            . $completedPayment->invoice_id
-                            . '?payment=success'
-                    );
+                        . '/admin/invoices/'
+                        . $completedPayment->invoice_id;
+
+                    $query = http_build_query([
+                        'payment' => 'success',
+                        'payment_id' => $completedPayment->id,
+                        'invoice_id' => $completedPayment->invoice_id,
+                        'amount' => $completedPayment->amount,
+                        'status' => $completedPayment->status,
+                        'message' => 'Payment completed successfully.',
+                    ]);
+
+                    $redirectUrl = $frontendUrl . '?' . $query;
+
+                    Log::info('KHALTI FRONTEND REDIRECT', [
+                        'payment_id' => $completedPayment->id,
+                        'invoice_id' => $completedPayment->invoice_id,
+                        'redirect_url' => $redirectUrl,
+                    ]);
+
+                    return redirect()->away($redirectUrl);
                 }
 
                 /*
@@ -203,11 +265,11 @@ class PaymentController extends Controller
              */
                 return $this->successResponse([
                     'payment' => new PaymentResource(
-                        $completedPayment->fresh()
+                        $completedPayment
                     ),
 
                     'invoice' => new InvoiceResource(
-                        $completedPayment->invoice->fresh()
+                        $invoice
                     ),
                 ], "{$gateway} payment completed successfully.");
             }
@@ -224,10 +286,29 @@ class PaymentController extends Controller
                     $result['gateway_response'] ?? null,
                 ]);
 
+                if ($gateway === 'Khalti') {
+
+                    $redirectUrl =
+                        $this->frontendUrl()
+                        . '/admin/invoices/'
+                        . $payment->invoice_id
+                        . '?payment=pending'
+                        . '&payment_id=' . $payment->id
+                        . '&invoice_id=' . $payment->invoice_id
+                        . '&message='
+                        . urlencode('Payment is still pending.');
+
+                    Log::info('KHALTI FRONTEND REDIRECT - PENDING', [
+                        'payment_id' => $payment->id,
+                        'invoice_id' => $payment->invoice_id,
+                        'redirect_url' => $redirectUrl,
+                    ]);
+
+                    return redirect()->away($redirectUrl);
+                }
+
                 return $this->successResponse(
-                    new PaymentResource(
-                        $payment->fresh()
-                    ),
+                    new PaymentResource($payment->fresh()),
                     "{$gateway} payment is still pending."
                 );
             }
@@ -247,12 +328,25 @@ class PaymentController extends Controller
          * Redirect back to frontend.
          */
             if ($gateway === 'Khalti') {
-                return redirect()->away(
+
+                $redirectUrl =
                     $this->frontendUrl()
-                        . '/admin/invoices/'
-                        . $payment->invoice_id
-                        . '?payment=failed'
-                );
+                    . '/admin/invoices/'
+                    . $payment->invoice_id
+                    . '?payment=failed'
+                    . '&payment_id=' . $payment->id
+                    . '&invoice_id=' . $payment->invoice_id
+                    . '&message='
+                    . urlencode('Payment failed or was cancelled.');
+
+                Log::warning('KHALTI FRONTEND REDIRECT - FAILED', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $payment->invoice_id,
+                    'redirect_url' => $redirectUrl,
+                    'gateway_status' => $gatewayStatus,
+                ]);
+
+                return redirect()->away($redirectUrl);
             }
 
             return $this->errorResponse(
@@ -261,17 +355,38 @@ class PaymentController extends Controller
             );
         } catch (Throwable $e) {
 
+            Log::error('KHALTI PAYMENT VERIFICATION ERROR', [
+                'payment_id' => $payment->id,
+                'invoice_id' => $payment->invoice_id,
+                'gateway' => $gateway,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
             /*
          * Send Khalti user back to frontend
          * if backend verification encounters an error.
          */
             if ($gateway === 'Khalti') {
-                return redirect()->away(
+
+                $redirectUrl =
                     $this->frontendUrl()
-                        . '/admin/invoices/'
-                        . $payment->invoice_id
-                        . '?payment=error'
-                );
+                    . '/admin/invoices/'
+                    . $payment->invoice_id
+                    . '?payment=error'
+                    . '&payment_id=' . $payment->id
+                    . '&invoice_id=' . $payment->invoice_id
+                    . '&message='
+                    . urlencode('Unable to verify payment.');
+
+                Log::error('KHALTI FRONTEND REDIRECT - ERROR', [
+                    'payment_id' => $payment->id,
+                    'invoice_id' => $payment->invoice_id,
+                    'redirect_url' => $redirectUrl,
+                ]);
+
+                return redirect()->away($redirectUrl);
             }
 
             return $this->errorResponse(

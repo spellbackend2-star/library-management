@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
+use App\Models\CentralInvoice;
 use App\Models\Subscription;
-use App\Models\SubscriptionInvoice;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Services\CentralAuthService;
@@ -85,10 +85,10 @@ class CentralSubscriptionPaymentController extends Controller
 
         $pricingPlan = (float) $subscription->plan->price;
 
-        $invoice = SubscriptionInvoice::create([
+        $invoice = CentralInvoice::create([
             'tenant_id' => $subscription->tenant_id,
             'subscription_id' => $subscription->id,
-            'invoice_number' => SubscriptionInvoice::generateInvoiceNumber(),
+            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
             'invoice_type' => 'subscription',
             'subtotal' => $pricingPlan,
             'tax' => 0,
@@ -108,6 +108,8 @@ class CentralSubscriptionPaymentController extends Controller
             'payment_method' => strtoupper($data['payment_method']),
             'status' => 'PENDING',
         ]);
+
+        $invoice->update(['subscription_payment_id' => $payment->id]);
 
         if (strtoupper($data['payment_method']) === 'CASH') {
             $this->centralAuthService->completeCentralCashPayment($payment);
@@ -156,10 +158,10 @@ class CentralSubscriptionPaymentController extends Controller
 
         $pricingPlan = (float) $plan->price;
 
-        $invoice = SubscriptionInvoice::create([
+        $invoice = CentralInvoice::create([
             'tenant_id' => null,
             'subscription_id' => $subscription->id,
-            'invoice_number' => SubscriptionInvoice::generateInvoiceNumber(),
+            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
             'invoice_type' => 'subscription',
             'subtotal' => $pricingPlan,
             'tax' => 0,
@@ -179,6 +181,8 @@ class CentralSubscriptionPaymentController extends Controller
             'payment_method' => strtoupper($data['payment_method']),
             'status' => 'PENDING',
         ]);
+
+        $invoice->update(['subscription_payment_id' => $payment->id]);
 
         if (strtoupper($data['payment_method']) === 'KHALTI') {
             try {

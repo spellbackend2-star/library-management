@@ -43,6 +43,6 @@ class SubscriptionPayment extends Model
 
     public function invoice(): BelongsTo
     {
-        return $this->belongsTo(SubscriptionInvoice::class, 'invoice_id');
+        return $this->belongsTo(CentralInvoice::class, 'invoice_id');
     }
 }

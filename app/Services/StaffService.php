@@ -85,12 +85,15 @@ class StaffService
     {
         return DB::transaction(function () use ($id) {
             $staff = Staff::findOrFail($id);
+            $user = $staff->user;
 
-            if ($staff->user) {
-                $staff->user->delete();
+            $deleted = $this->staffRepository->delete($id);
+
+            if ($user) {
+                $user->delete();
             }
 
-            return $this->staffRepository->delete($id);
+            return $deleted;
         });
     }
 

@@ -5,6 +5,7 @@ namespace App\Services\Payments;
 use App\Models\Payment;
 use App\Models\SubscriptionPayment;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class KhaltiService
 {
@@ -23,6 +24,7 @@ class KhaltiService
      */
     public function initiate(Payment $payment): array
     {
+
         $invoice = $payment->invoice;
 
         if (! $invoice) {
@@ -67,7 +69,9 @@ class KhaltiService
             [
                 'paymentId' => $payment->id,
             ]
+
         );
+       
 
         $response = Http::withHeaders([
             'Authorization' => 'Key ' . $this->secretKey,
@@ -186,6 +190,8 @@ class KhaltiService
      */
     public function verify(string $pidx): array
     {
+
+       
         $response = Http::withHeaders([
             'Authorization' => 'Key ' . $this->secretKey,
             'Content-Type' => 'application/json',

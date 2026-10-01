@@ -75,6 +75,13 @@ class PaymentIndexRequest extends FormRequest
                 'max:100'
             ],
 
+
+            'page' => [
+                'nullable',
+                'integer',
+                'min:1'
+            ],
+
         ];
     }
 }

@@ -21,33 +21,62 @@ class KhaltiService
     /**
      * Initiate Khalti payment for tenant invoice.
      */
-    public function initiate(Payment $payment , $return_url): array
+    public function initiate(Payment $payment): array
     {
         $invoice = $payment->invoice;
 
         if (! $invoice) {
-            throw new \Exception('Invoice not found for this payment.');
+            throw new \Exception(
+                'Invoice not found for this payment.'
+            );
         }
 
         if (! $invoice->invoice_number) {
-            throw new \Exception('Invoice number not found.');
+            throw new \Exception(
+                'Invoice number not found.'
+            );
         }
 
-        // Verify remaining balance before initiating
-        $maxPayable = round((float) $invoice->total_amount, 2);
-        $paidAmount = round((float) $invoice->paid_amount, 2);
-        $remaining = max(0, $maxPayable - $paidAmount);
+        $maxPayable = round(
+            (float) $invoice->total_amount,
+            2
+        );
 
-        if ($payment->amount > $remaining) {
-            throw new \Exception("Payment amount ({$payment->amount}) exceeds remaining balance ({$remaining}). Max payable: {$maxPayable}, Already paid: {$paidAmount}");
+        $paidAmount = round(
+            (float) $invoice->paid_amount,
+            2
+        );
+
+        $remaining = max(
+            0,
+            $maxPayable - $paidAmount
+        );
+
+        if ((float) $payment->amount > $remaining) {
+            throw new \Exception(
+                "Payment amount ({$payment->amount}) exceeds remaining balance ({$remaining})."
+            );
         }
+
+        /*
+     * IMPORTANT:
+     * Khalti must return to BACKEND first.
+     */
+        $returnUrl = route(
+            'payments.khalti.verify',
+            [
+                'paymentId' => $payment->id,
+            ]
+        );
+
         $response = Http::withHeaders([
-            'Authorization' => 'Key '.$this->secretKey,
+            'Authorization' => 'Key ' . $this->secretKey,
             'Content-Type' => 'application/json',
         ])->post(
-            rtrim($this->baseUrl, '/').'/epayment/initiate/',
+            rtrim($this->baseUrl, '/')
+                . '/epayment/initiate/',
             [
-                'return_url' => $return_url,
+                'return_url' => $returnUrl,
 
                 'website_url' => config('app.url'),
 
@@ -55,16 +84,18 @@ class KhaltiService
                     $payment->amount * 100
                 ),
 
-                'purchase_order_id' => $invoice->invoice_number,
+                'purchase_order_id' =>
+                $invoice->invoice_number,
 
-                'purchase_order_name' => 'Invoice #'.$invoice->invoice_number,
+                'purchase_order_name' =>
+                'Invoice #' . $invoice->invoice_number,
             ]
         );
 
         if ($response->failed()) {
             throw new \Exception(
-                'Khalti initiation failed: '.
-                    $response->body()
+                'Khalti initiation failed: '
+                    . $response->body()
             );
         }
 
@@ -78,6 +109,9 @@ class KhaltiService
 
         $payment->update([
             'transaction_id' => $result['pidx'],
+            'gateway_reference' => $result['pidx'],
+            'payment_url' => $result['payment_url'] ?? null,
+            'gateway_response' => $result,
         ]);
 
         return $result;
@@ -101,10 +135,10 @@ class KhaltiService
         }
 
         $response = Http::withHeaders([
-            'Authorization' => 'Key '.$this->secretKey,
+            'Authorization' => 'Key ' . $this->secretKey,
             'Content-Type' => 'application/json',
         ])->post(
-            rtrim($this->baseUrl, '/').'/epayment/initiate/',
+            rtrim($this->baseUrl, '/') . '/epayment/initiate/',
             [
                 'return_url' => route(
                     'central.subscription-payments.verify-khalti',
@@ -119,15 +153,15 @@ class KhaltiService
                     $payment->amount * 100
                 ),
 
-                'purchase_order_id' => 'SUB-'.$payment->id,
+                'purchase_order_id' => 'SUB-' . $payment->id,
 
-                'purchase_order_name' => 'Subscription #'.$payment->id,
+                'purchase_order_name' => 'Subscription #' . $payment->id,
             ]
         );
 
         if ($response->failed()) {
             throw new \Exception(
-                'Khalti initiation failed: '.
+                'Khalti initiation failed: ' .
                     $response->body()
             );
         }
@@ -153,10 +187,10 @@ class KhaltiService
     public function verify(string $pidx): array
     {
         $response = Http::withHeaders([
-            'Authorization' => 'Key '.$this->secretKey,
+            'Authorization' => 'Key ' . $this->secretKey,
             'Content-Type' => 'application/json',
         ])->post(
-            rtrim($this->baseUrl, '/').'/epayment/lookup/',
+            rtrim($this->baseUrl, '/') . '/epayment/lookup/',
             [
                 'pidx' => $pidx,
             ]
@@ -164,7 +198,7 @@ class KhaltiService
 
         if ($response->failed()) {
             throw new \Exception(
-                'Khalti verification failed: '.
+                'Khalti verification failed: ' .
                     $response->body()
             );
         }
@@ -175,7 +209,7 @@ class KhaltiService
             'status' => $result['status'] ?? 'Unknown',
 
             'transaction_id' => $result['transaction_id']
-                    ?? $pidx,
+                ?? $pidx,
 
             'gateway_response' => $result,
         ];

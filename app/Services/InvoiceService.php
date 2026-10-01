@@ -53,7 +53,7 @@ class InvoiceService
     {
         $memberId = (int) $data['member_id'];
         $couponId = isset($data['coupon_id']) ? (int) $data['coupon_id'] : null;
-        $extraAmount = round((float) ($data['total_amount'] ?? 0), 2);
+        $extraAmount = round((float) ($data['extra_amount'] ?? 0), 2);
 
         // Runs inside the caller's transaction if one exists (nested-safe).
         return DB::transaction(function () use ($memberId, $couponId, $extraAmount, $data) {
@@ -70,7 +70,7 @@ class InvoiceService
                 throw new \Exception('Member does not have a package assigned.');
             }
 
-            $totalAmount = round($extraAmount + (float) $package->price, 2);
+            $totalAmount = round((float) $package->price + $extraAmount, 2);
 
             // Coupon is validated and consumed in the same transaction as the
             // invoice, so a failure rolls the usage count back too.
@@ -323,7 +323,7 @@ class InvoiceService
 
         $year = now()->format('Y');
 
-        $build = fn (int $number): string => str_replace(
+        $build = fn(int $number): string => str_replace(
             ['{PREFIX}', '{YEAR}', '{NUMBER}'],
             [$prefix, $year, (string) $number],
             $format

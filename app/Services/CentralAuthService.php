@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\Subscription;
 use App\Models\SubscriptionInvoice;
 use App\Models\SubscriptionPayment;
@@ -155,7 +157,7 @@ class CentralAuthService
 
         if (! $plan) {
             throw new \RuntimeException(
-                'Selected subscription plan is not available.'
+                'The selected subscription plan is inactive.'
             );
         }
 
@@ -169,6 +171,7 @@ class CentralAuthService
             'company_name' => $data['company_name'],
             'tenant_code' => $data['subdomain'],
             'owner_email' => $data['email'],
+            'owner_name' => $data['owner'],
             'status' => 'inactive',
         ]);
 
@@ -180,8 +183,8 @@ class CentralAuthService
 
         $domain = $tenant->domains()->create([
             'domain' => $data['subdomain']
-                .'.'
-                .config('tenancy.central_domains')[0],
+                . '.'
+                . config('tenancy.central_domains')[0],
         ]);
 
         try {
@@ -242,7 +245,7 @@ class CentralAuthService
                 $client = app(ClientRepository::class)
                     ->createPasswordGrantClient(
                         name: $data['company_name']
-                            .' Password Grant Client',
+                            . ' Password Grant Client',
                         provider: 'users',
                         confidential: true,
                     );
@@ -296,10 +299,9 @@ class CentralAuthService
                 'gateway_response' => null,
                 'paid_at' => null,
             ]);
-
         } catch (\Throwable $e) {
             throw new \RuntimeException(
-                'Failed to create tenant: '.$e->getMessage()
+                'Failed to create tenant: ' . $e->getMessage()
             );
         }
 
@@ -351,7 +353,7 @@ class CentralAuthService
         $last = SubscriptionInvoice::orderByDesc('id')->first();
         $next = $last ? ((int) $last->id + 1) : 1;
 
-        return $prefix.'-'.str_pad((string) $next, 6, '0', STR_PAD_LEFT);
+        return $prefix . '-' . str_pad((string) $next, 6, '0', STR_PAD_LEFT);
     }
 
     public function completeCentralCashPayment(SubscriptionPayment $payment): SubscriptionPayment
@@ -410,113 +412,95 @@ class CentralAuthService
         });
     }
 
-    public function completePaymentAndCreateTenant(SubscriptionPayment $payment, array $data): array
+    public function completePayment(Payment $payment): Payment
     {
-        $subscription = $payment->subscription()->first();
+        return DB::transaction(function () use ($payment) {
 
-        if (! $subscription) {
-            throw new \RuntimeException('Subscription not found for this payment.');
-        }
-
-        $plan = $subscription->plan()->first();
-
-        if (! $plan) {
-            throw new \RuntimeException('Subscription plan not found for this payment.');
-        }
-
-        $tenant = Tenant::create([
-            'company_name' => $data['company_name'],
-            'tenant_code' => $data['subdomain'],
-            'owner_email' => $data['email'],
-            'status' => 'inactive',
-        ]);
-
-        $domain = $tenant->domains()->create([
-            'domain' => $data['subdomain']
-                .'.'
-                .config('tenancy.central_domains')[0],
-        ]);
-
-        $tenant->run(function () use ($data, $tenant) {
-            $owner = User::create([
-                'name' => $data['owner'],
-                'email' => $data['email'],
-                'password' => bcrypt($data['password']),
-            ]);
-
-            Artisan::call('db:seed', [
-                '--class' => RolePermissionSeeder::class,
-                '--force' => true,
-            ]);
-
-            $adminRole = Role::where('name', 'admin')
-                ->where('guard_name', 'api')
-                ->first();
-
-            if ($adminRole) {
-                $owner->assignRole($adminRole->name);
+            /*
+         * Prevent duplicate completion.
+         */
+            if ($payment->status !== 'SUCCESS') {
+                $payment->update([
+                    'status' => 'SUCCESS',
+                    'paid_at' => now(),
+                ]);
             }
 
-            $client = app(ClientRepository::class)
-                ->createPasswordGrantClient(
-                    name: $data['company_name']
-                        .' Password Grant Client',
-                    provider: 'users',
-                    confidential: true,
+            /*
+         * Invoice payment
+         */
+            if ($payment->invoice_id) {
+
+                $invoice = Invoice::query()
+                    ->lockForUpdate()
+                    ->findOrFail($payment->invoice_id);
+
+                /*
+             * Only SUCCESS payments count toward invoice payment.
+             */
+                $paidAmount = $invoice->payments()
+                    ->where('status', 'SUCCESS')
+                    ->sum('amount');
+
+                $paidAmount = round((float) $paidAmount, 2);
+
+                $remainingAmount = max(
+                    0,
+                    round(
+                        (float) $invoice->total_amount - $paidAmount,
+                        2
+                    )
                 );
 
-            $tenant->update([
-                'passport_client_id' => $client->id,
-                'passport_client_secret' => $client->plainSecret,
-            ]);
-        });
+                /*
+             * Partial payment is allowed.
+             */
+                $status = $remainingAmount <= 0
+                    ? 'paid'
+                    : ($paidAmount > 0 ? 'partially_paid' : 'unpaid');
 
-        return DB::transaction(function () use ($payment, $subscription, $plan, $tenant, $domain) {
-            $payment->update([
-                'status' => 'SUCCESS',
-                'paid_at' => now(),
-                'tenant_id' => $tenant->id,
-            ]);
+                $invoice->update([
+                    'paid_amount' => $paidAmount,
+                    'remaining_amount' => $remainingAmount,
+                    'status' => $status,
+                ]);
 
-            $startDate = now();
-            $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
-                'day' => $startDate->copy()->addDays((int) $plan->duration),
-                'month' => $startDate->copy()->addMonths((int) $plan->duration),
-                'year' => $startDate->copy()->addYears((int) $plan->duration),
-                default => $startDate->copy()->addMonths((int) $plan->duration),
-            };
+                /*
+             * Activate package ONLY after full payment.
+             */
+                if ($status === 'paid') {
 
-            $subscription->update([
-                'status' => 'active',
-                'starts_at' => $startDate->toDateString(),
-                'expires_at' => $expiresAt->toDateString(),
-                'tenant_id' => $tenant->id,
-            ]);
+                    app(InvoiceService::class)
+                        ->activateMemberPackage($invoice);
 
-            $tenant->update([
-                'status' => 'active',
-            ]);
+                    app(FineService::class)
+                        ->syncFineStatusOnInvoicePaid($invoice);
+                }
 
-            // Mark the existing invoice as PAID
-            $invoice = $payment->invoice()->first() ?? $this->createSubscriptionInvoice(
-                $subscription,
-                $tenant->id,
-                (float) $subscription->amount
+                return $payment->fresh([
+                    'invoice',
+                ]);
+            }
+
+            /*
+         * Booking payment
+         */
+            if ($payment->booking_id) {
+
+                $booking = $payment->booking;
+
+                $booking->update([
+                    'status' => 'CONFIRMED',
+                    'payment_status' => 'PAID',
+                    'confirmed_at' => now(),
+                ]);
+
+                return $payment->fresh();
+            }
+
+            throw new \Exception(
+                'Payment must belong to either an invoice or booking.'
             );
-
-            $invoice->update([
-                'status' => 'paid',
-                'paid_amount' => $invoice->total_amount,
-                'remaining_amount' => 0,
-            ]);
-
-            return [
-                'tenant' => $tenant->fresh(),
-                'domain' => $domain->domain,
-                'subscription' => $subscription->fresh()->load('plan'),
-                'subscription_payment' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
-                'invoice' => $invoice,
-            ];
         });
     }
 

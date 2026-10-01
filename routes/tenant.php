@@ -139,7 +139,7 @@ Route::middleware([
         Route::get('/settings/smtp', [SettingController::class, 'smtp']);
         Route::put('/settings/smtp', [SettingController::class, 'updateSmtp']);
 
-        Route::prefix('api/v1')->group(function () {
+      
             Route::get('/settings/appearance', [SettingController::class, 'appearance']);
             Route::put('/settings/appearance', [SettingController::class, 'updateAppearance']);
             Route::get('/settings/invoice', [SettingController::class, 'invoice']);
@@ -149,7 +149,7 @@ Route::middleware([
 
             Route::get('/settings/smtp', [SettingController::class, 'smtp']);
             Route::put('/settings/smtp', [SettingController::class, 'updateSmtp']);
-        });
+     
 
         Route::apiResource('settings', SettingController::class);
 

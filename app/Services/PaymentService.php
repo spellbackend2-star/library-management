@@ -203,86 +203,112 @@ class PaymentService
     /**
      * Complete successful payment.
      */
-    public function completePayment(Payment $payment): Payment
-    {
-        return DB::transaction(function () use ($payment) {
+   /**
+ * Complete successful payment.
+ */
+public function completePayment(Payment $payment): Payment
+{
+    return DB::transaction(function () use ($payment) {
 
-            $completedStatuses = ['SUCCESS', 'COMPLETED'];
+        /*
+         * Always use SUCCESS as the final payment status.
+         *
+         * Do not use COMPLETED because the payment status
+         * used by this project is SUCCESS.
+         */
+        if ($payment->status !== 'SUCCESS') {
+            $payment->update([
+                'status' => 'SUCCESS',
+                'paid_at' => now(),
+            ]);
+        }
 
-            // Prevent duplicate completion
-            if (! in_array($payment->status, $completedStatuses, true)) {
-                $payment->update([
-                    'status' => 'COMPLETED',
-                    'paid_at' => now(),
-                ]);
-            }
-
-            /*
+        /*
          * Invoice payment
          */
-            if ($payment->invoice_id) {
+        if ($payment->invoice_id) {
 
-                $invoice = Invoice::query()
-                    ->lockForUpdate()
-                    ->findOrFail($payment->invoice_id);
+            $invoice = Invoice::query()
+                ->lockForUpdate()
+                ->findOrFail($payment->invoice_id);
 
-                // Calculate total completed payments
-                $paidAmount = $invoice->payments()
-                    ->whereIn('status', $completedStatuses)
-                    ->sum('amount');
-
-                $paidAmount = round((float) $paidAmount, 2);
-
-                $remainingAmount = max(
-                    0,
-                    (float) $invoice->total_amount - $paidAmount
-                );
-
-                $status = $remainingAmount <= 0
-                    ? 'paid'
-                    : 'partially_paid';
-
-                $invoice->update([
-                    'paid_amount' => $paidAmount,
-                    'remaining_amount' => $remainingAmount,
-                    'status' => $status,
-                ]);
-
-                /*
-             * Activate package only when invoice is fully paid
+            /*
+             * Calculate only SUCCESS payments.
+             *
+             * PENDING Khalti/eSewa payments must NOT increase
+             * invoice paid_amount.
              */
-             if ($status === 'paid') {
-                     app(InvoiceService::class)
-                         ->activateMemberPackage($invoice);
+            $paidAmount = $invoice->payments()
+                ->where('status', 'SUCCESS')
+                ->sum('amount');
 
-                     app(FineService::class)
-                         ->syncFineStatusOnInvoicePaid($invoice);
-                 }
+            $paidAmount = round((float) $paidAmount, 2);
 
-                return $payment->fresh();
+            $remainingAmount = max(
+                0,
+                round(
+                    (float) $invoice->total_amount - $paidAmount,
+                    2
+                )
+            );
+
+            /*
+             * Determine invoice status.
+             */
+            if ($remainingAmount <= 0) {
+                $status = 'paid';
+            } elseif ($paidAmount > 0) {
+                $status = 'partially_paid';
+            } else {
+                $status = 'unpaid';
             }
 
             /*
-         * Booking payment
-         */
-            if ($payment->booking_id) {
+             * Update invoice.
+             */
+            $invoice->update([
+                'paid_amount' => $paidAmount,
+                'remaining_amount' => $remainingAmount,
+                'status' => $status,
+            ]);
 
-                $booking = $payment->booking;
+            /*
+             * Activate package and sync fines ONLY
+             * after the invoice is completely paid.
+             */
+            if ($status === 'paid') {
 
-                $booking->update([
-                    'status' => 'CONFIRMED',
-                    'payment_status' => 'PAID',
-                    'confirmed_at' => now(),
-                ]);
+                app(InvoiceService::class)
+                    ->activateMemberPackage($invoice);
 
-                return $payment->fresh();
+                app(FineService::class)
+                    ->syncFineStatusOnInvoicePaid($invoice);
             }
 
-            throw new \Exception(
-                'Payment must belong to either an invoice or booking.'
-            );
-        });
-    }
+            return $payment->fresh(['invoice']);
+        }
+
+        /*
+         * Booking payment
+         */
+        if ($payment->booking_id) {
+
+            $booking = $payment->booking;
+
+            $booking->update([
+                'status' => 'CONFIRMED',
+                'payment_status' => 'PAID',
+                'confirmed_at' => now(),
+            ]);
+
+            return $payment->fresh();
+        }
+
+        throw new \Exception(
+            'Payment must belong to either an invoice or booking.'
+        );
+    });
+}
 
     /**
      * Generate unique payment reference.

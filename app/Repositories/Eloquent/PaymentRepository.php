@@ -3,9 +3,10 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Payment;
+use App\Repositories\BaseRepository;
 use App\Repositories\Interface\PaymentRepositoryInterface;
 
-class PaymentRepository implements PaymentRepositoryInterface
+class PaymentRepository extends BaseRepository implements PaymentRepositoryInterface
 {
     public function getAll(array $filters = [])
     {
@@ -27,7 +28,32 @@ class PaymentRepository implements PaymentRepositoryInterface
             $query->where('booking_id', $filters['booking_id']);
         }
 
-        return $query->latest()->get();
+        if (!empty($filters['date_from'])) {
+            $query->whereDate('payment_date', '>=', $filters['date_from']);
+        }
+
+        if (!empty($filters['date_to'])) {
+            $query->whereDate('payment_date', '<=', $filters['date_to']);
+        }
+
+        if (!empty($filters['currency'])) {
+            $query->where('currency', $filters['currency']);
+        }
+
+        if (!empty($filters['user_id'])) {
+            $query->whereHas('booking', function ($q) use ($filters) {
+                $q->where('booked_by_user_id', $filters['user_id']);
+            });
+        }
+
+        $query->latest();
+
+        $paginator = $this->applyPagination($query, $filters);
+
+        return [
+            'data' => $paginator->items(),
+            'meta' => $this->paginationMeta($paginator),
+        ];
     }
 
     public function findById(int $id)

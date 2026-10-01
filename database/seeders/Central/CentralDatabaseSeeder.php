@@ -2,7 +2,6 @@
 
 namespace Database\Seeders\Central;
 
-use Database\Seeders\CentralRolePermissionSeeder;
 use Illuminate\Database\Seeder;
 
 class CentralDatabaseSeeder extends Seeder

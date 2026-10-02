@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'floor_id',
     'name',
     'room_type',
+    'status',
 ])]
 class Room extends Model
 {

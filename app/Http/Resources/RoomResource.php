@@ -15,6 +15,7 @@ class RoomResource extends JsonResource
             'floor_id' => $this->floor_id,
             'name' => $this->name,
             'room_type' => $this->room_type,
+            'status' => $this->status,
 
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

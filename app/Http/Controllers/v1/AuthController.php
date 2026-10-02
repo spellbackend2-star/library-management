@@ -95,7 +95,18 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Successfully logged in',
-            'data' => $result,
+            'data' => [
+                ...$result,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ],
+                'roles' => $user->getRoleNames()->values(),
+                'permissions' => $user->getAllPermissions()
+                    ->pluck('name')
+                    ->values(),
+            ],
         ], 200);
     }
 
@@ -228,7 +239,7 @@ class AuthController extends Controller
             $user->tokens()
                 ->where('revoked', false)
                 ->get()
-                ->each(fn ($token) => $token->revoke());
+                ->each(fn($token) => $token->revoke());
         }
 
         return response()->json([

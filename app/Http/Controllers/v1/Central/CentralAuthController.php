@@ -48,6 +48,10 @@ class CentralAuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
             ],
+            'roles' => $user->getRoleNames()->values(),
+            'permissions' => $user->getAllPermissions()
+                ->pluck('name')
+                ->values(),
         ];
 
         if ($tenant) {
@@ -126,14 +130,69 @@ class CentralAuthController extends Controller
             ], 500);
         }
 
+        $tenant = $result['tenant'];
+        $subscription = $result['subscription'];
+        $invoice = $result['invoice'];
+        $payment = $result['subscription_payment'];
+
         return response()->json([
             'status' => 'success',
             'message' => 'Tenant registered successfully',
-            'tenant' => $result['tenant'],
-            'domain' => $result['domain'],
-            'subscription' => $result['subscription'] ?? null,
-            'invoice' => $result['invoice'] ?? null,
-            'subscription_payment' => $result['subscription_payment'] ?? null,
+            'tenant' => [
+                'id' => $tenant->id,
+                'company_name' => $tenant->company_name,
+                'tenant_code' => $tenant->tenant_code,
+                'owner_email' => $tenant->owner_email,
+                'owner_name' => $tenant->owner_name,
+                'status' => $tenant->status,
+                'domain' => $result['domain'],
+            ],
+            'subscription' => [
+                'id' => $subscription->id,
+                'subscription_plan_id' => $subscription->subscription_plan_id,
+                'amount' => $subscription->amount,
+                'status' => $subscription->status,
+                'starts_at' => $subscription->starts_at,
+                'expires_at' => $subscription->expires_at,
+                'plan' => [
+                    'id' => $subscription->plan->id,
+                    'name' => $subscription->plan->name,
+                    'price' => $subscription->plan->price,
+                    'duration' => $subscription->plan->duration,
+                    'duration_unit' => $subscription->plan->duration_unit,
+                ],
+            ],
+            'invoice' => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'invoice_type' => $invoice->invoice_type,
+                'subtotal' => $invoice->subtotal,
+                'tax' => $invoice->tax,
+                'discount' => $invoice->discount,
+                'total_amount' => $invoice->total_amount,
+                'paid_amount' => $invoice->paid_amount,
+                'remaining_amount' => $invoice->remaining_amount,
+                'currency' => $invoice->currency,
+                'currency_symbol' => $invoice->currency_symbol,
+                'status' => $invoice->status,
+                'due_date' => $invoice->due_date,
+            ],
+            'payment' => [
+                'id' => $payment->id,
+                'invoice_id' => $payment->invoice_id,
+                'subscription_id' => $payment->subscription_id,
+                'amount' => $payment->amount,
+                'payment_method' => $payment->payment_method,
+                'status' => $payment->status,
+                'transaction_id' => $payment->transaction_id,
+                'paid_at' => $payment->paid_at,
+            ],
+            'next_step' => [
+                'action' => 'payment',
+                'payment_id' => $payment->id,
+                'invoice_id' => $invoice->id,
+                'message' => 'Complete the payment to activate the subscription and tenant.',
+            ],
         ], 201);
     }
 
@@ -235,7 +294,7 @@ class CentralAuthController extends Controller
             $user->tokens()
                 ->where('revoked', false)
                 ->get()
-                ->each(fn ($token) => $token->revoke());
+                ->each(fn($token) => $token->revoke());
         }
 
         return response()->json([

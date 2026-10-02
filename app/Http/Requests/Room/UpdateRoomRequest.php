@@ -34,6 +34,12 @@ class UpdateRoomRequest extends FormRequest
                 'string',
                 'in:study_area,quiet_zone,group_room,computer_lab',
             ],
+
+            'status' => [
+                'sometimes',
+                'string',
+                'in:available,maintenance,out_of_service',
+            ],
         ];
     }
 }

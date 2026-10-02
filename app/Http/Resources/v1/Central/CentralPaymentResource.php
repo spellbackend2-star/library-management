@@ -11,7 +11,7 @@ class CentralPaymentResource extends JsonResource
     {
         $payment = $this->resource;
 
-        return [
+        $resource = [
             'id' => $payment->id,
             'invoice_id' => $payment->invoice_id,
             'subscription_id' => $payment->subscription_id,
@@ -21,5 +21,11 @@ class CentralPaymentResource extends JsonResource
             'transaction_id' => $payment->transaction_id,
             'paid_at' => $payment->paid_at,
         ];
+
+        if (array_key_exists('return_url', $payment->getAttributes())) {
+            $resource['return_url'] = $payment->getAttribute('return_url');
+        }
+
+        return $resource;
     }
 }

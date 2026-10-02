@@ -71,7 +71,7 @@ class KhaltiService
             ]
 
         );
-       
+
 
         $response = Http::withHeaders([
             'Authorization' => 'Key ' . $this->secretKey,
@@ -124,8 +124,13 @@ class KhaltiService
     /**
      * Initiate Khalti payment for central subscription.
      */
-    public function initiateSubscription(SubscriptionPayment $payment): array
-    {
+    /**
+     * Initiate Khalti payment for central subscription.
+     */
+    public function initiateSubscription(
+        SubscriptionPayment $payment,
+        ?string $returnUrl = null
+    ): array {
         $subscription = $payment->subscription;
 
         if (! $subscription) {
@@ -138,18 +143,27 @@ class KhaltiService
             throw new \Exception('Subscription plan not found.');
         }
 
+        /*
+     * Khalti must return to BACKEND first.
+     *
+     * After backend verification, the backend will redirect
+     * the user to the frontend return_url.
+     */
+        $verifyUrl = route(
+            'central.subscription-payments.verify-khalti',
+            [
+                'payment' => $payment->id,
+                'return_url' => $returnUrl,
+            ]
+        );
+
         $response = Http::withHeaders([
             'Authorization' => 'Key ' . $this->secretKey,
             'Content-Type' => 'application/json',
         ])->post(
             rtrim($this->baseUrl, '/') . '/epayment/initiate/',
             [
-                'return_url' => route(
-                    'central.subscription-payments.verify-khalti',
-                    [
-                        'payment' => $payment->id,
-                    ]
-                ),
+                'return_url' => $verifyUrl,
 
                 'website_url' => config('app.url'),
 
@@ -180,6 +194,9 @@ class KhaltiService
 
         $payment->update([
             'transaction_id' => $result['pidx'],
+            'gateway_reference' => $result['pidx'],
+            'payment_url' => $result['payment_url'] ?? null,
+            'gateway_response' => $result,
         ]);
 
         return $result;
@@ -191,7 +208,7 @@ class KhaltiService
     public function verify(string $pidx): array
     {
 
-       
+
         $response = Http::withHeaders([
             'Authorization' => 'Key ' . $this->secretKey,
             'Content-Type' => 'application/json',

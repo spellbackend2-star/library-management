@@ -11,7 +11,9 @@ use App\Services\CentralAuthService;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class CentralSubscriptionPaymentController extends Controller
@@ -22,34 +24,64 @@ class CentralSubscriptionPaymentController extends Controller
         protected EsewaService $esewaService
     ) {}
 
+    /**
+     * Get all subscription payments.
+     */
     public function index(Request $request): JsonResponse
     {
+        $this->normalizePaymentMethod($request);
+
         $validated = $request->validate([
             'tenant_id' => ['nullable', 'string'],
             'subscription_id' => ['nullable', 'integer'],
-            'status' => ['nullable', 'string', 'in:PENDING,SUCCESS,FAILED'],
-            'payment_method' => ['nullable', 'string', 'in:CASH,KHALTI,ESEWA'],
+            'status' => [
+                'nullable',
+                'string',
+                'in:PENDING,SUCCESS,FAILED',
+            ],
+            'payment_method' => [
+                'nullable',
+                'string',
+                'in:CASH,KHALTI,ESEWA',
+            ],
         ]);
 
         $query = SubscriptionPayment::query();
 
         if (! empty($validated['tenant_id'])) {
-            $query->where('tenant_id', $validated['tenant_id']);
+            $query->where(
+                'tenant_id',
+                $validated['tenant_id']
+            );
         }
 
         if (! empty($validated['subscription_id'])) {
-            $query->where('subscription_id', $validated['subscription_id']);
+            $query->where(
+                'subscription_id',
+                $validated['subscription_id']
+            );
         }
 
         if (! empty($validated['status'])) {
-            $query->where('status', $validated['status']);
+            $query->where(
+                'status',
+                $validated['status']
+            );
         }
 
         if (! empty($validated['payment_method'])) {
-            $query->where('payment_method', $validated['payment_method']);
+            $query->where(
+                'payment_method',
+                $validated['payment_method']
+            );
         }
 
-        $payments = $query->with(['subscription.plan', 'tenant', 'invoice'])
+        $payments = $query
+            ->with([
+                'subscription.plan',
+                'tenant',
+                'invoice',
+            ])
             ->latest('id')
             ->get();
 
@@ -60,14 +92,36 @@ class CentralSubscriptionPaymentController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    /**
+     * Create invoice and subscription payment.
+     */
+    public function store(Request $request): JsonResponse|RedirectResponse
     {
+        $this->normalizePaymentMethod($request);
+
         $data = $request->validate([
-            'subscription_id' => ['required', 'integer', 'exists:subscriptions,id'],
-            'payment_method' => ['required', 'string', 'in:CASH,KHALTI,ESEWA'],
+            'subscription_id' => [
+                'required',
+                'integer',
+                'exists:subscriptions,id',
+            ],
+
+            'payment_method' => [
+                'required',
+                'string',
+                'regex:/^(CASH|KHALTI|ESEWA)$/i',
+            ],
+
+            'return_url' => [
+                'required',
+                'url',
+            ],
         ]);
 
-        $subscription = Subscription::with('plan')->findOrFail($data['subscription_id']);
+        $returnUrl = $data['return_url'] ?? null;
+
+        $subscription = Subscription::with('plan')
+            ->findOrFail($data['subscription_id']);
 
         if (! $subscription->plan) {
             return response()->json([
@@ -76,19 +130,27 @@ class CentralSubscriptionPaymentController extends Controller
             ], 422);
         }
 
-        if (! $subscription->plan->price || (float) $subscription->plan->price <= 0) {
+        if (
+            ! $subscription->plan->price ||
+            (float) $subscription->plan->price <= 0
+        ) {
             return response()->json([
                 'success' => false,
-                'message' => 'Subscription plan price must be greater than 0.',
+                'message' =>
+                'Subscription plan price must be greater than 0.',
             ], 422);
         }
 
         $pricingPlan = (float) $subscription->plan->price;
 
+        /*
+         * Create invoice.
+         */
         $invoice = CentralInvoice::create([
             'tenant_id' => $subscription->tenant_id,
             'subscription_id' => $subscription->id,
-            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
+            'invoice_number' =>
+            CentralInvoice::generateInvoiceNumber(),
             'invoice_type' => 'subscription',
             'subtotal' => $pricingPlan,
             'tax' => 0,
@@ -97,56 +159,229 @@ class CentralSubscriptionPaymentController extends Controller
             'paid_amount' => 0,
             'remaining_amount' => $pricingPlan,
             'status' => 'unpaid',
-            'due_date' => now()->addDays(7)->toDateString(),
+            'due_date' => now()
+                ->addDays(7)
+                ->toDateString(),
         ]);
 
+        /*
+         * Create payment.
+         */
         $payment = SubscriptionPayment::create([
             'subscription_id' => $subscription->id,
             'invoice_id' => $invoice->id,
             'tenant_id' => $subscription->tenant_id,
             'amount' => $pricingPlan,
-            'payment_method' => strtoupper($data['payment_method']),
+            'payment_method' =>
+            strtoupper($data['payment_method']),
             'status' => 'PENDING',
         ]);
 
-        $invoice->update(['subscription_payment_id' => $payment->id]);
+        $invoice->update([
+            'subscription_payment_id' => $payment->id,
+        ]);
 
-        if (strtoupper($data['payment_method']) === 'CASH') {
-            $this->centralAuthService->completeCentralCashPayment($payment);
+        /*
+         * CASH.
+         */
+        if (
+            strtoupper($data['payment_method']) === 'CASH'
+        ) {
+            $payment = $this->centralAuthService
+                ->completeCentralCashPayment($payment);
+
+            if ($returnUrl) {
+                return $this->redirectPaymentFrontend(
+                    $payment,
+                    $returnUrl,
+                    'Payment completed successfully.'
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                'Cash payment completed successfully.',
+                'data' => $payment
+                    ->fresh()
+                    ->load([
+                        'subscription.plan',
+                        'tenant',
+                        'invoice',
+                    ]),
+            ], 201);
+        }
+
+        /*
+         * KHALTI.
+         */
+        if (
+            strtoupper($data['payment_method']) === 'KHALTI'
+        ) {
+            try {
+                $result =
+                    $this->khaltiService
+                    ->initiateSubscription(
+                        $payment,
+                        $returnUrl
+                    );
+
+                return response()->json([
+                    'success' => true,
+                    'message' =>
+                    'Invoice created and Khalti payment initiated.',
+                    'data' => [
+                        'subscription' =>
+                        $subscription->load('plan'),
+
+                        'invoice' =>
+                        $invoice->load(
+                            'subscription.plan'
+                        ),
+
+                        'subscription_payment' =>
+                        $this->paymentWithReturnUrl(
+                            $payment->fresh()->load([
+                                'subscription.plan',
+                                'invoice',
+                            ]),
+                            $returnUrl
+                        ),
+
+                        'khalti' => $result,
+                    ],
+                ], 201);
+            } catch (Throwable $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                    'Khalti initiation failed: ' .
+                        $e->getMessage(),
+                ], 500);
+            }
+        }
+
+        /*
+         * ESEWA.
+         */
+        if (
+            strtoupper($data['payment_method']) === 'ESEWA'
+        ) {
+            try {
+                $result =
+                    $this->esewaService
+                    ->initiateSubscription(
+                        $payment,
+                        $returnUrl
+                    );
+
+                return response()->json([
+                    'success' => true,
+                    'message' =>
+                    'Invoice created and eSewa payment initiated.',
+                    'data' => [
+                        'subscription' =>
+                        $subscription->load('plan'),
+
+                        'invoice' =>
+                        $invoice->load(
+                            'subscription.plan'
+                        ),
+
+                        'subscription_payment' =>
+                        $this->paymentWithReturnUrl(
+                            $payment->fresh()->load([
+                                'subscription.plan',
+                                'invoice',
+                            ]),
+                            $returnUrl
+                        ),
+
+                        'esewa' => $result,
+                    ],
+                ], 201);
+            } catch (Throwable $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' =>
+                    'eSewa initiation failed: ' .
+                        $e->getMessage(),
+                ], 500);
+            }
         }
 
         return response()->json([
             'success' => true,
-            'message' => 'Invoice and subscription payment created successfully.',
-            'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
+            'message' =>
+            'Invoice and subscription payment created successfully.',
+            'data' => $payment
+                ->fresh()
+                ->load([
+                    'subscription.plan',
+                    'tenant',
+                    'invoice',
+                ]),
         ], 201);
     }
 
-    public function initiateFromPlan(Request $request): JsonResponse
-    {
+    /**
+     * Create subscription from plan and initiate payment.
+     */
+    public function initiateFromPlan(
+        Request $request
+    ): JsonResponse|RedirectResponse {
+        $this->normalizePaymentMethod($request);
+
         $data = $request->validate([
-            'subscription_plan_id' => ['required', 'integer', 'exists:subscription_plans,id'],
-            'payment_method' => ['required', 'string', 'in:CASH,KHALTI,ESEWA'],
+            'subscription_plan_id' => [
+                'required',
+                'integer',
+                'exists:subscription_plans,id',
+            ],
+
+            'payment_method' => [
+                'required',
+                'string',
+                'in:CASH,KHALTI,ESEWA',
+            ],
+
+            'return_url' => [
+                'nullable',
+                'url',
+            ],
         ]);
 
-        $plan = SubscriptionPlan::where('id', $data['subscription_plan_id'])
+        $returnUrl = $data['return_url'] ?? null;
+
+        $plan = SubscriptionPlan::where(
+            'id',
+            $data['subscription_plan_id']
+        )
             ->where('is_active', true)
             ->first();
 
         if (! $plan) {
             return response()->json([
                 'success' => false,
-                'message' => 'Selected subscription plan is not available.',
+                'message' =>
+                'Selected subscription plan is not available.',
             ], 422);
         }
 
-        if (! $plan->price || (float) $plan->price <= 0) {
+        if (
+            ! $plan->price ||
+            (float) $plan->price <= 0
+        ) {
             return response()->json([
                 'success' => false,
-                'message' => 'Subscription plan price must be greater than 0.',
+                'message' =>
+                'Subscription plan price must be greater than 0.',
             ], 422);
         }
 
+        /*
+         * Create subscription.
+         */
         $subscription = Subscription::create([
             'tenant_id' => null,
             'subscription_plan_id' => $plan->id,
@@ -158,10 +393,14 @@ class CentralSubscriptionPaymentController extends Controller
 
         $pricingPlan = (float) $plan->price;
 
+        /*
+         * Create invoice.
+         */
         $invoice = CentralInvoice::create([
             'tenant_id' => null,
             'subscription_id' => $subscription->id,
-            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
+            'invoice_number' =>
+            CentralInvoice::generateInvoiceNumber(),
             'invoice_type' => 'subscription',
             'subtotal' => $pricingPlan,
             'tax' => 0,
@@ -170,284 +409,786 @@ class CentralSubscriptionPaymentController extends Controller
             'paid_amount' => 0,
             'remaining_amount' => $pricingPlan,
             'status' => 'unpaid',
-            'due_date' => now()->addDays(7)->toDateString(),
+            'due_date' => now()
+                ->addDays(7)
+                ->toDateString(),
         ]);
 
+        /*
+         * Create payment.
+         */
         $payment = SubscriptionPayment::create([
             'subscription_id' => $subscription->id,
             'invoice_id' => $invoice->id,
             'tenant_id' => null,
             'amount' => $pricingPlan,
-            'payment_method' => strtoupper($data['payment_method']),
+            'payment_method' =>
+            strtoupper($data['payment_method']),
             'status' => 'PENDING',
         ]);
 
-        $invoice->update(['subscription_payment_id' => $payment->id]);
+        $invoice->update([
+            'subscription_payment_id' => $payment->id,
+        ]);
 
-        if (strtoupper($data['payment_method']) === 'KHALTI') {
+        /*
+         * KHALTI.
+         */
+        if (
+            strtoupper($data['payment_method']) === 'KHALTI'
+        ) {
             try {
-                $result = $this->khaltiService->initiateSubscription($payment);
+                $result =
+                    $this->khaltiService
+                    ->initiateSubscription(
+                        $payment,
+                        $returnUrl
+                    );
+
                 return response()->json([
                     'success' => true,
-                    'message' => 'Invoice created and Khalti payment initiated.',
+                    'message' =>
+                    'Invoice created and Khalti payment initiated.',
                     'data' => [
-                        'subscription' => $subscription->load('plan'),
-                        'invoice' => $invoice->load('subscription.plan'),
-                        'subscription_payment' => $payment->load(['subscription.plan', 'invoice']),
+                        'subscription' =>
+                        $subscription->load('plan'),
+
+                        'invoice' =>
+                        $invoice->load(
+                            'subscription.plan'
+                        ),
+
+                        'subscription_payment' =>
+                        $this->paymentWithReturnUrl(
+                            $payment->fresh()->load([
+                                'subscription.plan',
+                                'invoice',
+                            ]),
+                            $returnUrl
+                        ),
+
                         'khalti' => $result,
                     ],
                 ], 201);
             } catch (Throwable $e) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Khalti initiation failed: '.$e->getMessage(),
+                    'message' =>
+                    'Khalti initiation failed: ' .
+                        $e->getMessage(),
                 ], 500);
             }
         }
 
-        if (strtoupper($data['payment_method']) === 'ESEWA') {
+        /*
+         * ESEWA.
+         */
+        if (
+            strtoupper($data['payment_method']) === 'ESEWA'
+        ) {
             try {
-                $result = $this->esewaService->initiateSubscription($payment);
+                $result =
+                    $this->esewaService
+                    ->initiateSubscription(
+                        $payment,
+                        $returnUrl
+                    );
+
                 return response()->json([
                     'success' => true,
-                    'message' => 'Invoice created and eSewa payment initiated.',
+                    'message' =>
+                    'Invoice created and eSewa payment initiated.',
                     'data' => [
-                        'subscription' => $subscription->load('plan'),
-                        'invoice' => $invoice->load('subscription.plan'),
-                        'subscription_payment' => $payment->load(['subscription.plan', 'invoice']),
+                        'subscription' =>
+                        $subscription->load('plan'),
+
+                        'invoice' =>
+                        $invoice->load(
+                            'subscription.plan'
+                        ),
+
+                        'subscription_payment' =>
+                        $this->paymentWithReturnUrl(
+                            $payment->fresh()->load([
+                                'subscription.plan',
+                                'invoice',
+                            ]),
+                            $returnUrl
+                        ),
+
                         'esewa' => $result,
                     ],
                 ], 201);
             } catch (Throwable $e) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'eSewa initiation failed: '.$e->getMessage(),
+                    'message' =>
+                    'eSewa initiation failed: ' .
+                        $e->getMessage(),
                 ], 500);
             }
         }
 
+        /*
+         * CASH.
+         */
+        if (
+            strtoupper($data['payment_method']) === 'CASH'
+        ) {
+            $payment = $this->centralAuthService
+                ->completeCentralCashPayment($payment);
+
+            if ($returnUrl) {
+                return $this->redirectPaymentFrontend(
+                    $payment,
+                    $returnUrl,
+                    'Payment completed successfully.'
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' =>
+                'Cash payment completed successfully.',
+                'data' => $payment
+                    ->fresh()
+                    ->load([
+                        'subscription.plan',
+                        'tenant',
+                        'invoice',
+                    ]),
+            ], 201);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Invoice and subscription payment created successfully. Proceed to payment.',
+            'message' =>
+            'Invoice and subscription payment created successfully. Proceed to payment.',
             'data' => [
-                'subscription' => $subscription->load('plan'),
-                'invoice' => $invoice->load('subscription.plan'),
-                'subscription_payment' => $payment->load(['subscription.plan', 'invoice']),
+                'subscription' =>
+                $subscription->load('plan'),
+
+                'invoice' =>
+                $invoice->load(
+                    'subscription.plan'
+                ),
+
+                'subscription_payment' =>
+                $payment->fresh()->load([
+                    'subscription.plan',
+                    'invoice',
+                ]),
             ],
         ], 201);
     }
 
-    public function completeAndCreateTenant(Request $request, SubscriptionPayment $payment): JsonResponse
-    {
+    /**
+     * Complete payment and create tenant.
+     */
+    public function completeAndCreateTenant(
+        Request $request,
+        SubscriptionPayment $payment
+    ): JsonResponse {
         $data = $request->validate([
-            'owner' => ['required', 'string', 'max:255'],
-            'company_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:8'],
-            'subdomain' => ['required', 'string', 'max:255', 'unique:tenants,tenant_code'],
+            'owner' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+
+            'company_name' => [
+                'required',
+                'string',
+                'max:255',
+            ],
+
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+            ],
+
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+            ],
+
+            'subdomain' => [
+                'required',
+                'string',
+                'max:255',
+                'unique:tenants,tenant_code',
+            ],
         ]);
 
         if ($payment->status !== 'PENDING') {
             return response()->json([
                 'success' => false,
-                'message' => 'Payment must be in PENDING status.',
+                'message' =>
+                'Payment must be in PENDING status.',
             ], 422);
         }
 
-        $result = $this->centralAuthService->completePaymentAndCreateTenant($payment, $data);
+        $result =
+            $this->centralAuthService
+            ->completePaymentAndCreateTenant(
+                $payment,
+                $data
+            );
 
         return response()->json([
             'success' => true,
-            'message' => 'Tenant created and subscription activated successfully.',
+            'message' =>
+            'Tenant created and subscription activated successfully.',
             'data' => $result,
         ], 201);
     }
 
-    public function verifyKhalti(SubscriptionPayment $payment): JsonResponse
-    {
+    /**
+     * Verify Khalti payment.
+     */
+    public function verifyKhalti(
+        Request $request,
+        SubscriptionPayment $payment
+    ) {
+        /*
+         * return_url was originally supplied by frontend.
+         * Khalti sends it back to this endpoint through the
+         * backend verification URL.
+         */
+        $returnUrl = $request->query('return_url');
+
         if ($payment->payment_method !== 'KHALTI') {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid payment method for Khalti.',
+                'message' =>
+                'Invalid payment method for Khalti.',
             ], 400);
         }
 
         try {
-            if (in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Payment already completed.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
-                ]);
+            /*
+             * Prevent duplicate completion.
+             */
+            if (in_array(
+                $payment->status,
+                ['SUCCESS', 'COMPLETED'],
+                true
+            )) {
+                return $this->redirectKhaltiFrontend(
+                    $payment,
+                    'success',
+                    'Payment already completed successfully.',
+                    $returnUrl
+                );
             }
 
-            $result = $this->khaltiService->verify($payment->transaction_id);
+            /*
+             * Transaction ID is required.
+             */
+            if (! $payment->transaction_id) {
+                throw new \Exception(
+                    'Khalti transaction ID not found.'
+                );
+            }
 
-            if (in_array($result['status'], ['Completed', 'SUCCESS'], true)) {
+            /*
+             * Ask Khalti for actual payment status.
+             */
+            $result =
+                $this->khaltiService->verify(
+                    $payment->transaction_id
+                );
+
+            $gatewayStatus = strtoupper(
+                (string) ($result['status'] ?? '')
+            );
+
+            /*
+             * Payment successful.
+             */
+            if (in_array(
+                $gatewayStatus,
+                ['COMPLETED', 'SUCCESS'],
+                true
+            )) {
                 $payment->update([
-                    'gateway_response' => $result['gateway_response'] ?? null,
-                    'transaction_id' => $result['transaction_id'] ?? $payment->transaction_id,
+                    'gateway_response' =>
+                    $result['gateway_response'] ?? null,
+
+                    'transaction_id' =>
+                    $result['transaction_id']
+                        ?? $payment->transaction_id,
                 ]);
 
-                $this->centralAuthService->completeCentralCashPayment($payment);
+                Log::info(
+                    'CENTRAL KHALTI PAYMENT COMPLETING',
+                    [
+                        'payment_id' => $payment->id,
+                        'subscription_id' =>
+                        $payment->subscription_id,
+                        'invoice_id' =>
+                        $payment->invoice_id,
+                        'amount' => $payment->amount,
+                        'gateway_status' =>
+                        $gatewayStatus,
+                    ]
+                );
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Khalti payment completed successfully.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
+                /*
+                 * Complete payment.
+                 *
+                 * Payment -> SUCCESS
+                 * Invoice -> PAID
+                 * Subscription -> ACTIVE
+                 * Tenant -> ACTIVE
+                 */
+                $this->centralAuthService
+                    ->completeCentralCashPayment(
+                        $payment
+                    );
+
+                /*
+                 * Refresh after completion.
+                 */
+                $payment->refresh();
+
+                $payment->load([
+                    'subscription.plan',
+                    'tenant.domains',
+                    'invoice',
                 ]);
+
+                Log::info(
+                    'CENTRAL KHALTI PAYMENT COMPLETED',
+                    [
+                        'payment_id' => $payment->id,
+                        'subscription_id' =>
+                        $payment->subscription_id,
+                        'invoice_id' =>
+                        $payment->invoice_id,
+                        'amount' => $payment->amount,
+                        'status' => $payment->status,
+                        'invoice_status' =>
+                        $payment->invoice?->status,
+                        'paid_amount' =>
+                        $payment->invoice?->paid_amount,
+                        'remaining_amount' =>
+                        $payment->invoice?->remaining_amount,
+                        'subscription_status' =>
+                        $payment->subscription?->status,
+                        'tenant_status' =>
+                        $payment->tenant?->status,
+                    ]
+                );
+
+                /*
+                 * Redirect to frontend.
+                 */
+                return $this->redirectKhaltiFrontend(
+                    $payment,
+                    'success',
+                    'Payment completed successfully.',
+                    $returnUrl
+                );
             }
 
-            if ($result['status'] === 'Pending') {
+            /*
+             * Payment still pending.
+             */
+            if ($gatewayStatus === 'PENDING') {
                 $payment->update([
                     'status' => 'PENDING',
-                    'gateway_response' => $result['gateway_response'] ?? null,
+
+                    'gateway_response' =>
+                    $result['gateway_response'] ?? null,
                 ]);
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Khalti payment is still pending.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
-                ]);
+                $payment->refresh();
+
+                Log::info(
+                    'CENTRAL KHALTI PAYMENT PENDING',
+                    [
+                        'payment_id' => $payment->id,
+                        'invoice_id' =>
+                        $payment->invoice_id,
+                    ]
+                );
+
+                return $this->redirectKhaltiFrontend(
+                    $payment,
+                    'pending',
+                    'Payment is still pending.',
+                    $returnUrl
+                );
             }
 
+            /*
+             * Payment failed/cancelled.
+             */
             $payment->update([
                 'status' => 'FAILED',
-                'gateway_response' => $result['gateway_response'] ?? null,
+
+                'gateway_response' =>
+                $result['gateway_response'] ?? null,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Khalti payment failed or was cancelled.',
-            ], 400);
+            $payment->refresh();
 
+            Log::warning(
+                'CENTRAL KHALTI PAYMENT FAILED',
+                [
+                    'payment_id' => $payment->id,
+                    'invoice_id' =>
+                    $payment->invoice_id,
+                    'gateway_status' =>
+                    $gatewayStatus,
+                ]
+            );
+
+            return $this->redirectKhaltiFrontend(
+                $payment,
+                'failed',
+                'Payment failed or was cancelled.',
+                $returnUrl
+            );
         } catch (Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
+            Log::error(
+                'CENTRAL KHALTI PAYMENT VERIFICATION ERROR',
+                [
+                    'payment_id' => $payment->id,
+                    'subscription_id' =>
+                    $payment->subscription_id,
+                    'invoice_id' =>
+                    $payment->invoice_id,
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]
+            );
+
+            return $this->redirectKhaltiFrontend(
+                $payment,
+                'error',
+                'Unable to verify payment.',
+                $returnUrl
+            );
         }
     }
 
-    public function verifyEsewa(Request $request, SubscriptionPayment $payment): JsonResponse
-    {
+    /**
+     * Verify eSewa payment.
+     */
+    public function verifyEsewa(
+        Request $request,
+        SubscriptionPayment $payment
+    ) {
+        $returnUrl = $request->query('return_url');
+
         if ($payment->payment_method !== 'ESEWA') {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid payment method for eSewa.',
+                'message' =>
+                'Invalid payment method for eSewa.',
             ], 400);
         }
 
         try {
-            if (in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Payment already completed.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
-                ]);
+            /*
+             * Prevent duplicate completion.
+             */
+            if (in_array(
+                $payment->status,
+                ['SUCCESS', 'COMPLETED'],
+                true
+            )) {
+                return $this->redirectEsewaFrontend(
+                    $payment,
+                    'success',
+                    'Payment already completed successfully.',
+                    $returnUrl
+                );
             }
 
-            $result = $this->esewaService->verify($request->all());
+            /*
+             * Verify eSewa payment.
+             */
+            $result =
+                $this->esewaService->verify(
+                    $request->all()
+                );
 
-            if (in_array($result['status'], ['Completed', 'SUCCESS'], true)) {
+            $gatewayStatus = strtoupper(
+                (string) ($result['status'] ?? '')
+            );
+
+            /*
+             * Payment successful.
+             */
+            if (in_array(
+                $gatewayStatus,
+                ['COMPLETED', 'SUCCESS'],
+                true
+            )) {
                 $payment->update([
-                    'gateway_response' => $result['gateway_response'] ?? null,
-                    'transaction_id' => $result['transaction_id'] ?? $payment->transaction_id,
+                    'gateway_response' =>
+                    $result['gateway_response'] ?? null,
+
+                    'transaction_id' =>
+                    $result['transaction_id']
+                        ?? $payment->transaction_id,
                 ]);
 
-                $this->centralAuthService->completeCentralCashPayment($payment);
+                Log::info(
+                    'CENTRAL ESEWA PAYMENT COMPLETING',
+                    [
+                        'payment_id' => $payment->id,
+                        'subscription_id' =>
+                        $payment->subscription_id,
+                        'invoice_id' =>
+                        $payment->invoice_id,
+                        'amount' => $payment->amount,
+                        'gateway_status' =>
+                        $gatewayStatus,
+                    ]
+                );
 
-                return response()->json([
-                    'success' => true,
-                    'message' => 'eSewa payment completed successfully.',
-                    'data' => $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']),
+                /*
+                 * Complete payment.
+                 */
+                $this->centralAuthService
+                    ->completeCentralCashPayment(
+                        $payment
+                    );
+
+                $payment->refresh();
+
+                $payment->load([
+                    'subscription.plan',
+                    'tenant.domains',
+                    'invoice',
                 ]);
+
+                return $this->redirectEsewaFrontend(
+                    $payment,
+                    'success',
+                    'Payment completed successfully.',
+                    $returnUrl
+                );
             }
 
+            /*
+             * Pending.
+             */
+            if ($gatewayStatus === 'PENDING') {
+                $payment->update([
+                    'status' => 'PENDING',
+
+                    'gateway_response' =>
+                    $result['gateway_response'] ?? null,
+                ]);
+
+                $payment->refresh();
+
+                return $this->redirectEsewaFrontend(
+                    $payment,
+                    'pending',
+                    'Payment is still pending.',
+                    $returnUrl
+                );
+            }
+
+            /*
+             * Failed/cancelled.
+             */
             $payment->update([
                 'status' => 'FAILED',
-                'gateway_response' => $result['gateway_response'] ?? null,
+
+                'gateway_response' =>
+                $result['gateway_response'] ?? null,
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'eSewa payment failed or was cancelled.',
-            ], 400);
+            $payment->refresh();
 
+            return $this->redirectEsewaFrontend(
+                $payment,
+                'failed',
+                'Payment failed or was cancelled.',
+                $returnUrl
+            );
         } catch (Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
+            Log::error(
+                'CENTRAL ESEWA PAYMENT VERIFICATION ERROR',
+                [
+                    'payment_id' => $payment->id,
+                    'subscription_id' =>
+                    $payment->subscription_id,
+                    'invoice_id' =>
+                    $payment->invoice_id,
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ]
+            );
+
+            return $this->redirectEsewaFrontend(
+                $payment,
+                'error',
+                'Unable to verify payment.',
+                $returnUrl
+            );
         }
     }
 
-    public function show(SubscriptionPayment $payment): JsonResponse
-    {
+    /**
+     * Show payment.
+     */
+    public function show(
+        SubscriptionPayment $payment
+    ): JsonResponse {
         return response()->json([
             'success' => true,
-            'data' => $payment->load(['subscription', 'tenant', 'invoice']),
-        ]);
-    }
-
-    public function complete(SubscriptionPayment $payment): JsonResponse
-    {
-        $this->centralAuthService->completeCentralCashPayment($payment);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Payment completed successfully.',
-            'data' => $payment->fresh()->load(['subscription', 'tenant', 'invoice']),
+            'data' => $payment->load([
+                'subscription.plan',
+                'tenant',
+                'invoice',
+            ]),
         ]);
     }
 
     /**
-     * Pay the pending subscription payment created during tenant registration.
-     *
-     * The tenant is created as "inactive" during registration. This endpoint
-     * takes the already existing PENDING payment and lets the caller settle it
-     * with CASH, KHALTI or ESEWA. On success the existing activation logic
-     * (CentralAuthService::completeCentralCashPayment) flips the subscription
-     * to active and the tenant to active.
+     * Complete payment manually.
      */
-    public function pay(Request $request, SubscriptionPayment $payment): JsonResponse
-    {
+    public function complete(
+        SubscriptionPayment $payment
+    ): JsonResponse {
+        $this->centralAuthService
+            ->completeCentralCashPayment(
+                $payment
+            );
+
+        return response()->json([
+            'success' => true,
+            'message' =>
+            'Payment completed successfully.',
+            'data' => $payment
+                ->fresh()
+                ->load([
+                    'subscription.plan',
+                    'tenant',
+                    'invoice',
+                ]),
+        ]);
+    }
+
+    /**
+     * Pay existing pending tenant subscription payment.
+     */
+    public function pay(
+        Request $request,
+        SubscriptionPayment $payment
+    ): JsonResponse|RedirectResponse {
+        $this->normalizePaymentMethod($request);
+
         $data = $request->validate([
-            'payment_method' => ['required', 'string', 'in:CASH,KHALTI,ESEWA'],
+            'payment_method' => [
+                'required',
+                'string',
+                'in:CASH,KHALTI,ESEWA',
+            ],
+
+            'return_url' => [
+                'nullable',
+                'url',
+            ],
         ]);
 
-        $payment->load(['subscription.plan', 'tenant.domains', 'invoice']);
+        $returnUrl = $data['return_url'] ?? null;
+
+        $payment->load([
+            'subscription.plan',
+            'tenant.domains',
+            'invoice',
+        ]);
 
         if (! $payment->tenant) {
             return response()->json([
                 'success' => false,
-                'message' => 'This payment is not linked to a tenant. Use complete-and-create-tenant instead.',
+                'message' =>
+                'This payment is not linked to a tenant. Use complete-and-create-tenant instead.',
             ], 422);
         }
 
-        if (in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
+        /*
+         * Already completed.
+         */
+        if (in_array(
+            $payment->status,
+            ['SUCCESS', 'COMPLETED'],
+            true
+        )) {
+            if ($returnUrl) {
+                return $this->redirectPaymentFrontend(
+                    $payment,
+                    $returnUrl,
+                    'Payment already completed successfully.'
+                );
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Subscription payment already completed.',
-                'data' => $this->buildPaymentSummary($payment),
+                'message' =>
+                'Subscription payment already completed.',
+                'data' =>
+                $this->buildPaymentSummary(
+                    $payment
+                ),
             ]);
         }
 
-        $method = strtoupper($data['payment_method']);
+        $method = strtoupper(
+            $data['payment_method']
+        );
 
+        /*
+         * CASH.
+         */
         if ($method === 'CASH') {
-            $this->centralAuthService->completeCentralCashPayment($payment);
+            $payment = $this->centralAuthService
+                ->completeCentralCashPayment(
+                    $payment
+                );
+
+            if ($returnUrl) {
+                return $this->redirectPaymentFrontend(
+                    $payment,
+                    $returnUrl,
+                    'Payment completed successfully.'
+                );
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Cash payment recorded. Subscription activated and tenant is now active.',
-                'data' => $this->buildPaymentSummary($payment->fresh(['subscription.plan', 'tenant.domains', 'invoice'])),
+                'message' =>
+                'Cash payment recorded. Subscription activated and tenant is now active.',
+                'data' =>
+                $this->buildPaymentSummary(
+                    $payment->fresh([
+                        'subscription.plan',
+                        'tenant.domains',
+                        'invoice',
+                    ]),
+                    null,
+                    $returnUrl
+                ),
             ]);
         }
 
         /*
-        | Allow retrying a previously failed gateway payment.
-        */
+         * Retry failed gateway payment.
+         */
         if ($payment->status === 'FAILED') {
             $payment->update([
                 'status' => 'PENDING',
@@ -461,135 +1202,474 @@ class CentralSubscriptionPaymentController extends Controller
 
         try {
             $gateway = $method === 'KHALTI'
-                ? $this->khaltiService->initiateSubscription($payment)
-                : $this->esewaService->initiateSubscription($payment);
+                ? $this->khaltiService
+                ->initiateSubscription(
+                    $payment,
+                    $returnUrl
+                )
+                : $this->esewaService
+                ->initiateSubscription(
+                    $payment,
+                    $returnUrl
+                );
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $method.' initiation failed: '.$e->getMessage(),
+                'message' =>
+                $method .
+                    ' initiation failed: ' .
+                    $e->getMessage(),
             ], 500);
         }
 
         return response()->json([
             'success' => true,
-            'message' => $method.' payment initiated. Complete the payment on the gateway to activate the tenant.',
-            'data' => $this->buildPaymentSummary(
-                $payment->fresh(['subscription.plan', 'tenant.domains', 'invoice']),
-                $gateway
+            'message' =>
+            $method .
+                ' payment initiated. Complete the payment on the gateway to activate the tenant.',
+            'data' =>
+            $this->buildPaymentSummary(
+                $payment->fresh([
+                    'subscription.plan',
+                    'tenant.domains',
+                    'invoice',
+                ]),
+                $gateway,
+                $returnUrl
             ),
         ]);
     }
 
     /**
-     * Public status endpoint so a frontend can poll payment / tenant state
-     * after the gateway redirects the user back.
+     * Public payment status.
      */
-    public function paymentStatus(SubscriptionPayment $payment): JsonResponse
-    {
-        $payment->load(['subscription.plan', 'tenant.domains', 'invoice']);
+    public function paymentStatus(
+        SubscriptionPayment $payment
+    ): JsonResponse {
+        $payment->load([
+            'subscription.plan',
+            'tenant.domains',
+            'invoice',
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Subscription payment status retrieved successfully.',
-            'data' => $this->buildPaymentSummary($payment),
+            'message' =>
+            'Subscription payment status retrieved successfully.',
+            'data' =>
+            $this->buildPaymentSummary(
+                $payment
+            ),
         ]);
     }
 
     /**
-     * Build the "how to pay" payload for a subscription payment.
+     * Build payment summary.
      */
     protected function buildPaymentSummary(
         SubscriptionPayment $payment,
-        ?array $gateway = null
+        ?array $gateway = null,
+        ?string $returnUrl = null
     ): array {
-        $payment->loadMissing(['subscription.plan', 'tenant.domains', 'invoice']);
+        $payment->loadMissing([
+            'subscription.plan',
+            'tenant.domains',
+            'invoice',
+        ]);
 
         $tenant = $payment->tenant;
-        $isPaid = in_array($payment->status, ['SUCCESS', 'COMPLETED'], true);
-        $isTenantActive = $tenant && $tenant->status === 'active';
 
-        $domain = $tenant?->domains?->first()?->domain;
+        $isPaid = in_array(
+            $payment->status,
+            ['SUCCESS', 'COMPLETED'],
+            true
+        );
+
+        $isTenantActive =
+            $tenant &&
+            $tenant->status === 'active';
+
+        $domain =
+            $tenant?->domains?->first()?->domain;
 
         $summary = [
             'payment' => [
                 'id' => $payment->id,
                 'amount' => $payment->amount,
-                'payment_method' => $payment->payment_method,
+                'payment_method' =>
+                $payment->payment_method,
                 'status' => $payment->status,
-                'transaction_id' => $payment->transaction_id,
+                'transaction_id' =>
+                $payment->transaction_id,
+                'gateway_reference' =>
+                $payment->gateway_reference,
+                'payment_url' =>
+                $payment->payment_url,
                 'paid_at' => $payment->paid_at,
             ],
-            'invoice' => $payment->invoice ? [
-                'id' => $payment->invoice->id,
-                'invoice_number' => $payment->invoice->invoice_number,
-                'total_amount' => $payment->invoice->total_amount,
-                'paid_amount' => $payment->invoice->paid_amount,
-                'remaining_amount' => $payment->invoice->remaining_amount,
-                'status' => $payment->invoice->status,
-                'due_date' => $payment->invoice->due_date,
-            ] : null,
-            'subscription' => $payment->subscription ? [
-                'id' => $payment->subscription->id,
-                'status' => $payment->subscription->status,
-                'starts_at' => $payment->subscription->starts_at,
-                'expires_at' => $payment->subscription->expires_at,
-                'plan' => $payment->subscription->plan ? [
-                    'id' => $payment->subscription->plan->id,
-                    'name' => $payment->subscription->plan->name,
-                    'price' => $payment->subscription->plan->price,
-                    'duration' => $payment->subscription->plan->duration,
-                    'duration_unit' => $payment->subscription->plan->duration_unit,
-                ] : null,
-            ] : null,
-            'tenant' => $tenant ? [
-                'id' => $tenant->id,
-                'company_name' => $tenant->company_name,
-                'tenant_code' => $tenant->tenant_code,
-                'status' => $tenant->status,
-                'domain' => $domain,
-            ] : null,
+
+            'invoice' => $payment->invoice
+                ? [
+                    'id' =>
+                    $payment->invoice->id,
+
+                    'invoice_number' =>
+                    $payment->invoice->invoice_number,
+
+                    'total_amount' =>
+                    $payment->invoice->total_amount,
+
+                    'paid_amount' =>
+                    $payment->invoice->paid_amount,
+
+                    'remaining_amount' =>
+                    $payment->invoice->remaining_amount,
+
+                    'status' =>
+                    $payment->invoice->status,
+
+                    'due_date' =>
+                    $payment->invoice->due_date,
+                ]
+                : null,
+
+            'subscription' =>
+            $payment->subscription
+                ? [
+                    'id' =>
+                    $payment->subscription->id,
+
+                    'status' =>
+                    $payment->subscription->status,
+
+                    'starts_at' =>
+                    $payment->subscription->starts_at,
+
+                    'expires_at' =>
+                    $payment->subscription->expires_at,
+
+                    'plan' =>
+                    $payment->subscription->plan
+                        ? [
+                            'id' =>
+                            $payment->subscription
+                                ->plan->id,
+
+                            'name' =>
+                            $payment->subscription
+                                ->plan->name,
+
+                            'price' =>
+                            $payment->subscription
+                                ->plan->price,
+
+                            'duration' =>
+                            $payment->subscription
+                                ->plan->duration,
+
+                            'duration_unit' =>
+                            $payment->subscription
+                                ->plan
+                                ->duration_unit,
+                        ]
+                        : null,
+                ]
+                : null,
+
+            'tenant' => $tenant
+                ? [
+                    'id' => $tenant->id,
+
+                    'company_name' =>
+                    $tenant->company_name,
+
+                    'tenant_code' =>
+                    $tenant->tenant_code,
+
+                    'status' =>
+                    $tenant->status,
+
+                    'domain' => $domain,
+                ]
+                : null,
+
             'is_paid' => $isPaid,
-            'is_tenant_active' => $isTenantActive,
+
+            'is_tenant_active' =>
+            $isTenantActive,
         ];
 
         if ($gateway) {
             $summary['gateway'] = $gateway;
         }
 
+        if ($returnUrl !== null) {
+            $summary['payment']['return_url'] = $returnUrl;
+        }
+
         if ($isTenantActive) {
-            $summary['next_step'] = 'Payment successful. The tenant is active and can now log in.';
+            $summary['next_step'] =
+                'Payment successful. The tenant is active and can now log in.';
 
             $summary['login'] = [
-                'url' => $domain ? 'https://'.$domain.'/login' : null,
+                'url' => $domain
+                    ? 'https://' . $domain . '/login'
+                    : null,
+
                 'method' => 'POST',
             ];
         } else {
-            $summary['next_step'] = 'Complete the pending payment to activate the tenant.';
+            $summary['next_step'] =
+                'Complete the pending payment to activate the tenant.';
 
             $summary['pay'] = [
                 'method' => 'POST',
+
                 'url' => route(
                     'central.subscription-payments.pay',
-                    ['payment' => $payment->id]
+                    [
+                        'payment' =>
+                        $payment->id,
+                    ]
                 ),
-                'allowed_payment_methods' => ['CASH', 'KHALTI', 'ESEWA'],
+
+                'allowed_payment_methods' => [
+                    'CASH',
+                    'KHALTI',
+                    'ESEWA',
+                ],
             ];
 
             $summary['status_url'] = route(
                 'central.subscription-payments.status',
-                ['payment' => $payment->id]
+                [
+                    'payment' =>
+                    $payment->id,
+                ]
             );
         }
 
         return $summary;
     }
 
-    public function fail(SubscriptionPayment $payment): JsonResponse
+    /**
+     * Get configured frontend URL.
+     */
+    private function normalizePaymentMethod(Request $request): void
     {
-        if (in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
+        if ($request->filled('payment_method')) {
+            $request->merge([
+                'payment_method' => strtoupper(
+                    $request->input('payment_method')
+                ),
+            ]);
+        }
+    }
+
+    private function frontendUrl(): string
+    {
+        return rtrim(
+            config('app.frontend_url'),
+            '/'
+        );
+    }
+
+    /**
+     * Redirect Khalti verification to frontend.
+     */
+    private function paymentWithReturnUrl(
+        SubscriptionPayment $payment,
+        ?string $returnUrl
+    ): SubscriptionPayment {
+        if ($returnUrl !== null) {
+            $payment->setAttribute('return_url', $returnUrl);
+        }
+
+        return $payment;
+    }
+
+    private function redirectPaymentFrontend(
+        SubscriptionPayment $payment,
+        string $returnUrl,
+        string $message
+    ): RedirectResponse {
+        $frontendUrl = rtrim($returnUrl, '/');
+        $separator = str_contains($frontendUrl, '?') ? '&' : '?';
+        $query = http_build_query([
+            'payment' => 'success',
+            'payment_id' => $payment->id,
+            'subscription_id' => $payment->subscription_id,
+            'invoice_id' => $payment->invoice_id,
+            'amount' => $payment->amount,
+            'status' => $payment->status,
+            'message' => $message,
+        ]);
+
+        return redirect()->away($frontendUrl . $separator . $query);
+    }
+
+    private function redirectKhaltiFrontend(
+        SubscriptionPayment $payment,
+        string $status,
+        string $message,
+        ?string $returnUrl = null
+    ) {
+        /*
+         * Use the return_url sent by frontend.
+         *
+         * If no return_url was provided,
+         * use configured frontend URL.
+         */
+        if (! empty($returnUrl)) {
+            $frontendUrl = rtrim(
+                $returnUrl,
+                '/'
+            );
+        } else {
+            $frontendUrl =
+                $this->frontendUrl()
+                . '/payment/subscription';
+        }
+
+        $query = http_build_query([
+            'payment' => $status,
+
+            'payment_id' =>
+            $payment->id,
+
+            'subscription_id' =>
+            $payment->subscription_id,
+
+            'invoice_id' =>
+            $payment->invoice_id,
+
+            'amount' =>
+            $payment->amount,
+
+            'status' =>
+            $payment->status,
+
+            'message' =>
+            $message,
+        ]);
+
+        $redirectUrl =
+            $frontendUrl .
+            '?' .
+            $query;
+
+        Log::info(
+            'CENTRAL KHALTI FRONTEND REDIRECT',
+            [
+                'payment_id' =>
+                $payment->id,
+
+                'subscription_id' =>
+                $payment->subscription_id,
+
+                'invoice_id' =>
+                $payment->invoice_id,
+
+                'payment_status' =>
+                $payment->status,
+
+                'redirect_url' =>
+                $redirectUrl,
+            ]
+        );
+
+        return redirect()->away(
+            $redirectUrl
+        );
+    }
+
+    /**
+     * Redirect eSewa verification to frontend.
+     */
+    private function redirectEsewaFrontend(
+        SubscriptionPayment $payment,
+        string $status,
+        string $message,
+        ?string $returnUrl = null
+    ) {
+        if (! empty($returnUrl)) {
+            $frontendUrl = rtrim(
+                $returnUrl,
+                '/'
+            );
+        } else {
+            $frontendUrl =
+                $this->frontendUrl()
+                . '/payment/subscription';
+        }
+
+        $query = http_build_query([
+            'payment' => $status,
+
+            'payment_id' =>
+            $payment->id,
+
+            'subscription_id' =>
+            $payment->subscription_id,
+
+            'invoice_id' =>
+            $payment->invoice_id,
+
+            'amount' =>
+            $payment->amount,
+
+            'status' =>
+            $payment->status,
+
+            'message' =>
+            $message,
+        ]);
+
+        $redirectUrl =
+            $frontendUrl .
+            '?' .
+            $query;
+
+        Log::info(
+            'CENTRAL ESEWA FRONTEND REDIRECT',
+            [
+                'payment_id' =>
+                $payment->id,
+
+                'subscription_id' =>
+                $payment->subscription_id,
+
+                'invoice_id' =>
+                $payment->invoice_id,
+
+                'payment_status' =>
+                $payment->status,
+
+                'redirect_url' =>
+                $redirectUrl,
+            ]
+        );
+
+        return redirect()->away(
+            $redirectUrl
+        );
+    }
+
+    /**
+     * Mark payment as failed.
+     */
+    public function fail(
+        SubscriptionPayment $payment
+    ): JsonResponse {
+        if (in_array(
+            $payment->status,
+            ['SUCCESS', 'COMPLETED'],
+            true
+        )) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot fail an already successful payment.',
+                'message' =>
+                'Cannot fail an already successful payment.',
             ], 422);
         }
 
@@ -599,8 +1679,15 @@ class CentralSubscriptionPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Payment marked as failed.',
-            'data' => $payment->fresh()->load(['subscription', 'tenant', 'invoice']),
+            'message' =>
+            'Payment marked as failed.',
+            'data' => $payment
+                ->fresh()
+                ->load([
+                    'subscription.plan',
+                    'tenant',
+                    'invoice',
+                ]),
         ]);
     }
 }

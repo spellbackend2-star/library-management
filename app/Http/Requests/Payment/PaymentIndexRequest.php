@@ -11,6 +11,15 @@ class PaymentIndexRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('payment_method')) {
+            $this->merge([
+                'payment_method' => strtoupper($this->payment_method),
+            ]);
+        }
+    }
+
 
     public function rules(): array
     {
@@ -23,8 +32,9 @@ class PaymentIndexRequest extends FormRequest
 
 
             'payment_method' => [
-                'nullable',
-                'in:CASH,KHALTI,ESEWA'
+                'required',
+                'string',
+                'regex:/^(CASH|KHALTI|ESEWA)$/i',
             ],
 
 

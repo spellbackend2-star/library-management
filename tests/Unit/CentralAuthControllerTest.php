@@ -2,19 +2,52 @@
 
 namespace Tests\Unit;
 
-use App\Http\Controllers\v1\Central\CentralAuthController;
+use App\Http\Controllers\v1\Central\CentralRegistrationController;
+use App\Http\Resources\v1\Central\CentralLoginResource;
 use App\Models\CentralInvoice;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
+use App\Http\Requests\Central\CentralRegisterRequest;
 use App\Services\CentralAuthService;
-use Illuminate\Http\Request;
 use Mockery;
 use Tests\TestCase;
+use Illuminate\Http\Request;
 
 class CentralAuthControllerTest extends TestCase
 {
+    public function test_login_resource_preserves_roles_and_permissions(): void
+    {
+        $user = new class
+        {
+            public int $id = 1;
+            public string $name = 'Central Admin';
+            public string $email = 'admin@example.com';
+
+            public function getRoleNames()
+            {
+                return collect(['admin']);
+            }
+
+            public function getAllPermissions()
+            {
+                return collect([(object) ['name' => 'tenant.view']]);
+            }
+        };
+
+        $payload = response()->json((new CentralLoginResource([
+            'token' => ['access_token' => 'test-token'],
+            'tenant' => null,
+            'user' => $user,
+        ]))->resolve(Request::create('/api/v1/central/login')))->getData(true);
+
+        $this->assertSame(['success', 'message', 'token', 'user', 'roles', 'permissions'], array_keys($payload));
+        $this->assertSame(['admin'], $payload['roles']);
+        $this->assertSame(['tenant.view'], $payload['permissions']);
+        $this->assertArrayNotHasKey('tenant', $payload);
+    }
+
     public function test_tenant_registration_returns_requested_response_shape(): void
     {
         $input = [
@@ -26,9 +59,9 @@ class CentralAuthControllerTest extends TestCase
             'subscription_plan_id' => 2,
         ];
 
-        $request = new class extends Request
+        $request = new class extends CentralRegisterRequest
         {
-            public function validate(array $rules, array $messages = [], array $attributes = []): array
+            public function validated($key = null, $default = null)
             {
                 return [
                     'owner' => 'Name',
@@ -104,7 +137,7 @@ class CentralAuthControllerTest extends TestCase
             'subscription_payment' => $payment,
         ]);
 
-        $response = (new CentralAuthController($service))->register($request);
+        $response = (new CentralRegistrationController($service))->register($request);
         $payload = json_decode($response->getContent(), true);
 
         $this->assertSame(201, $response->getStatusCode());

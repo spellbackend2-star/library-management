@@ -3,11 +3,11 @@
 namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Central\CentralLoginRequest;
+use App\Http\Resources\v1\Central\CentralLoginResource;
 use App\Services\CentralAuthService;
-use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Psr\Http\Message\ServerRequestInterface;
 
 class CentralAuthController extends Controller
@@ -16,12 +16,9 @@ class CentralAuthController extends Controller
         protected CentralAuthService $centralAuthService
     ) {}
 
-    public function login(Request $request, ServerRequestInterface $serverRequest): JsonResponse
+    public function login(CentralLoginRequest $request, ServerRequestInterface $serverRequest): JsonResponse
     {
-        $credentials = $request->validate([
-            'email' => ['required', 'string', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:1'],
-        ]);
+        $credentials = $request->validated();
 
         try {
             $result = $this->centralAuthService->login(
@@ -35,246 +32,9 @@ class CentralAuthController extends Controller
             ], 401);
         }
 
-        $tenant = $result['tenant'];
-        $user = $result['user'];
-        $domain = $tenant?->domains()->first();
-
-        $payload = [
-            'success' => true,
-            'message' => 'Login successful',
-            'token' => $result['token'],
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ],
-            'roles' => $user->getRoleNames()->values(),
-            'permissions' => $user->getAllPermissions()
-                ->pluck('name')
-                ->values(),
-        ];
-
-        if ($tenant) {
-            $payload['tenant'] = [
-                'id' => $tenant->id,
-                'company_name' => $tenant->company_name,
-                'tenant_code' => $tenant->tenant_code,
-                'domain' => $domain?->domain,
-            ];
-        }
-
-        return response()->json($payload);
-    }
-
-    public function me(Request $request): JsonResponse
-    {
-        $user = $request->user();
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
-        }
-
-        $tenant = $this->centralAuthService->getTenantForUser($user);
-        $domain = $tenant?->domains()->first();
-
-        return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ],
-            'tenant' => $tenant ? [
-                'id' => $tenant->id,
-                'company_name' => $tenant->company_name,
-                'tenant_code' => $tenant->tenant_code,
-                'domain' => $domain?->domain,
-            ] : null,
-        ]);
-    }
-
-    public function register(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'owner' => ['required', 'string', 'max:255'],
-            'company_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:8'],
-            'subdomain' => ['required', 'string', 'max:255', 'unique:tenants,tenant_code'],
-            'subscription_plan_id' => [
-                'required',
-                'integer',
-                'exists:subscription_plans,id',
-            ],
-        ], [
-            'subdomain.unique' => 'This subdomain is already taken. Please choose another one.',
-        ]);
-
-        try {
-            $result = $this->centralAuthService->registerTenant($data);
-        } catch (QueryException $e) {
-            if (str_contains($e->getMessage(), 'Duplicate entry') || str_contains($e->getMessage(), '1062')) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'This subdomain is already taken. Please choose another one.',
-                ], 422);
-            }
-
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Failed to register tenant. Please try again.',
-            ], 500);
-        } catch (\RuntimeException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => $e->getMessage(),
-            ], 500);
-        }
-
-        $tenant = $result['tenant'];
-        $subscription = $result['subscription'];
-        $invoice = $result['invoice'];
-        $payment = $result['subscription_payment'];
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Tenant registered successfully',
-            'tenant' => [
-                'id' => $tenant->id,
-                'company_name' => $tenant->company_name,
-                'tenant_code' => $tenant->tenant_code,
-                'owner_email' => $tenant->owner_email,
-                'owner_name' => $tenant->owner_name,
-                'status' => $tenant->status,
-                'domain' => $result['domain'],
-            ],
-            'subscription' => [
-                'id' => $subscription->id,
-                'subscription_plan_id' => $subscription->subscription_plan_id,
-                'amount' => $subscription->amount,
-                'status' => $subscription->status,
-                'starts_at' => $subscription->starts_at,
-                'expires_at' => $subscription->expires_at,
-                'plan' => [
-                    'id' => $subscription->plan->id,
-                    'name' => $subscription->plan->name,
-                    'price' => $subscription->plan->price,
-                    'duration' => $subscription->plan->duration,
-                    'duration_unit' => $subscription->plan->duration_unit,
-                ],
-            ],
-            'invoice' => [
-                'id' => $invoice->id,
-                'invoice_number' => $invoice->invoice_number,
-                'invoice_type' => $invoice->invoice_type,
-                'subtotal' => $invoice->subtotal,
-                'tax' => $invoice->tax,
-                'discount' => $invoice->discount,
-                'total_amount' => $invoice->total_amount,
-                'paid_amount' => $invoice->paid_amount,
-                'remaining_amount' => $invoice->remaining_amount,
-                'currency' => $invoice->currency,
-                'currency_symbol' => $invoice->currency_symbol,
-                'status' => $invoice->status,
-                'due_date' => $invoice->due_date,
-            ],
-            'payment' => [
-                'id' => $payment->id,
-                'invoice_id' => $payment->invoice_id,
-                'subscription_id' => $payment->subscription_id,
-                'amount' => $payment->amount,
-                'payment_method' => $payment->payment_method,
-                'status' => $payment->status,
-                'transaction_id' => $payment->transaction_id,
-                'paid_at' => $payment->paid_at,
-            ],
-            'next_step' => [
-                'action' => 'payment',
-                'payment_id' => $payment->id,
-                'invoice_id' => $invoice->id,
-                'message' => 'Complete the payment to activate the subscription and tenant.',
-            ],
-        ], 201);
-    }
-
-    public function profile(Request $request): JsonResponse
-    {
-        $user = $request->user();
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
-        }
-
-        $tenant = $this->centralAuthService->getTenantForUser($user);
-        $domain = $tenant?->domains()->first();
-
-        return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ],
-            'tenant' => $tenant ? [
-                'id' => $tenant->id,
-                'company_name' => $tenant->company_name,
-                'tenant_code' => $tenant->tenant_code,
-                'domain' => $domain?->domain,
-            ] : null,
-        ]);
-    }
-
-    public function update(Request $request): JsonResponse
-    {
-        $user = $request->user();
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
-        }
-
-        $data = $request->validate([
-            'name' => ['sometimes', 'string', 'max:255'],
-            'email' => ['sometimes', 'string', 'email', 'max:255'],
-        ]);
-
-        $user->update($data);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Profile updated successfully',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-            ],
-        ]);
-    }
-
-    public function changePassword(Request $request): JsonResponse
-    {
-        $user = $request->user();
-
-        if (! $user) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
-        }
-
-        $data = $request->validate([
-            'current_password' => ['required', 'string'],
-            'new_password' => ['required', 'string', 'min:8'],
-        ]);
-
-        if (! Hash::check($data['current_password'], $user->password)) {
-            return response()->json([
-                'message' => 'Current password is incorrect.',
-            ], 422);
-        }
-
-        $user->update([
-            'password' => bcrypt($data['new_password']),
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Password changed successfully.',
-        ]);
+        return response()->json(
+            (new CentralLoginResource($result))->resolve($request)
+        );
     }
 
     public function logout(Request $request): JsonResponse

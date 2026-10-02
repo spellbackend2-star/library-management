@@ -2,6 +2,10 @@
 
 use App\Http\Controllers\v1\Central\CentralAuthController;
 use App\Http\Controllers\v1\Central\CentralDashboardController;
+use App\Http\Controllers\v1\Central\CentralPasswordController;
+use App\Http\Controllers\v1\Central\CentralProfileController;
+use App\Http\Controllers\v1\Central\CentralRegistrationController;
+use App\Http\Controllers\v1\Central\CentralStaffController;
 use App\Http\Controllers\v1\Central\CentralSettingController;
 use App\Http\Controllers\v1\Central\CentralInvoiceController;
 use App\Http\Controllers\v1\Central\CentralSubscriptionPaymentController;
@@ -28,12 +32,17 @@ Route::prefix('central')->group(function () {
     Route::get('/subscription-payments/{payment}/status', [CentralSubscriptionPaymentController::class, 'paymentStatus'])->name('central.subscription-payments.status');
 
     Route::middleware('auth:api')->group(function () {
-        Route::post('/tenants', [CentralAuthController::class, 'register']);
-        Route::get('/me', [CentralAuthController::class, 'me']);
-        Route::get('/profile', [CentralAuthController::class, 'profile']);
-        Route::put('/profile', [CentralAuthController::class, 'update']);
-        Route::post('/profile/change-password', [CentralAuthController::class, 'changePassword']);
+        Route::post('/tenants', [CentralRegistrationController::class, 'register']);
+        Route::get('/me', [CentralProfileController::class, 'me']);
+        Route::get('/profile', [CentralProfileController::class, 'profile']);
+        Route::put('/profile', [CentralProfileController::class, 'update']);
+        Route::post('/profile/change-password', [CentralPasswordController::class, 'changePassword']);
         Route::post('/logout', [CentralAuthController::class, 'logout']);
+
+        Route::patch('/staff/{staff}/role', [CentralStaffController::class, 'assignRole'])
+            ->name('central.staff.assign-role');
+        Route::apiResource('/staff', CentralStaffController::class)
+            ->names('central.staff');
 
         // Central Dashboard
         Route::get('/dashboard', [CentralDashboardController::class, 'index']);

@@ -21,14 +21,24 @@ return new class extends Migration
     public function up(): void
     {
         $connection = $this->centralConnection();
+        $schema = Schema::connection($connection);
 
-        if (! Schema::connection($connection)->hasTable('subscription_invoices')) {
+        if (! $schema->hasTable('subscription_invoices')) {
             return;
         }
 
+        if (! $schema->hasTable('invoices')) {
+            throw new RuntimeException(
+                'Cannot consolidate subscription invoices because the central invoices table does not exist.'
+            );
+        }
+
+        $this->validateExistingInvoices($connection);
         $this->migrateRemainingInvoices($connection);
-        $this->dropForeignKey($connection);
+        $this->validateAllInvoicesMigrated($connection);
+        $this->dropForeignKey($connection, 'invoices');
         $this->repointSubscriptionPayments($connection);
+        $this->validatePaymentLinks($connection);
         $this->moveForeignKey($connection);
 
         DB::connection($connection)->statement('DROP TABLE subscription_invoices');
@@ -42,7 +52,9 @@ return new class extends Migration
             return;
         }
 
-        Schema::connection($connection)->create('subscription_invoices', function (Blueprint $table) {
+        $schema = Schema::connection($connection);
+
+        $schema->create('subscription_invoices', function (Blueprint $table) {
             $table->id();
 
             $table->string('tenant_id', 36)->nullable();
@@ -89,14 +101,51 @@ return new class extends Migration
             $table->index('due_date');
         });
 
-        $this->revertSubscriptionPayments($connection);
+        $rows = DB::connection($connection)
+            ->table('invoices')
+            ->whereIn('invoice_type', ['subscription', 'renewal'])
+            ->get();
 
-        Schema::connection($connection)->table('subscription_payments', function (Blueprint $table) {
-            $table->foreign('invoice_id')
-                ->references('id')
-                ->on('subscription_invoices')
-                ->nullOnDelete();
-        });
+        foreach ($rows->chunk(200) as $chunk) {
+            $legacyRows = $chunk->map(fn ($row) => [
+                'id' => $row->id,
+                'tenant_id' => $row->tenant_id,
+                'subscription_id' => $row->subscription_id,
+                'invoice_number' => $row->invoice_number,
+                'invoice_type' => $row->invoice_type,
+                'subtotal' => $row->subtotal,
+                'tax' => $row->tax,
+                'discount' => $row->discount,
+                'total_amount' => $row->total_amount,
+                'paid_amount' => $row->paid_amount,
+                'remaining_amount' => $row->remaining_amount,
+                'status' => $row->status,
+                'due_date' => $row->due_date,
+                'notes' => $row->notes,
+                'created_at' => $row->created_at,
+                'updated_at' => $row->updated_at,
+            ])->all();
+
+            DB::connection($connection)
+                ->table('subscription_invoices')
+                ->insert($legacyRows);
+        }
+
+        $unmappedPayments = DB::connection($connection)
+            ->table('subscription_payments as payments')
+            ->leftJoin('subscription_invoices as invoices', 'invoices.id', '=', 'payments.invoice_id')
+            ->whereNotNull('payments.invoice_id')
+            ->whereNull('invoices.id')
+            ->exists();
+
+        if ($unmappedPayments) {
+            throw new RuntimeException(
+                'Cannot roll back invoice consolidation because some subscription payments do not have a matching subscription invoice.'
+            );
+        }
+
+        $this->dropForeignKey($connection, 'invoices');
+        $this->addForeignKey($connection, 'subscription_invoices');
     }
 
     /**
@@ -122,6 +171,24 @@ return new class extends Migration
 
         $insert = $rows->map(function ($row) use ($connection, $now) {
             $total = (float) $row->total_amount;
+            $legacyPaid = (float) ($row->paid_amount ?? 0);
+            $successfulPaid = $this->successfulPaymentAmount($connection, (int) $row->id);
+            $paid = max($legacyPaid, $successfulPaid);
+            $remaining = (float) ($row->remaining_amount ?? max(0, $total - $legacyPaid));
+            $status = $row->status ?? 'unpaid';
+
+            if (
+                $successfulPaid > $legacyPaid
+                && ! in_array($status, ['cancelled', 'refunded'], true)
+            ) {
+                $paid = min($paid, $total);
+                $remaining = max(0, round($total - $paid, 2));
+                $status = match (true) {
+                    $remaining <= 0 => 'paid',
+                    $paid > 0 => 'partially_paid',
+                    default => $status,
+                };
+            }
 
             return [
                 'tenant_id' => $row->tenant_id,
@@ -133,11 +200,11 @@ return new class extends Migration
                 'tax' => $row->tax ?? 0,
                 'discount' => $row->discount ?? 0,
                 'total_amount' => $total,
-                'paid_amount' => $row->paid_amount ?? 0,
-                'remaining_amount' => $row->remaining_amount ?? 0,
+                'paid_amount' => $paid,
+                'remaining_amount' => $remaining,
                 'currency' => 'NPR',
                 'currency_symbol' => 'Rs.',
-                'status' => $row->status ?? 'unpaid',
+                'status' => $status,
                 'due_date' => $row->due_date,
                 'notes' => $row->notes,
                 'created_at' => $row->created_at ?? $now,
@@ -155,43 +222,78 @@ return new class extends Migration
      */
     protected function repointSubscriptionPayments(string $connection): void
     {
-        $map = DB::connection($connection)->table('subscription_invoices')
-            ->join('invoices', 'invoices.invoice_number', '=', 'subscription_invoices.invoice_number')
-            ->pluck('invoices.id', 'subscription_invoices.id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        DB::connection($connection)
+            ->table('subscription_payments as payments')
+            ->join('subscription_invoices as legacy', 'legacy.id', '=', 'payments.invoice_id')
+            ->join('invoices as central', 'central.invoice_number', '=', 'legacy.invoice_number')
+            ->update(['payments.invoice_id' => DB::raw('central.id')]);
+    }
 
-        if ($map === []) {
-            return;
-        }
+    protected function validateExistingInvoices(string $connection): void
+    {
+        $conflictingInvoice = DB::connection($connection)
+            ->table('subscription_invoices as legacy')
+            ->join('invoices as central', 'central.invoice_number', '=', 'legacy.invoice_number')
+            ->where(function ($query) {
+                $query->whereColumn('central.total_amount', '<>', 'legacy.total_amount')
+                    ->orWhere(function ($query) {
+                        $query->whereNotNull('central.subscription_id')
+                            ->whereNotNull('legacy.subscription_id')
+                            ->whereColumn('central.subscription_id', '<>', 'legacy.subscription_id');
+                    })
+                    ->orWhere(function ($query) {
+                        $query->whereNotNull('central.tenant_id')
+                            ->whereNotNull('legacy.tenant_id')
+                            ->whereColumn('central.tenant_id', '<>', 'legacy.tenant_id');
+                    });
+            })
+            ->exists();
 
-        foreach ($map as $oldId => $newId) {
-            DB::connection($connection)->table('subscription_payments')
-                ->where('invoice_id', $oldId)
-                ->update(['invoice_id' => $newId]);
+        if ($conflictingInvoice) {
+            throw new RuntimeException(
+                'Cannot consolidate invoices because matching invoice numbers have conflicting totals or ownership. No legacy invoice data was deleted.'
+            );
         }
     }
 
-    /**
-     * Reset subscription payments that no longer resolve to an invoice.
-     */
-    protected function revertSubscriptionPayments(string $connection): void
+    protected function validateAllInvoicesMigrated(string $connection): void
     {
-        $map = DB::connection($connection)->table('invoices')
-            ->join('subscription_invoices', 'subscription_invoices.invoice_number', '=', 'invoices.invoice_number')
-            ->pluck('subscription_invoices.id', 'invoices.id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        $missingInvoice = DB::connection($connection)
+            ->table('subscription_invoices as legacy')
+            ->leftJoin('invoices as central', 'central.invoice_number', '=', 'legacy.invoice_number')
+            ->whereNull('central.id')
+            ->exists();
 
-        if ($map === []) {
-            return;
+        if ($missingInvoice) {
+            throw new RuntimeException(
+                'Cannot consolidate invoices because at least one legacy invoice was not copied. No legacy invoice data was deleted.'
+            );
         }
+    }
 
-        foreach ($map as $newId => $oldId) {
-            DB::connection($connection)->table('subscription_payments')
-                ->where('invoice_id', $newId)
-                ->update(['invoice_id' => $oldId]);
+    protected function validatePaymentLinks(string $connection): void
+    {
+        $unlinkedPayment = DB::connection($connection)
+            ->table('subscription_payments as payments')
+            ->leftJoin('invoices', 'invoices.id', '=', 'payments.invoice_id')
+            ->whereNotNull('payments.invoice_id')
+            ->whereNull('invoices.id')
+            ->exists();
+
+        if ($unlinkedPayment) {
+            throw new RuntimeException(
+                'Cannot consolidate invoices because at least one subscription payment is not linked to a central invoice. No legacy invoice data was deleted.'
+            );
         }
+    }
+
+    protected function successfulPaymentAmount(string $connection, int $invoiceId): float
+    {
+        return (float) DB::connection($connection)
+            ->table('subscription_payments')
+            ->where('invoice_id', $invoiceId)
+            ->whereIn('status', ['SUCCESS', 'COMPLETED'])
+            ->sum('amount');
     }
 
     /**
@@ -199,22 +301,62 @@ return new class extends Migration
      */
     protected function moveForeignKey(string $connection): void
     {
-        Schema::connection($connection)->table('subscription_payments', function (Blueprint $table) {
-            $table->foreign('invoice_id')
-                ->references('id')
-                ->on('invoices')
-                ->nullOnDelete();
-        });
+        $this->addForeignKey($connection, 'invoices');
     }
 
     /**
      * Drop the old foreign key that referenced subscription_invoices.
      */
-    protected function dropForeignKey(string $connection): void
+    protected function dropForeignKey(string $connection, string $preserveTarget): void
     {
+        $foreignKey = $this->invoiceForeignKey($connection);
+
+        if (! $foreignKey || $foreignKey['foreign_table'] === $preserveTarget) {
+            return;
+        }
+
+        if ($foreignKey['foreign_table'] !== 'subscription_invoices' && $foreignKey['foreign_table'] !== 'invoices') {
+            throw new RuntimeException(
+                'Cannot consolidate invoices because subscription_payments.invoice_id references an unexpected table.'
+            );
+        }
+
         Schema::connection($connection)->table('subscription_payments', function (Blueprint $table) {
             $table->dropForeign(['invoice_id']);
         });
+    }
+
+    protected function addForeignKey(string $connection, string $target): void
+    {
+        $foreignKey = $this->invoiceForeignKey($connection);
+
+        if ($foreignKey && $foreignKey['foreign_table'] === $target) {
+            return;
+        }
+
+        if ($foreignKey) {
+            throw new RuntimeException(
+                'Cannot update the subscription payment invoice foreign key because it references an unexpected table.'
+            );
+        }
+
+        Schema::connection($connection)->table('subscription_payments', function (Blueprint $table) use ($target) {
+            $table->foreign('invoice_id')
+                ->references('id')
+                ->on($target)
+                ->nullOnDelete();
+        });
+    }
+
+    protected function invoiceForeignKey(string $connection): ?array
+    {
+        foreach (Schema::connection($connection)->getForeignKeys('subscription_payments') as $foreignKey) {
+            if ($foreignKey['columns'] === ['invoice_id']) {
+                return $foreignKey;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -462,8 +462,10 @@ class CentralAuthService
     ): array {
         $payment->loadMissing(['subscription.plan', 'invoice']);
 
-        if ($payment->status !== 'PENDING') {
-            throw new \RuntimeException('Payment must be in PENDING status.');
+        if (! in_array($payment->status, ['PENDING', 'SUCCESS', 'COMPLETED'], true)) {
+            throw new \RuntimeException(
+                'Payment must be pending or successfully completed before creating a tenant.'
+            );
         }
 
         $subscription = $payment->subscription;
@@ -538,7 +540,39 @@ class CentralAuthService
             );
         }
 
-        $payment = $this->completeCentralCashPayment($payment);
+        if ($payment->status === 'PENDING') {
+            $payment = $this->completeCentralCashPayment($payment);
+        } else {
+            $tenant->update(['status' => 'active']);
+
+            if ($subscription->status !== 'active') {
+                $startDate = now();
+                $expiresAt = match (strtolower($subscription->plan->duration_unit ?? 'month')) {
+                    'day' => $startDate->copy()->addDays((int) $subscription->plan->duration),
+                    'month' => $startDate->copy()->addMonths((int) $subscription->plan->duration),
+                    'year' => $startDate->copy()->addYears((int) $subscription->plan->duration),
+                    default => $startDate->copy()->addMonths((int) $subscription->plan->duration),
+                };
+
+                $subscription->update([
+                    'status' => 'active',
+                    'starts_at' => $startDate->toDateString(),
+                    'expires_at' => $expiresAt->toDateString(),
+                ]);
+            }
+
+            $payment->invoice?->update([
+                'status' => 'paid',
+                'paid_amount' => $payment->invoice->total_amount,
+                'remaining_amount' => 0,
+            ]);
+
+            $payment = $payment->fresh()->load([
+                'subscription.plan',
+                'tenant',
+                'invoice',
+            ]);
+        }
 
         return [
             'tenant' => $tenant->fresh(),

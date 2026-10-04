@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\v1\Central\CentralPaymentTenantCompletionResource;
+use App\Http\Resources\v1\Central\CentralPlanPaymentInitiationResource;
 use App\Models\CentralInvoice;
 use App\Models\Coupon;
 use App\Models\Subscription;
@@ -676,31 +678,13 @@ class CentralSubscriptionPaymentController extends Controller
                         $returnUrl
                     );
 
-                return response()->json([
-                    'success' => true,
-                    'message' =>
+                return $this->planPaymentInitiationResponse(
+                    $subscription,
+                    $invoice,
+                    $payment,
                     'Invoice created and Khalti payment initiated.',
-                    'data' => [
-                        'subscription' =>
-                        $subscription->load('plan'),
-
-                        'invoice' =>
-                        $invoice->load(
-                            'subscription.plan'
-                        ),
-
-                        'subscription_payment' =>
-                        $this->paymentWithReturnUrl(
-                            $payment->fresh()->load([
-                                'subscription.plan',
-                                'invoice',
-                            ]),
-                            $returnUrl
-                        ),
-
-                        'khalti' => $result,
-                    ],
-                ], 201);
+                    $result
+                );
             } catch (Throwable $e) {
                 return response()->json([
                     'success' => false,
@@ -725,31 +709,13 @@ class CentralSubscriptionPaymentController extends Controller
                         $returnUrl
                     );
 
-                return response()->json([
-                    'success' => true,
-                    'message' =>
+                return $this->planPaymentInitiationResponse(
+                    $subscription,
+                    $invoice,
+                    $payment,
                     'Invoice created and eSewa payment initiated.',
-                    'data' => [
-                        'subscription' =>
-                        $subscription->load('plan'),
-
-                        'invoice' =>
-                        $invoice->load(
-                            'subscription.plan'
-                        ),
-
-                        'subscription_payment' =>
-                        $this->paymentWithReturnUrl(
-                            $payment->fresh()->load([
-                                'subscription.plan',
-                                'invoice',
-                            ]),
-                            $returnUrl
-                        ),
-
-                        'esewa' => $result,
-                    ],
-                ], 201);
+                    $result
+                );
             } catch (Throwable $e) {
                 return response()->json([
                     'success' => false,
@@ -777,39 +743,44 @@ class CentralSubscriptionPaymentController extends Controller
                 );
             }
 
-            return response()->json([
-                'success' => true,
-                'message' =>
-                'Cash payment completed successfully.',
-                'data' => $payment
-                    ->fresh()
-                    ->load([
-                        'subscription.plan',
-                        'tenant',
-                        'invoice',
-                    ]),
-            ], 201);
+            return $this->planPaymentInitiationResponse(
+                $subscription->fresh()->load('plan'),
+                $invoice->fresh(),
+                $payment,
+                'Cash payment completed successfully.'
+            );
+        }
+
+        return $this->planPaymentInitiationResponse(
+            $subscription,
+            $invoice,
+            $payment,
+            'Invoice and subscription payment created successfully. Proceed to payment.'
+        );
+    }
+
+    private function planPaymentInitiationResponse(
+        Subscription $subscription,
+        CentralInvoice $invoice,
+        SubscriptionPayment $payment,
+        string $message,
+        ?array $gateway = null
+    ): JsonResponse {
+        $resourceData = [
+            'subscription' => $subscription->fresh()->load('plan'),
+            'invoice' => $invoice->fresh(),
+            'payment' => $payment->fresh(),
+        ];
+
+        if ($gateway !== null) {
+            $resourceData['gateway'] = $gateway;
         }
 
         return response()->json([
             'success' => true,
-            'message' =>
-            'Invoice and subscription payment created successfully. Proceed to payment.',
-            'data' => [
-                'subscription' =>
-                $subscription->load('plan'),
-
-                'invoice' =>
-                $invoice->load(
-                    'subscription.plan'
-                ),
-
-                'subscription_payment' =>
-                $payment->fresh()->load([
-                    'subscription.plan',
-                    'invoice',
-                ]),
-            ],
+            'message' => $message,
+            'data' => (new CentralPlanPaymentInitiationResource($resourceData))
+                ->resolve(request()),
         ], 201);
     }
 
@@ -854,11 +825,11 @@ class CentralSubscriptionPaymentController extends Controller
             ],
         ]);
 
-        if ($payment->status !== 'PENDING') {
+        if (! in_array($payment->status, ['PENDING', 'SUCCESS', 'COMPLETED'], true)) {
             return response()->json([
                 'success' => false,
                 'message' =>
-                'Payment must be in PENDING status.',
+                'Payment must be pending or successfully completed before creating a tenant.',
             ], 422);
         }
 
@@ -872,8 +843,9 @@ class CentralSubscriptionPaymentController extends Controller
         return response()->json([
             'success' => true,
             'message' =>
-            'Tenant created and subscription activated successfully.',
-            'data' => $result,
+            'Payment completed and tenant activated successfully.',
+            'data' => (new CentralPaymentTenantCompletionResource($result))
+                ->resolve($request),
         ], 201);
     }
 

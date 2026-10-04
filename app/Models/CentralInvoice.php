@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'subtotal',
     'tax',
     'discount',
+    'coupon_id',
+    'coupon_discount',
     'total_amount',
     'paid_amount',
     'remaining_amount',
@@ -51,6 +53,8 @@ class CentralInvoice extends Model
             'subtotal' => 'decimal:2',
             'tax' => 'decimal:2',
             'discount' => 'decimal:2',
+            'coupon_id' => 'integer',
+            'coupon_discount' => 'decimal:2',
             'total_amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'remaining_amount' => 'decimal:2',
@@ -83,6 +87,11 @@ class CentralInvoice extends Model
         return $this->belongsTo(SubscriptionPayment::class);
     }
 
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(SubscriptionPayment::class);
@@ -113,7 +122,8 @@ class CentralInvoice extends Model
         $subtotal = (float) $this->subtotal;
         $tax = (float) $this->tax;
         $discount = (float) $this->discount;
-        $total = round($subtotal + $tax - $discount, 2);
+        $couponDiscount = (float) $this->coupon_discount;
+        $total = round($subtotal + $tax - $discount - $couponDiscount, 2);
 
         $paid = (float) $this->paid_amount;
         $remaining = max(0, round($total - $paid, 2));

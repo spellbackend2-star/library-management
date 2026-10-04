@@ -18,6 +18,8 @@ class CentralInvoiceResource extends JsonResource
             'subtotal' => $invoice->subtotal,
             'tax' => $invoice->tax,
             'discount' => $invoice->discount,
+            'coupon_id' => $invoice->coupon_id,
+            'coupon_discount' => $invoice->coupon_discount,
             'total_amount' => $invoice->total_amount,
             'paid_amount' => $invoice->paid_amount,
             'remaining_amount' => $invoice->remaining_amount,

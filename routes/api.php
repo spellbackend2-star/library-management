@@ -10,10 +10,14 @@ use App\Http\Controllers\v1\Central\CentralSettingController;
 use App\Http\Controllers\v1\Central\CentralInvoiceController;
 use App\Http\Controllers\v1\Central\CentralSubscriptionPaymentController;
 use App\Http\Controllers\v1\Central\CentralTenantController;
+use App\Http\Controllers\v1\Central\CentralCouponController;
 use App\Http\Controllers\v1\Tenant\SubscriptionController;
 use App\Http\Controllers\v1\Tenant\SubscriptionPlanController;
 use App\Services\CentralSettingService;
 use Illuminate\Support\Facades\Route;
+
+
+
 Route::prefix('v1')->group(function () {
 Route::middleware('auth:api')->group(function () {
     Route::get('subscription-plans/all', [SubscriptionPlanController::class, 'all']);
@@ -71,6 +75,10 @@ Route::prefix('central')->group(function () {
         // Central Tenants
         Route::get('/tenants', [CentralTenantController::class, 'index']);
         Route::get('/tenants/{tenant}', [CentralTenantController::class, 'show']);
+
+        // Central Coupons
+        Route::apiResource('/coupons', CentralCouponController::class)
+            ->names('central.coupons');
     });
 
 });

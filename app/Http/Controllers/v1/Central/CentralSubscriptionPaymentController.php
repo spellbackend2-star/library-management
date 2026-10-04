@@ -4,6 +4,7 @@ namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
 use App\Models\CentralInvoice;
+use App\Models\Coupon;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
@@ -13,6 +14,7 @@ use App\Services\Payments\KhaltiService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -189,6 +191,12 @@ class CentralSubscriptionPaymentController extends Controller
                 'required',
                 'url',
             ],
+
+            'coupon_id' => [
+                'nullable',
+                'integer',
+                'exists:coupons,id',
+            ],
         ]);
 
         $returnUrl = $data['return_url'] ?? null;
@@ -216,6 +224,71 @@ class CentralSubscriptionPaymentController extends Controller
 
         $pricingPlan = (float) $subscription->plan->price;
 
+        // Apply coupon if provided
+        $couponDiscount = 0;
+        $couponId = null;
+
+        if (! empty($data['coupon_id'])) {
+            $coupon = Coupon::lockForUpdate()->find($data['coupon_id']);
+
+            if (! $coupon) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The selected coupon is invalid.',
+                ], 422);
+            }
+
+            if (! $coupon->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This coupon is inactive.',
+                ], 422);
+            }
+
+            if ($coupon->valid_from && now() < $coupon->valid_from) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This coupon is not yet valid.',
+                ], 422);
+            }
+
+            if ($coupon->valid_until && now() > $coupon->valid_until) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This coupon has expired.',
+                ], 422);
+            }
+
+            if ($coupon->max_uses !== null && (int) $coupon->used_count >= (int) $coupon->max_uses) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Coupon usage limit reached.',
+                ], 422);
+            }
+
+            if ($pricingPlan < (float) $coupon->min_order_value) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Minimum order value not met for this coupon.',
+                ], 422);
+            }
+
+            $couponDiscount = match (strtoupper((string) $coupon->discount_type)) {
+                'PERCENT' => round($pricingPlan * ((float) $coupon->discount_value / 100), 2),
+                'FLAT' => round((float) $coupon->discount_value, 2),
+                default => 0.0,
+            };
+
+            if ($coupon->max_discount !== null) {
+                $couponDiscount = min($couponDiscount, (float) $coupon->max_discount);
+            }
+
+            $couponDiscount = min($couponDiscount, $pricingPlan);
+            $couponId = $coupon->id;
+        }
+
+        $totalAmount = round($pricingPlan - $couponDiscount, 2);
+
         /*
          * Create invoice.
          */
@@ -228,9 +301,11 @@ class CentralSubscriptionPaymentController extends Controller
             'subtotal' => $pricingPlan,
             'tax' => 0,
             'discount' => 0,
-            'total_amount' => $pricingPlan,
+            'coupon_id' => $couponId,
+            'coupon_discount' => $couponDiscount,
+            'total_amount' => $totalAmount,
             'paid_amount' => 0,
-            'remaining_amount' => $pricingPlan,
+            'remaining_amount' => $totalAmount,
             'status' => 'unpaid',
             'due_date' => now()
                 ->addDays(7)
@@ -244,7 +319,7 @@ class CentralSubscriptionPaymentController extends Controller
             'subscription_id' => $subscription->id,
             'invoice_id' => $invoice->id,
             'tenant_id' => $subscription->tenant_id,
-            'amount' => $pricingPlan,
+            'amount' => $totalAmount,
             'payment_method' =>
             strtoupper($data['payment_method']),
             'status' => 'PENDING',
@@ -253,6 +328,11 @@ class CentralSubscriptionPaymentController extends Controller
         $invoice->update([
             'subscription_payment_id' => $payment->id,
         ]);
+
+        // Increment coupon usage count if coupon was applied
+        if ($couponId) {
+            Coupon::where('id', $couponId)->increment('used_count');
+        }
 
         /*
          * CASH.
@@ -422,6 +502,12 @@ class CentralSubscriptionPaymentController extends Controller
                 'nullable',
                 'url',
             ],
+
+            'coupon_id' => [
+                'nullable',
+                'integer',
+                'exists:coupons,id',
+            ],
         ]);
 
         $returnUrl = $data['return_url'] ?? null;
@@ -466,6 +552,71 @@ class CentralSubscriptionPaymentController extends Controller
 
         $pricingPlan = (float) $plan->price;
 
+        // Apply coupon if provided
+        $couponDiscount = 0;
+        $couponId = null;
+
+        if (! empty($data['coupon_id'])) {
+            $coupon = Coupon::lockForUpdate()->find($data['coupon_id']);
+
+            if (! $coupon) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The selected coupon is invalid.',
+                ], 422);
+            }
+
+            if (! $coupon->is_active) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This coupon is inactive.',
+                ], 422);
+            }
+
+            if ($coupon->valid_from && now() < $coupon->valid_from) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This coupon is not yet valid.',
+                ], 422);
+            }
+
+            if ($coupon->valid_until && now() > $coupon->valid_until) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This coupon has expired.',
+                ], 422);
+            }
+
+            if ($coupon->max_uses !== null && (int) $coupon->used_count >= (int) $coupon->max_uses) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Coupon usage limit reached.',
+                ], 422);
+            }
+
+            if ($pricingPlan < (float) $coupon->min_order_value) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Minimum order value not met for this coupon.',
+                ], 422);
+            }
+
+            $couponDiscount = match (strtoupper((string) $coupon->discount_type)) {
+                'PERCENT' => round($pricingPlan * ((float) $coupon->discount_value / 100), 2),
+                'FLAT' => round((float) $coupon->discount_value, 2),
+                default => 0.0,
+            };
+
+            if ($coupon->max_discount !== null) {
+                $couponDiscount = min($couponDiscount, (float) $coupon->max_discount);
+            }
+
+            $couponDiscount = min($couponDiscount, $pricingPlan);
+            $couponId = $coupon->id;
+        }
+
+        $totalAmount = round($pricingPlan - $couponDiscount, 2);
+
         /*
          * Create invoice.
          */
@@ -478,9 +629,11 @@ class CentralSubscriptionPaymentController extends Controller
             'subtotal' => $pricingPlan,
             'tax' => 0,
             'discount' => 0,
-            'total_amount' => $pricingPlan,
+            'coupon_id' => $couponId,
+            'coupon_discount' => $couponDiscount,
+            'total_amount' => $totalAmount,
             'paid_amount' => 0,
-            'remaining_amount' => $pricingPlan,
+            'remaining_amount' => $totalAmount,
             'status' => 'unpaid',
             'due_date' => now()
                 ->addDays(7)
@@ -494,7 +647,7 @@ class CentralSubscriptionPaymentController extends Controller
             'subscription_id' => $subscription->id,
             'invoice_id' => $invoice->id,
             'tenant_id' => null,
-            'amount' => $pricingPlan,
+            'amount' => $totalAmount,
             'payment_method' =>
             strtoupper($data['payment_method']),
             'status' => 'PENDING',
@@ -503,6 +656,11 @@ class CentralSubscriptionPaymentController extends Controller
         $invoice->update([
             'subscription_payment_id' => $payment->id,
         ]);
+
+        // Increment coupon usage count if coupon was applied
+        if ($couponId) {
+            Coupon::where('id', $couponId)->increment('used_count');
+        }
 
         /*
          * KHALTI.
@@ -1388,6 +1546,12 @@ class CentralSubscriptionPaymentController extends Controller
 
                     'invoice_number' =>
                     $payment->invoice->invoice_number,
+
+                    'coupon_id' =>
+                    $payment->invoice->coupon_id,
+
+                    'coupon_discount' =>
+                    $payment->invoice->coupon_discount,
 
                     'total_amount' =>
                     $payment->invoice->total_amount,

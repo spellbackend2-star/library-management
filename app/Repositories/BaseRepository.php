@@ -117,6 +117,24 @@ abstract class BaseRepository
                         $query->where($column, '<=', (float) $value);
                     }
                     break;
+                case 'date_min':
+                    if ($relation) {
+                        $query->whereHas($relation, function ($q) use ($column, $value) {
+                            $q->whereDate($column, '>=', $value);
+                        });
+                    } else {
+                        $query->whereDate($column, '>=', $value);
+                    }
+                    break;
+                case 'date_max':
+                    if ($relation) {
+                        $query->whereHas($relation, function ($q) use ($column, $value) {
+                            $q->whereDate($column, '<=', $value);
+                        });
+                    } else {
+                        $query->whereDate($column, '<=', $value);
+                    }
+                    break;
                 case 'exact':
                 default:
                     if ($relation) {

@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Subscription;
+use App\Models\CentralInvoice;
+use App\Models\Coupon;
 use App\Models\SubscriptionPlan;
+use App\Models\SubscriptionPayment;
 use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -50,5 +53,62 @@ class CentralSubscriptionPaymentTest extends TestCase
         ]);
 
         $response->assertStatus(200);
+    }
+
+    public function test_payment_status_includes_coupon_details_on_invoice(): void
+    {
+        $plan = SubscriptionPlan::create([
+            'name' => 'Coupon plan',
+            'description' => 'Plan with a coupon',
+            'price' => 1500,
+            'duration' => 1,
+            'duration_unit' => 'month',
+            'is_active' => true,
+        ]);
+
+        $subscription = Subscription::create([
+            'subscription_plan_id' => $plan->id,
+            'amount' => 1500,
+            'status' => 'pending',
+        ]);
+
+        $coupon = Coupon::create([
+            'code' => 'SAVE100',
+            'discount_type' => 'FLAT',
+            'discount_value' => 100,
+            'used_count' => 1,
+            'is_active' => true,
+        ]);
+
+        $invoice = CentralInvoice::create([
+            'subscription_id' => $subscription->id,
+            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
+            'invoice_type' => 'subscription',
+            'subtotal' => 1500,
+            'coupon_id' => $coupon->id,
+            'coupon_discount' => 100,
+            'total_amount' => 1400,
+            'paid_amount' => 1400,
+            'remaining_amount' => 0,
+            'status' => 'paid',
+        ]);
+
+        $payment = SubscriptionPayment::create([
+            'subscription_id' => $subscription->id,
+            'invoice_id' => $invoice->id,
+            'amount' => 1400,
+            'payment_method' => 'KHALTI',
+            'status' => 'SUCCESS',
+            'paid_at' => now(),
+        ]);
+
+        $invoice->update([
+            'subscription_payment_id' => $payment->id,
+        ]);
+
+        $this->getJson("/api/central/subscription-payments/{$payment->id}/status")
+            ->assertOk()
+            ->assertJsonPath('data.invoice.coupon_id', $coupon->id)
+            ->assertJsonPath('data.invoice.coupon_discount', '100.00');
     }
 }

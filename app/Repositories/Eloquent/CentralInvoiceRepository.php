@@ -37,6 +37,14 @@ class CentralInvoiceRepository extends BaseRepository implements CentralInvoiceI
             'type' => 'max',
             'column' => 'total_amount',
         ],
+        'from_date' => [
+            'type' => 'date_min',
+            'column' => 'created_at',
+        ],
+        'to_date' => [
+            'type' => 'date_max',
+            'column' => 'created_at',
+        ],
     ];
 
     protected array $allowedSorts = [

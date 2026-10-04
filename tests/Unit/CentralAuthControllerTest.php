@@ -57,6 +57,7 @@ class CentralAuthControllerTest extends TestCase
             'password' => 'reader5678',
             'subdomain' => 'radhe4',
             'subscription_plan_id' => 2,
+            'coupon_id' => 3,
         ];
 
         $request = new class extends CentralRegisterRequest
@@ -70,6 +71,7 @@ class CentralAuthControllerTest extends TestCase
                     'password' => 'reader5678',
                     'subdomain' => 'radhe4',
                     'subscription_plan_id' => 2,
+                    'coupon_id' => 3,
                 ];
             }
         };
@@ -107,9 +109,11 @@ class CentralAuthControllerTest extends TestCase
             'subtotal' => '2000.00',
             'tax' => '0.00',
             'discount' => '0.00',
-            'total_amount' => '2000.00',
+            'coupon_id' => 3,
+            'coupon_discount' => '250.00',
+            'total_amount' => '1750.00',
             'paid_amount' => '0.00',
-            'remaining_amount' => '2000.00',
+            'remaining_amount' => '1750.00',
             'currency' => 'NPR',
             'currency_symbol' => 'Rs.',
             'status' => 'unpaid',
@@ -120,7 +124,7 @@ class CentralAuthControllerTest extends TestCase
         $payment = new SubscriptionPayment([
             'invoice_id' => 24,
             'subscription_id' => 29,
-            'amount' => '2000.00',
+            'amount' => '1750.00',
             'payment_method' => 'CASH',
             'status' => 'PENDING',
             'transaction_id' => null,
@@ -145,11 +149,15 @@ class CentralAuthControllerTest extends TestCase
         $this->assertSame(['id', 'company_name', 'tenant_code', 'owner_email', 'owner_name', 'status', 'domain'], array_keys($payload['tenant']));
         $this->assertSame(['id', 'subscription_plan_id', 'amount', 'status', 'starts_at', 'expires_at', 'plan'], array_keys($payload['subscription']));
         $this->assertSame(['id', 'name', 'price', 'duration', 'duration_unit'], array_keys($payload['subscription']['plan']));
-        $this->assertSame(['id', 'invoice_number', 'invoice_type', 'subtotal', 'tax', 'discount', 'total_amount', 'paid_amount', 'remaining_amount', 'currency', 'currency_symbol', 'status', 'due_date'], array_keys($payload['invoice']));
+        $this->assertSame(['id', 'invoice_number', 'invoice_type', 'subtotal', 'tax', 'discount', 'coupon_id', 'coupon_discount', 'total_amount', 'paid_amount', 'remaining_amount', 'currency', 'currency_symbol', 'status', 'due_date'], array_keys($payload['invoice']));
         $this->assertSame(['id', 'invoice_id', 'subscription_id', 'amount', 'payment_method', 'status', 'transaction_id', 'paid_at'], array_keys($payload['payment']));
         $this->assertSame(['action', 'payment_id', 'invoice_id', 'message'], array_keys($payload['next_step']));
         $this->assertSame('radhe4.example.com', $payload['tenant']['domain']);
         $this->assertSame(29, $payload['next_step']['payment_id']);
         $this->assertSame(24, $payload['next_step']['invoice_id']);
+        $this->assertSame(3, $payload['invoice']['coupon_id']);
+        $this->assertSame('250.00', $payload['invoice']['coupon_discount']);
+        $this->assertSame('1750.00', $payload['invoice']['total_amount']);
+        $this->assertSame('1750.00', $payload['payment']['amount']);
     }
 }

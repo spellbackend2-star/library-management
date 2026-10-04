@@ -45,7 +45,8 @@ class CentralInvoiceService
         $subtotal = (float) ($overrides['subtotal'] ?? $payment->amount ?? 0);
         $tax = (float) ($overrides['tax'] ?? 0);
         $discount = (float) ($overrides['discount'] ?? 0);
-        $total = round($subtotal + $tax - $discount, 2);
+        $couponDiscount = (float) ($overrides['coupon_discount'] ?? 0);
+        $total = round($subtotal + $tax - $discount - $couponDiscount, 2);
         $paid = (float) ($overrides['paid_amount'] ?? 0);
 
         $planName = $payment->subscription?->plan?->name;
@@ -59,6 +60,8 @@ class CentralInvoiceService
             'subtotal' => $subtotal,
             'tax' => $tax,
             'discount' => $discount,
+            'coupon_id' => $overrides['coupon_id'] ?? null,
+            'coupon_discount' => $couponDiscount,
             'total_amount' => $total,
             'paid_amount' => $paid,
             'remaining_amount' => max(0, round($total - $paid, 2)),

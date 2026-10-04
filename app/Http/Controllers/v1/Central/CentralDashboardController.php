@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\Tenant;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
 
 class CentralDashboardController extends Controller
 {
+    use ResponseMessage;
+
     public function index(): JsonResponse
     {
         $tenantStats = $this->getTenantStats();
@@ -19,17 +21,16 @@ class CentralDashboardController extends Controller
         $recentTenants = $this->getRecentTenants();
         $recentPayments = $this->getRecentPayments();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Dashboard data retrieved successfully.',
-            'data' => [
+        return $this->successResponse(
+            [
                 'tenants' => $tenantStats,
                 'subscriptions' => $subscriptionStats,
                 'payments' => $paymentStats,
                 'recent_tenants' => $recentTenants,
                 'recent_payments' => $recentPayments,
             ],
-        ]);
+            'Dashboard data retrieved successfully.'
+        );
     }
 
     protected function getTenantStats(): array

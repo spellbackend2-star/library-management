@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CentralInvoice;
+use App\Models\Coupon;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Subscription;
@@ -16,6 +17,7 @@ use GuzzleHttp\Psr7\Response;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Http\Controllers\AccessTokenController;
 use Psr\Http\Message\ServerRequestInterface;
@@ -161,6 +163,14 @@ class CentralAuthService
             );
         }
 
+        $couponId = isset($data['coupon_id'])
+            ? (int) $data['coupon_id']
+            : null;
+        $this->calculateRegistrationCoupon(
+            $couponId,
+            (float) $plan->price
+        );
+
         /*
         |--------------------------------------------------------------------------
         | Create central tenant
@@ -273,34 +283,58 @@ class CentralAuthService
             |
             */
 
-            $subscription = Subscription::create([
-                'tenant_id' => $tenant->id,
-                'subscription_plan_id' => $plan->id,
-                'amount' => (float) $plan->price,
-                'starts_at' => null,
-                'expires_at' => null,
-                'status' => 'pending',
-            ]);
+            [$subscription, $invoice, $subscriptionPayment] = DB::transaction(function () use (
+                $tenant,
+                $plan,
+                $couponId
+            ): array {
+                $couponData = $this->calculateRegistrationCoupon(
+                    $couponId,
+                    (float) $plan->price
+                );
 
-            $invoice = $this->createSubscriptionInvoice(
-                $subscription,
-                $tenant->id,
-                (float) $plan->price
-            );
+                $subscription = Subscription::create([
+                    'tenant_id' => $tenant->id,
+                    'subscription_plan_id' => $plan->id,
+                    'amount' => (float) $plan->price,
+                    'starts_at' => null,
+                    'expires_at' => null,
+                    'status' => 'pending',
+                ]);
 
-            $subscriptionPayment = SubscriptionPayment::create([
-                'subscription_id' => $subscription->id,
-                'invoice_id' => $invoice->id,
-                'tenant_id' => $tenant->id,
-                'amount' => (float) $plan->price,
-                'payment_method' => 'CASH',
-                'status' => 'PENDING',
-                'transaction_id' => null,
-                'gateway_response' => null,
-                'paid_at' => null,
-            ]);
+                $invoice = $this->createSubscriptionInvoice(
+                    $subscription,
+                    $tenant->id,
+                    (float) $plan->price,
+                    $couponData['coupon_id'],
+                    $couponData['coupon_discount']
+                );
 
-            $invoice->update(['subscription_payment_id' => $subscriptionPayment->id]);
+                $subscriptionPayment = SubscriptionPayment::create([
+                    'subscription_id' => $subscription->id,
+                    'invoice_id' => $invoice->id,
+                    'tenant_id' => $tenant->id,
+                    'amount' => (float) $invoice->total_amount,
+                    'payment_method' => 'CASH',
+                    'status' => 'PENDING',
+                    'transaction_id' => null,
+                    'gateway_response' => null,
+                    'paid_at' => null,
+                ]);
+
+                $invoice->update([
+                    'subscription_payment_id' => $subscriptionPayment->id,
+                ]);
+
+                if ($couponData['coupon_id']) {
+                    Coupon::whereKey($couponData['coupon_id'])
+                        ->increment('used_count');
+                }
+
+                return [$subscription, $invoice, $subscriptionPayment];
+            });
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 'Failed to create tenant: ' . $e->getMessage()
@@ -325,8 +359,12 @@ class CentralAuthService
     protected function createSubscriptionInvoice(
         Subscription $subscription,
         string $tenantId,
-        float $amount
+        float $amount,
+        ?int $couponId = null,
+        float $couponDiscount = 0
     ): CentralInvoice {
+        $totalAmount = round($amount - $couponDiscount, 2);
+
         return CentralInvoice::create([
             'tenant_id' => $tenantId,
             'subscription_id' => $subscription->id,
@@ -335,15 +373,184 @@ class CentralAuthService
             'subtotal' => $amount,
             'tax' => 0,
             'discount' => 0,
-            'total_amount' => $amount,
+            'coupon_id' => $couponId,
+            'coupon_discount' => $couponDiscount,
+            'total_amount' => $totalAmount,
             'paid_amount' => 0,
-            'remaining_amount' => $amount,
+            'remaining_amount' => $totalAmount,
             'currency' => 'NPR',
             'currency_symbol' => 'Rs.',
             'status' => 'unpaid',
             'due_date' => now()->addDays(7)->toDateString(),
             'notes' => null,
         ]);
+    }
+
+    /**
+     * Validate a registration coupon and return its applied discount.
+     *
+     * Call inside a transaction when reserving the coupon usage.
+     */
+    protected function calculateRegistrationCoupon(?int $couponId, float $amount): array
+    {
+        if (! $couponId) {
+            return [
+                'coupon_id' => null,
+                'coupon_discount' => 0.0,
+            ];
+        }
+
+        $coupon = Coupon::query()
+            ->lockForUpdate()
+            ->find($couponId);
+
+        if (! $coupon) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['The selected coupon is invalid.'],
+            ]);
+        }
+
+        if (! $coupon->is_active) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['This coupon is inactive.'],
+            ]);
+        }
+
+        if ($coupon->valid_from && now()->lt($coupon->valid_from)) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['This coupon is not yet valid.'],
+            ]);
+        }
+
+        if ($coupon->valid_until && now()->gt($coupon->valid_until)) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['This coupon has expired.'],
+            ]);
+        }
+
+        if ($coupon->max_uses !== null && $coupon->used_count >= $coupon->max_uses) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['Coupon usage limit reached.'],
+            ]);
+        }
+
+        if ($amount < (float) $coupon->min_order_value) {
+            throw ValidationException::withMessages([
+                'coupon_id' => ['Minimum order value not met for this coupon.'],
+            ]);
+        }
+
+        $discount = match (strtoupper((string) $coupon->discount_type)) {
+            'PERCENT' => round($amount * ((float) $coupon->discount_value / 100), 2),
+            'FLAT' => round((float) $coupon->discount_value, 2),
+            default => 0.0,
+        };
+
+        if ($coupon->max_discount !== null) {
+            $discount = min($discount, (float) $coupon->max_discount);
+        }
+
+        return [
+            'coupon_id' => $coupon->id,
+            'coupon_discount' => min($discount, $amount),
+        ];
+    }
+
+    public function completePaymentAndCreateTenant(
+        SubscriptionPayment $payment,
+        array $data
+    ): array {
+        $payment->loadMissing(['subscription.plan', 'invoice']);
+
+        if ($payment->status !== 'PENDING') {
+            throw new \RuntimeException('Payment must be in PENDING status.');
+        }
+
+        $subscription = $payment->subscription;
+
+        if (! $subscription || ! $subscription->plan) {
+            throw new \RuntimeException('Subscription plan not found for this payment.');
+        }
+
+        if ($payment->tenant_id || $subscription->tenant_id) {
+            throw new \RuntimeException('This payment is already linked to a tenant.');
+        }
+
+        $centralDomain = config('tenancy.central_domains.0');
+
+        if (! $centralDomain) {
+            throw new \RuntimeException('The central domain is not configured.');
+        }
+
+        $tenant = Tenant::create([
+            'company_name' => $data['company_name'],
+            'tenant_code' => $data['subdomain'],
+            'owner_email' => $data['email'],
+            'owner_name' => $data['owner'],
+            'status' => 'inactive',
+        ]);
+
+        $domain = $tenant->domains()->create([
+            'domain' => $data['subdomain'].'.'.$centralDomain,
+        ]);
+
+        $subscription->update(['tenant_id' => $tenant->id]);
+        $payment->update(['tenant_id' => $tenant->id]);
+        $payment->invoice?->update(['tenant_id' => $tenant->id]);
+
+        try {
+            $tenant->run(function () use ($data, $tenant): void {
+                $owner = User::create([
+                    'name' => $data['owner'],
+                    'email' => $data['email'],
+                    'password' => Hash::make($data['password']),
+                ]);
+
+                Artisan::call('db:seed', [
+                    '--class' => RolePermissionSeeder::class,
+                    '--force' => true,
+                ]);
+
+                $adminRole = Role::where('name', 'admin')
+                    ->where('guard_name', 'api')
+                    ->first();
+
+                if ($adminRole) {
+                    $owner->assignRole($adminRole->name);
+                }
+
+                $client = app(ClientRepository::class)
+                    ->createPasswordGrantClient(
+                        name: $data['company_name'].' Password Grant Client',
+                        provider: 'users',
+                        confidential: true,
+                    );
+
+                $tenant->update([
+                    'passport_client_id' => $client->id,
+                    'passport_client_secret' => $client->plainSecret,
+                ]);
+            });
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                'Failed to provision tenant: '.$e->getMessage(),
+                previous: $e
+            );
+        }
+
+        $payment = $this->completeCentralCashPayment($payment);
+
+        return [
+            'tenant' => $tenant->fresh(),
+            'domain' => $domain->domain,
+            'subscription' => $subscription->fresh()->load('plan'),
+            'subscription_payment' => $payment->fresh()->load([
+                'subscription.plan',
+                'tenant',
+                'invoice',
+            ]),
+            'invoice' => $payment->invoice()->first(),
+        ];
     }
 
     public function completeCentralCashPayment(SubscriptionPayment $payment): SubscriptionPayment

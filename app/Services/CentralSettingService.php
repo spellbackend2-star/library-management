@@ -347,6 +347,11 @@ class CentralSettingService
             'type' => 'string',
             'description' => 'SMS sender ID.',
         ],
+        'sms_campaign_id' => [
+            'value' => null,
+            'type' => 'string',
+            'description' => 'SMS campaign ID.',
+        ],
     ];
 
     /**

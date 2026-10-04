@@ -91,6 +91,7 @@ class UpdateCentralSettingGroupRequest extends FormRequest
                 'sms_api_url' => ['sometimes', 'nullable', 'url', 'max:255'],
                 'sms_api_key' => ['sometimes', 'nullable', 'string', 'max:255'],
                 'sms_sender_id' => ['sometimes', 'nullable', 'string', 'max:100'],
+                'sms_campaign_id' => ['sometimes', 'nullable', 'string', 'max:100'],
             ],
             CentralSettingService::NOTIFICATION_GROUP => [
                 'email_notification_enabled' => ['sometimes', 'boolean'],

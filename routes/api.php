@@ -9,6 +9,7 @@ use App\Http\Controllers\v1\Central\CentralStaffController;
 use App\Http\Controllers\v1\Central\CentralSettingController;
 use App\Http\Controllers\v1\Central\CentralInvoiceController;
 use App\Http\Controllers\v1\Central\CentralSubscriptionPaymentController;
+use App\Http\Controllers\v1\Central\CentralTenantController;
 use App\Http\Controllers\v1\Tenant\SubscriptionController;
 use App\Http\Controllers\v1\Tenant\SubscriptionPlanController;
 use App\Services\CentralSettingService;
@@ -66,6 +67,10 @@ Route::prefix('central')->group(function () {
         Route::post('/subscription-payments/{payment}/complete-and-create-tenant', [CentralSubscriptionPaymentController::class, 'completeAndCreateTenant']);
         Route::patch('/subscription-payments/{payment}/fail', [CentralSubscriptionPaymentController::class, 'fail']);
         Route::post('/subscription-payments/{payment}/pay', [CentralSubscriptionPaymentController::class, 'pay'])->name('central.subscription-payments.pay');
+
+        // Central Tenants
+        Route::get('/tenants', [CentralTenantController::class, 'index']);
+        Route::get('/tenants/{tenant}', [CentralTenantController::class, 'show']);
     });
 
 });

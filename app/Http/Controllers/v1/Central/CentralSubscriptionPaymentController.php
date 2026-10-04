@@ -44,37 +44,28 @@ class CentralSubscriptionPaymentController extends Controller
                 'string',
                 'in:CASH,KHALTI,ESEWA',
             ],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $query = SubscriptionPayment::query();
 
         if (! empty($validated['tenant_id'])) {
-            $query->where(
-                'tenant_id',
-                $validated['tenant_id']
-            );
+            $query->where('tenant_id', $validated['tenant_id']);
         }
 
         if (! empty($validated['subscription_id'])) {
-            $query->where(
-                'subscription_id',
-                $validated['subscription_id']
-            );
+            $query->where('subscription_id', $validated['subscription_id']);
         }
 
         if (! empty($validated['status'])) {
-            $query->where(
-                'status',
-                $validated['status']
-            );
+            $query->where('status', $validated['status']);
         }
 
         if (! empty($validated['payment_method'])) {
-            $query->where(
-                'payment_method',
-                $validated['payment_method']
-            );
+            $query->where('payment_method', $validated['payment_method']);
         }
+
+        $perPage = $validated['per_page'] ?? 20;
 
         $payments = $query
             ->with([
@@ -83,12 +74,94 @@ class CentralSubscriptionPaymentController extends Controller
                 'invoice',
             ])
             ->latest('id')
-            ->get();
+            ->paginate($perPage);
+
+        $data = $payments->getCollection()->map(function ($payment) {
+            $tenant = $payment->tenant;
+            $subscription = $payment->subscription;
+            $plan = $subscription?->plan;
+            $invoice = $payment->invoice;
+
+            return [
+                'id' => $payment->id,
+                'transaction_id' => $payment->transaction_id,
+                'amount' => $payment->amount,
+                'currency' => $invoice?->currency ?? 'NPR',
+                'payment_method' => $payment->payment_method,
+                'status' => $payment->status,
+                'paid_at' => $payment->paid_at
+                    ? \Carbon\Carbon::parse($payment->paid_at)->format('Y-m-d\TH:i:s\Z')
+                    : null,
+                'created_at' => $payment->created_at
+                    ? \Carbon\Carbon::parse($payment->created_at)->format('Y-m-d\TH:i:s\Z')
+                    : null,
+                'tenant' => $tenant
+                    ? [
+                        'id' => $tenant->id,
+                        'company_name' => $tenant->company_name,
+                        'tenant_code' => $tenant->tenant_code,
+                    ]
+                    : null,
+                'plan' => $plan
+                    ? [
+                        'id' => $plan->id,
+                        'name' => $plan->name,
+                    ]
+                    : null,
+                'subscription' => $subscription
+                    ? [
+                        'id' => $subscription->id,
+                        'status' => $subscription->status,
+                        'starts_at' => $subscription->starts_at ? (string) $subscription->starts_at : null,
+                        'expires_at' => $subscription->expires_at ? (string) $subscription->expires_at : null,
+                    ]
+                    : null,
+                'invoice' => $invoice
+                    ? [
+                        'id' => $invoice->id,
+                        'invoice_number' => $invoice->invoice_number,
+                        'status' => $invoice->status,
+                    ]
+                    : null,
+            ];
+        });
+
+        // Summary stats
+        $allPayments = SubscriptionPayment::query();
+        if (! empty($validated['tenant_id'])) {
+            $allPayments->where('tenant_id', $validated['tenant_id']);
+        }
+        if (! empty($validated['subscription_id'])) {
+            $allPayments->where('subscription_id', $validated['subscription_id']);
+        }
+        if (! empty($validated['payment_method'])) {
+            $allPayments->where('payment_method', $validated['payment_method']);
+        }
+
+        $totalCollected = (string) $allPayments
+            ->whereIn('status', ['SUCCESS', 'COMPLETED'])
+            ->sum('amount');
+
+        $successCount = $allPayments->whereIn('status', ['SUCCESS', 'COMPLETED'])->count();
+        $pendingCount = $allPayments->where('status', 'PENDING')->count();
+        $failedCount = $allPayments->where('status', 'FAILED')->count();
 
         return response()->json([
             'success' => true,
             'message' => 'Subscription payments retrieved successfully.',
-            'data' => $payments,
+            'data' => $data,
+            'meta' => [
+                'current_page' => $payments->currentPage(),
+                'per_page' => $payments->perPage(),
+                'total' => $payments->total(),
+                'last_page' => $payments->lastPage(),
+            ],
+            'summary' => [
+                'total_collected' => $totalCollected,
+                'success_count' => $successCount,
+                'pending_count' => $pendingCount,
+                'failed_count' => $failedCount,
+            ],
         ]);
     }
 

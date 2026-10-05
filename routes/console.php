@@ -14,3 +14,8 @@ Schedule::command('lms:check-overdue')
     ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('central:expire-subscriptions')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();

@@ -33,6 +33,7 @@ class CentralTenantController extends Controller
                 'owner_email' => $tenant->owner_email,
                 'owner_name' => $tenant->owner_name,
                 'status' => $tenant->status,
+                'suspension_reason' => $tenant->suspension_reason,
                 'domain' => $tenant->domains->first()?->domain,
                 'created_at' => $tenant->created_at,
             ];
@@ -87,6 +88,7 @@ class CentralTenantController extends Controller
                     'owner_email' => $tenant->owner_email,
                     'owner_name' => $tenant->owner_name,
                     'status' => $tenant->status,
+                    'suspension_reason' => $tenant->suspension_reason,
                     'domain' => $tenant->domains->first()?->domain,
                     'created_at' => $tenant->created_at,
                 ],
@@ -203,6 +205,7 @@ class CentralTenantController extends Controller
                 'owner_email' => $tenant->owner_email,
                 'owner_name' => $tenant->owner_name,
                 'status' => $tenant->status,
+                'suspension_reason' => $tenant->suspension_reason,
                 'domain' => $tenant->domains->first()?->domain,
                 'created_at' => $tenant->created_at,
             ],
@@ -218,7 +221,12 @@ class CentralTenantController extends Controller
             'status' => ['required', 'in:active,inactive,suspended'],
         ]);
 
-        $tenant->update(['status' => $data['status']]);
+        $tenant->update([
+            'status' => $data['status'],
+            'suspension_reason' => $data['status'] === 'suspended'
+                ? 'ADMIN'
+                : null,
+        ]);
 
         return response()->json([
             'success' => true,
@@ -228,6 +236,7 @@ class CentralTenantController extends Controller
                 'company_name' => $tenant->company_name,
                 'tenant_code' => $tenant->tenant_code,
                 'status' => $tenant->status,
+                'suspension_reason' => $tenant->suspension_reason,
             ],
         ]);
     }

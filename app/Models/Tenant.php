@@ -18,6 +18,7 @@ class Tenant extends BaseTenant implements TenantWithDatabase
         'owner_email',
         'owner_name',
         'status',
+        'suspension_reason',
         'passport_client_id',
         'passport_client_secret',
     ];

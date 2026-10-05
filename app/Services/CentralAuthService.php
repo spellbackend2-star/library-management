@@ -543,7 +543,10 @@ class CentralAuthService
         if ($payment->status === 'PENDING') {
             $payment = $this->completeCentralCashPayment($payment);
         } else {
-            $tenant->update(['status' => 'active']);
+            $tenant->update([
+                'status' => 'active',
+                'suspension_reason' => null,
+            ]);
 
             if ($subscription->status !== 'active') {
                 $startDate = now();
@@ -673,6 +676,7 @@ class CentralAuthService
             if ($tenant) {
                 $tenant->update([
                     'status' => 'active',
+                    'suspension_reason' => null,
                 ]);
 
                 $payment->update(['tenant_id' => $tenant->id]);

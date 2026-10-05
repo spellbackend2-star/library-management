@@ -7,10 +7,15 @@ use App\Models\CentralInvoice;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\Tenant;
+use App\Repositories\Eloquent\CentralInvoiceRepository;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CentralTenantController extends Controller
 {
+    public function __construct(
+        protected CentralInvoiceRepository $centralInvoiceRepository
+    ) {}
     /**
      * Get all tenants with pagination.
      */
@@ -64,10 +69,12 @@ class CentralTenantController extends Controller
             ->get();
 
         // All invoices for this tenant
-        $invoices = CentralInvoice::with('subscription.plan')
-            ->where('tenant_id', $tenant->id)
-            ->latest('id')
-            ->get();
+        $invoices = $this->centralInvoiceRepository->getAll([
+            'tenant_id' => $tenant->id,
+            'per_page' => request()->get('per_page', 15),
+            'sort_by' => 'id',
+            'sort_order' => 'desc',
+        ]);
 
         return response()->json([
             'success' => true,
@@ -134,38 +141,93 @@ class CentralTenantController extends Controller
                             : null,
                     ];
                 }),
-                'invoices' => $invoices->map(function ($invoice) {
-                    return [
-                        'id' => $invoice->id,
-                        'invoice_number' => $invoice->invoice_number,
-                        'invoice_type' => $invoice->invoice_type,
-                        'subtotal' => $invoice->subtotal,
-                        'tax' => $invoice->tax,
-                        'discount' => $invoice->discount,
-                        'total_amount' => $invoice->total_amount,
-                        'paid_amount' => $invoice->paid_amount,
-                        'remaining_amount' => $invoice->remaining_amount,
-                        'currency' => $invoice->currency,
-                        'currency_symbol' => $invoice->currency_symbol,
-                        'status' => $invoice->status,
-                        'due_date' => $invoice->due_date,
-                        'notes' => $invoice->notes,
-                        'subscription' => $invoice->subscription
-                            ? [
-                                'id' => $invoice->subscription->id,
-                                'status' => $invoice->subscription->status,
-                                'plan' => $invoice->subscription->plan
+                'invoices' => [
+                        'data' => collect($invoices['data'])->map(function ($invoice) {
+                            return [
+                                'id' => $invoice->id,
+                                'invoice_number' => $invoice->invoice_number,
+                                'invoice_type' => $invoice->invoice_type,
+                                'subtotal' => $invoice->subtotal,
+                                'tax' => $invoice->tax,
+                                'discount' => $invoice->discount,
+                                'total_amount' => $invoice->total_amount,
+                                'paid_amount' => $invoice->paid_amount,
+                                'remaining_amount' => $invoice->remaining_amount,
+                                'currency' => $invoice->currency,
+                                'currency_symbol' => $invoice->currency_symbol,
+                                'status' => $invoice->status,
+                                'due_date' => $invoice->due_date,
+                                'notes' => $invoice->notes,
+                                'subscription' => $invoice->subscription
                                     ? [
-                                        'id' => $invoice->subscription->plan->id,
-                                        'name' => $invoice->subscription->plan->name,
-                                        'price' => $invoice->subscription->plan->price,
+                                        'id' => $invoice->subscription->id,
+                                        'status' => $invoice->subscription->status,
+                                        'plan' => $invoice->subscription->plan
+                                            ? [
+                                                'id' => $invoice->subscription->plan->id,
+                                                'name' => $invoice->subscription->plan->name,
+                                                'price' => $invoice->subscription->plan->price,
+                                            ]
+                                            : null,
                                     ]
                                     : null,
-                            ]
-                            : null,
-                        'created_at' => $invoice->created_at,
-                    ];
-                }),
+                                'created_at' => $invoice->created_at,
+                            ];
+                        }),
+                        'pagination' => $invoices['meta'],
+                    ],
+            ],
+        ]);
+    }
+
+    /**
+     * Update tenant company information.
+     */
+    public function update(Request $request, Tenant $tenant): JsonResponse
+    {
+        $data = $request->validate([
+            'company_name' => ['sometimes', 'string', 'max:255'],
+            'owner_email' => ['sometimes', 'email', 'max:255'],
+            'owner_name' => ['sometimes', 'string', 'max:255'],
+        ]);
+
+        $tenant->update($data);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tenant updated successfully.',
+            'data' => [
+                'id' => $tenant->id,
+                'company_name' => $tenant->company_name,
+                'tenant_code' => $tenant->tenant_code,
+                'owner_email' => $tenant->owner_email,
+                'owner_name' => $tenant->owner_name,
+                'status' => $tenant->status,
+                'domain' => $tenant->domains->first()?->domain,
+                'created_at' => $tenant->created_at,
+            ],
+        ]);
+    }
+
+    /**
+     * Update tenant status.
+     */
+    public function updateStatus(Request $request, Tenant $tenant): JsonResponse
+    {
+        $data = $request->validate([
+            'status' => ['required', 'in:active,inactive,suspended'],
+        ]);
+
+        $tenant->update(['status' => $data['status']]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tenant status updated successfully.',
+            'data' => [
+                'id' => $tenant->id,
+                'company_name' => $tenant->company_name,
+                'tenant_code' => $tenant->tenant_code,
+                'status' => $tenant->status,
             ],
         ]);
     }

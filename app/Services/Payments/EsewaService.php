@@ -253,12 +253,14 @@ class EsewaService
             );
         }
 
-        // Payment successful
-        $payment->update([
-            'status' => 'SUCCESS',
-            'paid_at' => now(),
-            'gateway_reference' => $verify['transaction_code'] ?? null,
-        ]);
+        // Central subscription payments are finalized by CentralAuthService.
+        if (! ($payment instanceof SubscriptionPayment)) {
+            $payment->update([
+                'status' => 'SUCCESS',
+                'paid_at' => now(),
+                'gateway_reference' => $verify['transaction_code'] ?? null,
+            ]);
+        }
 
         return [
             'status' => 'Completed',

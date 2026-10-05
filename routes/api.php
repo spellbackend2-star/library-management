@@ -75,6 +75,8 @@ Route::prefix('central')->group(function () {
         // Central Tenants
         Route::get('/tenants', [CentralTenantController::class, 'index']);
         Route::get('/tenants/{tenant}', [CentralTenantController::class, 'show']);
+        Route::put('/tenants/{tenant}', [CentralTenantController::class, 'update']);
+        Route::patch('/tenants/{tenant}/status', [CentralTenantController::class, 'updateStatus']);
 
         // Central Coupons
         Route::apiResource('/coupons', CentralCouponController::class)

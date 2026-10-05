@@ -189,6 +189,12 @@ class CentralSubscriptionPaymentController extends Controller
                 'regex:/^(CASH|KHALTI|ESEWA)$/i',
             ],
 
+            'amount' => [
+                'nullable',
+                'numeric',
+                'gt:0',
+            ],
+
             'return_url' => [
                 'required',
                 'url',
@@ -291,6 +297,27 @@ class CentralSubscriptionPaymentController extends Controller
 
         $totalAmount = round($pricingPlan - $couponDiscount, 2);
 
+        $paymentAmount = round(
+            (float) ($data['amount'] ?? $totalAmount),
+            2
+        );
+
+        if ($paymentAmount > $totalAmount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment amount cannot be greater than the invoice remaining amount.',
+                'data' => [
+                    'invoice_total' => $totalAmount,
+                    'requested_amount' => $paymentAmount,
+                    'remaining_amount' => $totalAmount,
+                ],
+                'errors' => [
+                    'amount' => [
+                        'The payment amount cannot exceed the invoice remaining amount.',
+                    ],
+                ],
+            ], 422);
+        }
         /*
          * Create invoice.
          */
@@ -321,7 +348,7 @@ class CentralSubscriptionPaymentController extends Controller
             'subscription_id' => $subscription->id,
             'invoice_id' => $invoice->id,
             'tenant_id' => $subscription->tenant_id,
-            'amount' => $totalAmount,
+            'amount' => $paymentAmount,
             'payment_method' =>
             strtoupper($data['payment_method']),
             'status' => 'PENDING',
@@ -499,6 +526,11 @@ class CentralSubscriptionPaymentController extends Controller
                 'string',
                 'in:CASH,KHALTI,ESEWA',
             ],
+            'amount' => [
+                'required',
+                'numeric',
+                'gt:0',
+            ],
 
             'return_url' => [
                 'nullable',
@@ -539,18 +571,6 @@ class CentralSubscriptionPaymentController extends Controller
                 'Subscription plan price must be greater than 0.',
             ], 422);
         }
-
-        /*
-         * Create subscription.
-         */
-        $subscription = Subscription::create([
-            'tenant_id' => null,
-            'subscription_plan_id' => $plan->id,
-            'amount' => (float) $plan->price,
-            'starts_at' => null,
-            'expires_at' => null,
-            'status' => 'pending',
-        ]);
 
         $pricingPlan = (float) $plan->price;
 
@@ -619,6 +639,32 @@ class CentralSubscriptionPaymentController extends Controller
 
         $totalAmount = round($pricingPlan - $couponDiscount, 2);
 
+        $paymentAmount = round((float) $data['amount'], 2);
+
+        if ($paymentAmount > $totalAmount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment amount cannot be greater than the invoice remaining amount.',
+                'data' => [
+                    'invoice_total' => $totalAmount,
+                    'requested_amount' => $paymentAmount,
+                    'remaining_amount' => $totalAmount,
+                ],
+            ], 422);
+        }
+
+        /*
+         * Create subscription.
+         */
+        $subscription = Subscription::create([
+            'tenant_id' => null,
+            'subscription_plan_id' => $plan->id,
+            'amount' => (float) $plan->price,
+            'starts_at' => null,
+            'expires_at' => null,
+            'status' => 'pending',
+        ]);
+
         /*
          * Create invoice.
          */
@@ -649,7 +695,7 @@ class CentralSubscriptionPaymentController extends Controller
             'subscription_id' => $subscription->id,
             'invoice_id' => $invoice->id,
             'tenant_id' => null,
-            'amount' => $totalAmount,
+            'amount' => $paymentAmount,
             'payment_method' =>
             strtoupper($data['payment_method']),
             'status' => 'PENDING',
@@ -1302,6 +1348,12 @@ class CentralSubscriptionPaymentController extends Controller
                 'in:CASH,KHALTI,ESEWA',
             ],
 
+            'amount' => [
+                'required',
+                'numeric',
+                'gt:0',
+            ],
+
             'return_url' => [
                 'nullable',
                 'url',
@@ -1324,36 +1376,86 @@ class CentralSubscriptionPaymentController extends Controller
             ], 422);
         }
 
-        /*
-         * Already completed.
-         */
-        if (in_array(
-            $payment->status,
-            ['SUCCESS', 'COMPLETED'],
-            true
-        )) {
-            if ($returnUrl) {
-                return $this->redirectPaymentFrontend(
-                    $payment,
-                    $returnUrl,
-                    'Payment already completed successfully.'
-                );
-            }
-
+        $invoice = $payment->invoice;
+        if (! $invoice) {
             return response()->json([
-                'success' => true,
-                'message' =>
-                'Subscription payment already completed.',
-                'data' =>
-                $this->buildPaymentSummary(
-                    $payment
-                ),
-            ]);
+                'success' => false,
+                'message' => 'Invoice not found for this payment.',
+            ], 422);
         }
 
         $method = strtoupper(
             $data['payment_method']
         );
+        $requestedAmount = round((float) $data['amount'], 2);
+        $remainingAmount = round(
+            (float) $invoice->remaining_amount,
+            2
+        );
+
+        if ($requestedAmount > $remainingAmount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment amount cannot be greater than the invoice remaining amount.',
+                'errors' => [
+                    'amount' => [
+                        "The payment amount cannot exceed the remaining balance of {$remainingAmount}.",
+                    ],
+                ],
+            ], 422);
+        }
+
+        /*
+         * A completed payment is immutable. Start a new payment against
+         * its existing invoice so partial balances retain payment history.
+         */
+        if (in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
+            $completedPayment = $payment;
+            $payment = SubscriptionPayment::query()
+                ->where('invoice_id', $completedPayment->invoice_id)
+                ->where('status', 'PENDING')
+                ->latest('id')
+                ->first();
+
+            if ($payment) {
+                $payment->update([
+                    'amount' => $requestedAmount,
+                    'payment_method' => $method,
+                    'transaction_id' => null,
+                    'gateway_response' => null,
+                ]);
+            } else {
+                $payment = SubscriptionPayment::create([
+                    'subscription_id' => $completedPayment->subscription_id,
+                    'invoice_id' => $invoice->id,
+                    'tenant_id' => $completedPayment->tenant_id,
+                    'amount' => $requestedAmount,
+                    'payment_method' => $method,
+                    'status' => 'PENDING',
+                ]);
+            }
+
+            $payment->load([
+                'subscription.plan',
+                'tenant.domains',
+                'invoice',
+            ]);
+        } else {
+            $attemptChanged = $payment->status === 'FAILED'
+                || round((float) $payment->amount, 2) !== $requestedAmount
+                || $payment->payment_method !== $method;
+
+            $payment->update([
+                'status' => 'PENDING',
+                'paid_at' => null,
+                'amount' => $requestedAmount,
+                'payment_method' => $method,
+                ...($attemptChanged ? [
+                    'transaction_id' => null,
+                    'gateway_response' => null,
+                ] : []),
+            ]);
+        }
 
         /*
          * CASH.
@@ -1389,20 +1491,6 @@ class CentralSubscriptionPaymentController extends Controller
             ]);
         }
 
-        /*
-         * Retry failed gateway payment.
-         */
-        if ($payment->status === 'FAILED') {
-            $payment->update([
-                'status' => 'PENDING',
-                'paid_at' => null,
-            ]);
-        }
-
-        $payment->update([
-            'payment_method' => $method,
-        ]);
-
         try {
             $gateway = $method === 'KHALTI'
                 ? $this->khaltiService
@@ -1427,9 +1515,9 @@ class CentralSubscriptionPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' =>
-            $method .
-                ' payment initiated. Complete the payment on the gateway to activate the tenant.',
+            'message' => $payment->tenant?->status === 'active'
+                ? $method . ' payment initiated. Complete the payment on the gateway to update the invoice balance.'
+                : $method . ' payment initiated. Complete the payment on the gateway to activate the tenant.',
             'data' =>
             $this->buildPaymentSummary(
                 $payment->fresh([
@@ -1627,6 +1715,26 @@ class CentralSubscriptionPaymentController extends Controller
 
                 'method' => 'POST',
             ];
+
+            if ((float) $payment->invoice?->remaining_amount > 0) {
+                $summary['pay'] = [
+                    'method' => 'POST',
+                    'url' => route(
+                        'central.subscription-payments.pay',
+                        ['payment' => $payment->id]
+                    ),
+                    'allowed_payment_methods' => [
+                        'CASH',
+                        'KHALTI',
+                        'ESEWA',
+                    ],
+                ];
+
+                $summary['status_url'] = route(
+                    'central.subscription-payments.status',
+                    ['payment' => $payment->id]
+                );
+            }
         } else {
             $summary['next_step'] =
                 'Complete the pending payment to activate the tenant.';

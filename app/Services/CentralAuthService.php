@@ -590,6 +590,48 @@ class CentralAuthService
     public function completeCentralCashPayment(SubscriptionPayment $payment): SubscriptionPayment
     {
         return DB::transaction(function () use ($payment) {
+            $payment = SubscriptionPayment::query()
+                ->lockForUpdate()
+                ->findOrFail($payment->id);
+
+            if (in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
+                return $payment->fresh()->load([
+                    'subscription.plan',
+                    'tenant',
+                    'invoice',
+                ]);
+            }
+
+            $invoice = CentralInvoice::query()
+                ->lockForUpdate()
+                ->find($payment->invoice_id);
+
+            if (! $invoice) {
+                throw new \RuntimeException('Invoice not found for this payment.');
+            }
+
+            $totalAmount = round((float) $invoice->total_amount, 2);
+            $currentPaid = round((float) $invoice->paid_amount, 2);
+            $paymentAmount = round((float) $payment->amount, 2);
+            $remainingAmount = max(0, round($totalAmount - $currentPaid, 2));
+
+            if ($paymentAmount > $remainingAmount) {
+                throw ValidationException::withMessages([
+                    'amount' => [
+                        "The payment amount cannot exceed the remaining balance of {$remainingAmount}.",
+                    ],
+                ]);
+            }
+
+            $newPaid = round($currentPaid + $paymentAmount, 2);
+            $newRemaining = max(0, round($totalAmount - $newPaid, 2));
+
+            if ($newPaid > $totalAmount) {
+                throw ValidationException::withMessages([
+                    'amount' => ['The payment amount cannot exceed the invoice total.'],
+                ]);
+            }
+
             $subscription = $payment->subscription()->first();
 
             if (! $subscription) {
@@ -607,18 +649,23 @@ class CentralAuthService
                 'paid_at' => now(),
             ]);
 
-            $startDate = now();
-            $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
-                'day' => $startDate->copy()->addDays((int) $plan->duration),
-                'month' => $startDate->copy()->addMonths((int) $plan->duration),
-                'year' => $startDate->copy()->addYears((int) $plan->duration),
-                default => $startDate->copy()->addMonths((int) $plan->duration),
-            };
+            if ($subscription->status !== 'active') {
+                $startDate = now();
+                $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
+                    'day' => $startDate->copy()->addDays((int) $plan->duration),
+                    'month' => $startDate->copy()->addMonths((int) $plan->duration),
+                    'year' => $startDate->copy()->addYears((int) $plan->duration),
+                    default => $startDate->copy()->addMonths((int) $plan->duration),
+                };
+
+                $subscription->update([
+                    'starts_at' => $startDate->toDateString(),
+                    'expires_at' => $expiresAt->toDateString(),
+                ]);
+            }
 
             $subscription->update([
                 'status' => 'active',
-                'starts_at' => $startDate->toDateString(),
-                'expires_at' => $expiresAt->toDateString(),
             ]);
 
             $tenant = $payment->tenant()->first() ?? $subscription->tenant()->first();
@@ -627,17 +674,17 @@ class CentralAuthService
                 $tenant->update([
                     'status' => 'active',
                 ]);
+
+                $payment->update(['tenant_id' => $tenant->id]);
+                $subscription->update(['tenant_id' => $tenant->id]);
+                $invoice->update(['tenant_id' => $tenant->id]);
             }
 
-            // Mark the related invoice as PAID
-            $invoice = $payment->invoice()->first();
-            if ($invoice) {
-                $invoice->update([
-                    'status' => 'paid',
-                    'paid_amount' => $invoice->total_amount,
-                    'remaining_amount' => 0,
-                ]);
-            }
+            $invoice->update([
+                'paid_amount' => $newPaid,
+                'remaining_amount' => $newRemaining,
+                'status' => $newRemaining <= 0 ? 'paid' : 'partially_paid',
+            ]);
 
             return $payment->fresh()->load(['subscription.plan', 'tenant', 'invoice']);
         });

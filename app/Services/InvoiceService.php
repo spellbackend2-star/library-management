@@ -22,9 +22,9 @@ class InvoiceService
         protected PaymentRepositoryInterface $paymentRepository,
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return $this->invoiceRepository->all();
+        return $this->invoiceRepository->getAll($filters);
     }
 
     public function findById(int $id): ?Invoice

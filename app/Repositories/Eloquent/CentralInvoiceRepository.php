@@ -121,6 +121,6 @@ class CentralInvoiceRepository extends BaseRepository implements CentralInvoiceI
     protected function query()
     {
         return CentralInvoice::query()
-            ->with(['tenant', 'subscription', 'subscriptionPayment']);
+            ->with(['tenant', 'subscription.plan', 'subscriptionPayment']);
     }
 }

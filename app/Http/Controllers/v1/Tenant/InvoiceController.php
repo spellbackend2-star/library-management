@@ -19,9 +19,21 @@ class InvoiceController extends Controller
 
     public function index(Request $request)
     {
-        $invoices = $this->invoiceService->getAll();
+        $filters = $request->only([
+            'search',
+            'member_id',
+            'status',
+            'invoice_type',
+            'min_total',
+            'max_total',
+            'from_date',
+            'to_date',
+            'per_page',
+            'sort_by',
+            'sort_order',
+        ]);
 
-        return InvoiceResource::collection($invoices);
+        return $this->invoiceService->getAll($filters);
     }
 
     public function show(int $id)

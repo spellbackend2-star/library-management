@@ -64,13 +64,13 @@ class KhaltiService
      * IMPORTANT:
      * Khalti must return to BACKEND first.
      */
-        $returnUrl = route(
+        $callbackBaseUrl = rtrim((string) config('services.khalti.callback_base_url'), '/');
+        $callbackPath = route(
             'payments.khalti.verify',
-            [
-                'paymentId' => $payment->id,
-            ]
-
+            ['paymentId' => $payment->id],
+            false
         );
+        $returnUrl = $callbackBaseUrl . $callbackPath;
 
 
         $response = Http::withHeaders([

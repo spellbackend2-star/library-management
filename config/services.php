@@ -37,6 +37,7 @@ return [
     'khalti' => [
         'base_url' => env('KHALTI_BASE_URL'),
         'secret_key' => env('KHALTI_SECRET_KEY'),
+        'callback_base_url' => env('KHALTI_CALLBACK_BASE_URL', env('APP_URL')),
     ],
     'esewa' => [
         'merchant_code' => env('ESEWA_MERCHANT_CODE'),

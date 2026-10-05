@@ -319,7 +319,7 @@ Route::middleware([
 
         // Add payment to invoice
         Route::post(
-            'invoices/{invoice}/paymentss',
+            'invoices/{invoice}/payments',
             [InvoiceController::class, 'addPayment']
         );
 

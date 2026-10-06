@@ -13,7 +13,11 @@ use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
 use App\Models\Tenant;
 use App\Http\Requests\Central\CentralRegisterRequest;
-use App\Services\CentralAuthService;
+use App\Services\Central\CentralInvoiceService;
+use App\Services\Central\CentralPaymentService;
+use App\Services\Central\CentralTenantService;
+use App\Services\Central\CentralSubscriptionService;
+use App\Services\Central\CentralCouponService;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
 use Mockery;
@@ -137,7 +141,7 @@ class CentralAuthControllerTest extends TestCase
         ]);
         $payment->id = 29;
 
-        $service = Mockery::mock(CentralAuthService::class);
+        $service = Mockery::mock(CentralTenantService::class);
         $service->shouldReceive('registerTenant')->once()->with($input)->andReturn([
             'tenant' => $tenant,
             'domain' => 'radhe4.example.com',
@@ -166,9 +170,9 @@ class CentralAuthControllerTest extends TestCase
         $this->assertSame('1750.00', $payload['payment']['amount']);
     }
 
-    public function test_completed_payment_can_be_used_to_create_tenant(): void
+    public function test_partial_invoice_payment_can_be_used_to_create_tenant(): void
     {
-        $payment = new SubscriptionPayment(['status' => 'SUCCESS']);
+        $payment = new SubscriptionPayment(['status' => 'PENDING']);
         $input = [
             'owner' => 'Name',
             'company_name' => 'Company',
@@ -177,7 +181,7 @@ class CentralAuthControllerTest extends TestCase
             'subdomain' => 'newlibrary',
         ];
 
-        $service = Mockery::mock(CentralAuthService::class);
+        $service = Mockery::mock(CentralTenantService::class);
         $plan = new SubscriptionPlan([
             'name' => 'Basic1',
             'price' => '2000.00',
@@ -235,7 +239,11 @@ class CentralAuthControllerTest extends TestCase
             ]);
 
         $controller = new CentralSubscriptionPaymentController(
+            Mockery::mock(CentralInvoiceService::class),
+            Mockery::mock(CentralPaymentService::class),
             $service,
+            Mockery::mock(CentralSubscriptionService::class),
+            Mockery::mock(CentralCouponService::class),
             Mockery::mock(KhaltiService::class),
             Mockery::mock(EsewaService::class),
         );

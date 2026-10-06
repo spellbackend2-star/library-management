@@ -4,7 +4,7 @@ namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CentralInvoiceResource;
-use App\Repositories\Interface\CentralInvoiceInterface;
+use App\Services\Central\CentralInvoiceService;
 use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,7 +14,7 @@ class CentralInvoiceController extends Controller
     use ResponseMessage;
 
     public function __construct(
-        protected CentralInvoiceInterface $centralInvoiceRepository
+        protected CentralInvoiceService $centralInvoiceService
     ) {}
 
     /**
@@ -34,7 +34,7 @@ class CentralInvoiceController extends Controller
             'sort_order',
         ]);
 
-        $result = $this->centralInvoiceRepository->getAll($filters);
+        $result = $this->centralInvoiceService->getAll($filters);
 
         return $this->successResponse(
             CentralInvoiceResource::collection($result['data']),
@@ -49,7 +49,7 @@ class CentralInvoiceController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $centralInvoice = $this->centralInvoiceRepository->find($id);
+        $centralInvoice = $this->centralInvoiceService->getById($id);
 
         if (! $centralInvoice) {
             return $this->errorResponse(
@@ -69,7 +69,7 @@ class CentralInvoiceController extends Controller
      */
     public function showByNumber(string $invoiceNumber): JsonResponse
     {
-        $centralInvoice = $this->centralInvoiceRepository->findByNumber($invoiceNumber);
+        $centralInvoice = $this->centralInvoiceService->getByNumber($invoiceNumber);
 
         if (! $centralInvoice) {
             return $this->errorResponse(

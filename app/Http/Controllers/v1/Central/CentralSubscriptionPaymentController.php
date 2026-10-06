@@ -10,9 +10,14 @@ use App\Models\Coupon;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
-use App\Services\CentralAuthService;
+use App\Services\Central\CentralCouponService;
+use App\Services\Central\CentralInvoiceService;
+use App\Services\Central\CentralPaymentService;
+use App\Services\Central\CentralTenantService;
+use App\Services\Central\CentralSubscriptionService;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,8 +27,14 @@ use Throwable;
 
 class CentralSubscriptionPaymentController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
-        protected CentralAuthService $centralAuthService,
+        protected CentralInvoiceService $centralInvoiceService,
+        protected CentralPaymentService $centralPaymentService,
+        protected CentralTenantService $centralTenantService,
+        protected CentralSubscriptionService $centralSubscriptionService,
+        protected CentralCouponService $centralCouponService,
         protected KhaltiService $khaltiService,
         protected EsewaService $esewaService
     ) {}
@@ -213,87 +224,36 @@ class CentralSubscriptionPaymentController extends Controller
             ->findOrFail($data['subscription_id']);
 
         if (! $subscription->plan) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Subscription plan not found.',
-            ], 422);
+            return $this->errorResponse(
+                'Subscription plan not found.',
+                422
+            );
         }
 
         if (
             ! $subscription->plan->price ||
             (float) $subscription->plan->price <= 0
         ) {
-            return response()->json([
-                'success' => false,
-                'message' =>
+            return $this->errorResponse(
                 'Subscription plan price must be greater than 0.',
-            ], 422);
+                422
+            );
         }
 
         $pricingPlan = (float) $subscription->plan->price;
 
         // Apply coupon if provided
-        $couponDiscount = 0;
-        $couponId = null;
+        $couponData = $this->centralCouponService->calculatePaymentCoupon(
+            isset($data['coupon_id']) ? (int) $data['coupon_id'] : null,
+            $pricingPlan
+        );
 
-        if (! empty($data['coupon_id'])) {
-            $coupon = Coupon::lockForUpdate()->find($data['coupon_id']);
-
-            if (! $coupon) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The selected coupon is invalid.',
-                ], 422);
-            }
-
-            if (! $coupon->is_active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This coupon is inactive.',
-                ], 422);
-            }
-
-            if ($coupon->valid_from && now() < $coupon->valid_from) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This coupon is not yet valid.',
-                ], 422);
-            }
-
-            if ($coupon->valid_until && now() > $coupon->valid_until) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This coupon has expired.',
-                ], 422);
-            }
-
-            if ($coupon->max_uses !== null && (int) $coupon->used_count >= (int) $coupon->max_uses) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Coupon usage limit reached.',
-                ], 422);
-            }
-
-            if ($pricingPlan < (float) $coupon->min_order_value) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Minimum order value not met for this coupon.',
-                ], 422);
-            }
-
-            $couponDiscount = match (strtoupper((string) $coupon->discount_type)) {
-                'PERCENT' => round($pricingPlan * ((float) $coupon->discount_value / 100), 2),
-                'FLAT' => round((float) $coupon->discount_value, 2),
-                default => 0.0,
-            };
-
-            if ($coupon->max_discount !== null) {
-                $couponDiscount = min($couponDiscount, (float) $coupon->max_discount);
-            }
-
-            $couponDiscount = min($couponDiscount, $pricingPlan);
-            $couponId = $coupon->id;
+        if ($couponData['error'] !== null) {
+            return $this->errorResponse($couponData['error'], 422);
         }
+
+        $couponDiscount = $couponData['coupon_discount'];
+        $couponId = $couponData['coupon_id'];
 
         $totalAmount = round($pricingPlan - $couponDiscount, 2);
 
@@ -303,12 +263,12 @@ class CentralSubscriptionPaymentController extends Controller
         );
 
         if ($paymentAmount > $totalAmount) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Payment amount cannot be greater than the invoice remaining amount.',
-                'data' => [
-                    'invoice_total' => $totalAmount,
-                    'requested_amount' => $paymentAmount,
+            return $this->errorResponse(
+                'Payment amount cannot be greater than the invoice remaining amount.',
+                422
+            );
+        }
+        /*
                     'remaining_amount' => $totalAmount,
                 ],
                 'errors' => [
@@ -321,7 +281,7 @@ class CentralSubscriptionPaymentController extends Controller
         /*
          * Create invoice.
          */
-        $invoice = CentralInvoice::create([
+        $invoice = $this->centralInvoiceService->create([
             'tenant_id' => $subscription->tenant_id,
             'subscription_id' => $subscription->id,
             'invoice_number' =>
@@ -360,7 +320,7 @@ class CentralSubscriptionPaymentController extends Controller
 
         // Increment coupon usage count if coupon was applied
         if ($couponId) {
-            Coupon::where('id', $couponId)->increment('used_count');
+            $this->centralCouponService->recordUsage($couponId);
         }
 
         /*
@@ -369,7 +329,7 @@ class CentralSubscriptionPaymentController extends Controller
         if (
             strtoupper($data['payment_method']) === 'CASH'
         ) {
-            $payment = $this->centralAuthService
+            $payment = $this->centralPaymentService
                 ->completeCentralCashPayment($payment);
 
             if ($returnUrl) {
@@ -380,18 +340,15 @@ class CentralSubscriptionPaymentController extends Controller
                 );
             }
 
-            return response()->json([
-                'success' => true,
-                'message' =>
-                'Cash payment completed successfully.',
-                'data' => $payment
-                    ->fresh()
-                    ->load([
-                        'subscription.plan',
-                        'tenant',
-                        'invoice',
-                    ]),
-            ], 201);
+            return $this->successResponse(
+                $payment->fresh()->load([
+                    'subscription.plan',
+                    'tenant',
+                    'invoice',
+                ]),
+                'Cash payment completed successfully.'
+            );
+            , 201);
         }
 
         /*
@@ -575,67 +532,20 @@ class CentralSubscriptionPaymentController extends Controller
         $pricingPlan = (float) $plan->price;
 
         // Apply coupon if provided
-        $couponDiscount = 0;
-        $couponId = null;
+        $couponData = $this->centralCouponService->calculatePaymentCoupon(
+            isset($data['coupon_id']) ? (int) $data['coupon_id'] : null,
+            $pricingPlan
+        );
 
-        if (! empty($data['coupon_id'])) {
-            $coupon = Coupon::lockForUpdate()->find($data['coupon_id']);
-
-            if (! $coupon) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'The selected coupon is invalid.',
-                ], 422);
-            }
-
-            if (! $coupon->is_active) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This coupon is inactive.',
-                ], 422);
-            }
-
-            if ($coupon->valid_from && now() < $coupon->valid_from) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This coupon is not yet valid.',
-                ], 422);
-            }
-
-            if ($coupon->valid_until && now() > $coupon->valid_until) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This coupon has expired.',
-                ], 422);
-            }
-
-            if ($coupon->max_uses !== null && (int) $coupon->used_count >= (int) $coupon->max_uses) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Coupon usage limit reached.',
-                ], 422);
-            }
-
-            if ($pricingPlan < (float) $coupon->min_order_value) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Minimum order value not met for this coupon.',
-                ], 422);
-            }
-
-            $couponDiscount = match (strtoupper((string) $coupon->discount_type)) {
-                'PERCENT' => round($pricingPlan * ((float) $coupon->discount_value / 100), 2),
-                'FLAT' => round((float) $coupon->discount_value, 2),
-                default => 0.0,
-            };
-
-            if ($coupon->max_discount !== null) {
-                $couponDiscount = min($couponDiscount, (float) $coupon->max_discount);
-            }
-
-            $couponDiscount = min($couponDiscount, $pricingPlan);
-            $couponId = $coupon->id;
+        if ($couponData['error'] !== null) {
+            return response()->json([
+                'success' => false,
+                'message' => $couponData['error'],
+            ], 422);
         }
+
+        $couponDiscount = $couponData['coupon_discount'];
+        $couponId = $couponData['coupon_id'];
 
         $totalAmount = round($pricingPlan - $couponDiscount, 2);
 
@@ -656,19 +566,12 @@ class CentralSubscriptionPaymentController extends Controller
         /*
          * Create subscription.
          */
-        $subscription = Subscription::create([
-            'tenant_id' => null,
-            'subscription_plan_id' => $plan->id,
-            'amount' => (float) $plan->price,
-            'starts_at' => null,
-            'expires_at' => null,
-            'status' => 'pending',
-        ]);
+        $subscription = $this->centralSubscriptionService->createPendingSubscription(null, $plan);
 
         /*
          * Create invoice.
          */
-        $invoice = CentralInvoice::create([
+        $invoice = $this->centralInvoiceService->create([
             'tenant_id' => null,
             'subscription_id' => $subscription->id,
             'invoice_number' =>
@@ -707,7 +610,7 @@ class CentralSubscriptionPaymentController extends Controller
 
         // Increment coupon usage count if coupon was applied
         if ($couponId) {
-            Coupon::where('id', $couponId)->increment('used_count');
+            $this->centralCouponService->recordUsage($couponId);
         }
 
         /*
@@ -860,18 +763,23 @@ class CentralSubscriptionPaymentController extends Controller
             ],
         ]);
 
-        if (! in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
+        $hasSuccessfulPayment = in_array(
+            $payment->status,
+            ['SUCCESS', 'COMPLETED'],
+            true
+        );
+        $hasPartialInvoicePayment = (float) $payment->invoice?->paid_amount > 0;
+
+        if (! $hasSuccessfulPayment && ! $hasPartialInvoicePayment) {
             return response()->json([
                 'success' => false,
                 'message' =>
-                'Payment must be successfully completed before creating a tenant.',
+                'A successful payment or partial invoice payment is required before creating a tenant.',
             ], 422);
         }
 
-        $invoice = $payment->invoice;
-
         $result =
-            $this->centralAuthService
+            $this->centralTenantService
             ->completePaymentAndCreateTenant(
                 $payment,
                 $data
@@ -978,10 +886,10 @@ class CentralSubscriptionPaymentController extends Controller
                 );
 
                 /*
-                 * Apply this payment to the invoice. The subscription is
-                 * activated only when the full invoice balance is paid.
+                 * Apply this installment to the invoice and activate the
+                 * subscription after any successful payment.
                  */
-                $this->centralAuthService
+                $this->centralPaymentService
                     ->completeCentralCashPayment(
                         $payment
                     );
@@ -1194,7 +1102,7 @@ class CentralSubscriptionPaymentController extends Controller
                 /*
                  * Complete payment.
                  */
-                $this->centralAuthService
+                $this->centralPaymentService
                     ->completeCentralCashPayment(
                         $payment
                     );
@@ -1314,7 +1222,7 @@ class CentralSubscriptionPaymentController extends Controller
             ], 422);
         }
 
-        $this->centralAuthService
+        $this->centralPaymentService
             ->completeCentralCashPayment(
                 $payment
             );
@@ -1442,7 +1350,7 @@ class CentralSubscriptionPaymentController extends Controller
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => $data['payment_method'].' initiation failed: '.$e->getMessage(),
+                'message' => $data['payment_method'] . ' initiation failed: ' . $e->getMessage(),
             ], 500);
         }
 
@@ -1454,7 +1362,7 @@ class CentralSubscriptionPaymentController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => $data['payment_method'].' payment initiated for the invoice balance.',
+            'message' => $data['payment_method'] . ' payment initiated for the invoice balance.',
             'data' => $this->buildPaymentSummary($payment, $gateway, $returnUrl),
         ], 201);
     }
@@ -1588,7 +1496,7 @@ class CentralSubscriptionPaymentController extends Controller
          * CASH.
          */
         if ($method === 'CASH') {
-            $payment = $this->centralAuthService
+            $payment = $this->centralPaymentService
                 ->completeCentralCashPayment(
                     $payment
                 );
@@ -1603,8 +1511,9 @@ class CentralSubscriptionPaymentController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' =>
-                'Cash payment recorded. Subscription activated and tenant is now active.',
+                'message' => $payment->tenant?->status === 'active'
+                    ? 'Cash payment recorded. Subscription activated and tenant is now active.'
+                    : 'Cash payment recorded. Tenant registration is pending central admin review.',
                 'data' =>
                 $this->buildPaymentSummary(
                     $payment->fresh([
@@ -1759,28 +1668,28 @@ class CentralSubscriptionPaymentController extends Controller
 
             'payments' => $payment->invoice
                 ? $payment->invoice->payments()
-                    ->orderBy('id')
-                    ->get([
-                        'id',
-                        'invoice_id',
-                        'subscription_id',
-                        'amount',
-                        'payment_method',
-                        'status',
-                        'transaction_id',
-                        'paid_at',
-                    ])
-                    ->map(fn (SubscriptionPayment $invoicePayment): array => [
-                        'id' => $invoicePayment->id,
-                        'invoice_id' => $invoicePayment->invoice_id,
-                        'subscription_id' => $invoicePayment->subscription_id,
-                        'amount' => $invoicePayment->amount,
-                        'payment_method' => $invoicePayment->payment_method,
-                        'status' => $invoicePayment->status,
-                        'transaction_id' => $invoicePayment->transaction_id,
-                        'paid_at' => $invoicePayment->paid_at,
-                    ])
-                    ->all()
+                ->orderBy('id')
+                ->get([
+                    'id',
+                    'invoice_id',
+                    'subscription_id',
+                    'amount',
+                    'payment_method',
+                    'status',
+                    'transaction_id',
+                    'paid_at',
+                ])
+                ->map(fn(SubscriptionPayment $invoicePayment): array => [
+                    'id' => $invoicePayment->id,
+                    'invoice_id' => $invoicePayment->invoice_id,
+                    'subscription_id' => $invoicePayment->subscription_id,
+                    'amount' => $invoicePayment->amount,
+                    'payment_method' => $invoicePayment->payment_method,
+                    'status' => $invoicePayment->status,
+                    'transaction_id' => $invoicePayment->transaction_id,
+                    'paid_at' => $invoicePayment->paid_at,
+                ])
+                ->all()
                 : [],
 
             'subscription' =>

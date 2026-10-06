@@ -5,16 +5,19 @@ namespace App\Http\Controllers\v1\Central;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Central\UpdateCentralSettingGroupRequest;
 use App\Services\CentralSettingService;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 
 class CentralSettingController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
         protected CentralSettingService $centralSettingService
     ) {}
 
     /**
-     * Get every central settings group at once.
+     * Get all central settings groups.
      */
     public function index(): JsonResponse
     {
@@ -24,30 +27,27 @@ class CentralSettingController extends Controller
             $data[$group] = $this->centralSettingService->getGroup($group);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Central settings retrieved successfully.',
-            'data' => $data,
-        ]);
+        return $this->successResponse(
+            $data,
+            'Central settings retrieved successfully.'
+        );
     }
 
     /**
-     * Get a central settings group. Supported groups are general,
-     * website, payment, smtp, sms and notification.
+     * Get a central settings group.
      */
     public function show(string $group): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'message' => ucfirst($group).' settings retrieved successfully.',
-            'group' => $group,
-            'data' => $this->centralSettingService->getGroup($group),
-        ]);
+        return $this->successResponse(
+            $this->centralSettingService->getGroup($group),
+            ucfirst($group) . ' settings retrieved successfully.',
+            200,
+            ['group' => $group]
+        );
     }
 
     /**
-     * Update a central settings group. Only the keys sent in the
-     * request body are written, the rest keep their current value.
+     * Update a central settings group.
      */
     public function update(UpdateCentralSettingGroupRequest $request): JsonResponse
     {
@@ -58,41 +58,42 @@ class CentralSettingController extends Controller
             $request->validated()
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => ucfirst($group).' settings updated successfully.',
-            'group' => $group,
-            'data' => $settings,
-        ]);
+        return $this->successResponse(
+            $settings,
+            ucfirst($group) . ' settings updated successfully.',
+            200,
+            ['group' => $group]
+        );
     }
 
     /**
-     * Get the central general settings.
+     * Get central general settings.
      */
     public function general(): JsonResponse
     {
-        return response()->json([
-            'success' => true,
-            'message' => 'Central general settings retrieved successfully.',
-            'group' => CentralSettingService::GENERAL_GROUP,
-            'data' => $this->centralSettingService->general(),
-        ]);
+        return $this->successResponse(
+            $this->centralSettingService->general(),
+            'Central general settings retrieved successfully.',
+            200,
+            ['group' => CentralSettingService::GENERAL_GROUP]
+        );
     }
 
     /**
-     * Update the central general settings.
+     * Update central general settings.
      */
-    public function updateGeneral(UpdateCentralSettingGroupRequest $request): JsonResponse
-    {
+    public function updateGeneral(
+        UpdateCentralSettingGroupRequest $request
+    ): JsonResponse {
         $settings = $this->centralSettingService->updateGeneral(
             $request->validated()
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Central general settings updated successfully.',
-            'group' => CentralSettingService::GENERAL_GROUP,
-            'data' => $settings,
-        ]);
+        return $this->successResponse(
+            $settings,
+            'Central general settings updated successfully.',
+            200,
+            ['group' => CentralSettingService::GENERAL_GROUP]
+        );
     }
 }

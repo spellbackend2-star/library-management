@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Services;
+namespace App\Services\Central;
 
 use App\Models\CentralInvoice;
+use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Repositories\Interface\CentralInvoiceInterface;
 use InvalidArgumentException;
@@ -73,6 +74,41 @@ class CentralInvoiceService
                 ? 'Invoice for plan: '.$planName
                 : null),
         ]);
+    }
+
+    public function createSubscriptionInvoice(
+        Subscription $subscription,
+        string $tenantId,
+        float $amount,
+        ?int $couponId = null,
+        float $couponDiscount = 0
+    ): CentralInvoice {
+        $totalAmount = round($amount - $couponDiscount, 2);
+
+        return $this->create([
+            'tenant_id' => $tenantId,
+            'subscription_id' => $subscription->id,
+            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
+            'invoice_type' => 'subscription',
+            'subtotal' => $amount,
+            'tax' => 0,
+            'discount' => 0,
+            'coupon_id' => $couponId,
+            'coupon_discount' => $couponDiscount,
+            'total_amount' => $totalAmount,
+            'paid_amount' => 0,
+            'remaining_amount' => $totalAmount,
+            'currency' => 'NPR',
+            'currency_symbol' => 'Rs.',
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+            'notes' => null,
+        ]);
+    }
+
+    public function create(array $data): CentralInvoice
+    {
+        return CentralInvoice::create($data);
     }
 
     public function update(int $id, array $data): CentralInvoice

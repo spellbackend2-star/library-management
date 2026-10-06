@@ -15,19 +15,13 @@ class CentralDashboardController extends Controller
 
     public function index(): JsonResponse
     {
-        $tenantStats = $this->getTenantStats();
-        $subscriptionStats = $this->getSubscriptionStats();
-        $paymentStats = $this->getPaymentStats();
-        $recentTenants = $this->getRecentTenants();
-        $recentPayments = $this->getRecentPayments();
-
         return $this->successResponse(
             [
-                'tenants' => $tenantStats,
-                'subscriptions' => $subscriptionStats,
-                'payments' => $paymentStats,
-                'recent_tenants' => $recentTenants,
-                'recent_payments' => $recentPayments,
+                'tenants' => $this->getTenantStats(),
+                'subscriptions' => $this->getSubscriptionStats(),
+                'payments' => $this->getPaymentStats(),
+                'recent_tenants' => $this->getRecentTenants(),
+                'recent_payments' => $this->getRecentPayments(),
             ],
             'Dashboard data retrieved successfully.'
         );
@@ -38,7 +32,9 @@ class CentralDashboardController extends Controller
         $total = Tenant::count();
         $active = Tenant::where('status', 'active')->count();
         $inactive = Tenant::where('status', 'inactive')->count();
-        $totalUsers = Tenant::whereNotNull('owner_email')->where('owner_email', '!=', '')->count();
+        $totalUsers = Tenant::whereNotNull('owner_email')
+            ->where('owner_email', '!=', '')
+            ->count();
 
         return [
             'total' => $total,
@@ -122,11 +118,13 @@ class CentralDashboardController extends Controller
                     'transaction_id' => $payment->transaction_id,
                     'paid_at' => $payment->paid_at?->format('Y-m-d H:i:s'),
                     'created_at' => $payment->created_at?->format('Y-m-d H:i:s'),
+
                     'subscription' => $payment->subscription ? [
                         'id' => $payment->subscription->id,
                         'plan_name' => $payment->subscription->plan?->name,
                         'status' => $payment->subscription->status,
                     ] : null,
+
                     'tenant' => $payment->tenant ? [
                         'id' => $payment->tenant->id,
                         'company_name' => $payment->tenant->company_name,

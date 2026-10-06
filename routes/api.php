@@ -36,6 +36,13 @@ Route::prefix('central')->group(function () {
     // Public "how to pay" status polling after the gateway redirect
     Route::get('/subscription-payments/{payment}/status', [CentralSubscriptionPaymentController::class, 'paymentStatus'])->name('central.subscription-payments.status');
 
+    // Public plan checkout and post-payment tenant registration.
+    Route::post('/subscription-payments/initiate-from-plan', [CentralSubscriptionPaymentController::class, 'initiateFromPlan']);
+    Route::post('/subscription-payments/pay', [CentralSubscriptionPaymentController::class, 'payInvoice'])
+        ->name('central.subscription-payments.pay-invoice');
+    Route::post('/subscription-payments/{payment}/complete-and-create-tenant', [CentralSubscriptionPaymentController::class, 'completeAndCreateTenant'])
+        ->name('central.subscription-payments.complete-and-create-tenant');
+
     Route::middleware('auth:api')->group(function () {
         Route::post('/tenants', [CentralRegistrationController::class, 'register']);
         Route::get('/me', [CentralProfileController::class, 'me']);
@@ -66,9 +73,8 @@ Route::prefix('central')->group(function () {
 
         Route::get('/subscription-payments', [CentralSubscriptionPaymentController::class, 'index']);
         Route::post('/subscription-payments', [CentralSubscriptionPaymentController::class, 'store']);
-        Route::post('/subscription-payments/initiate-from-plan', [CentralSubscriptionPaymentController::class, 'initiateFromPlan']);
         Route::get('/subscription-payments/{payment}', [CentralSubscriptionPaymentController::class, 'show']);
-        Route::post('/subscription-payments/{payment}/complete-and-create-tenant', [CentralSubscriptionPaymentController::class, 'completeAndCreateTenant']);
+        Route::post('/subscription-payments/{payment}/complete', [CentralSubscriptionPaymentController::class, 'complete']);
         Route::patch('/subscription-payments/{payment}/fail', [CentralSubscriptionPaymentController::class, 'fail']);
         Route::post('/subscription-payments/{payment}/pay', [CentralSubscriptionPaymentController::class, 'pay'])->name('central.subscription-payments.pay');
 
@@ -77,6 +83,7 @@ Route::prefix('central')->group(function () {
         Route::get('/tenants/{tenant}', [CentralTenantController::class, 'show']);
         Route::put('/tenants/{tenant}', [CentralTenantController::class, 'update']);
         Route::patch('/tenants/{tenant}/status', [CentralTenantController::class, 'updateStatus']);
+        Route::patch('/tenants/{tenant}/review', [CentralTenantController::class, 'review']);
 
         // Central Coupons
         Route::apiResource('/coupons', CentralCouponController::class)

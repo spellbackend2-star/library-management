@@ -773,27 +773,16 @@ class CentralSubscriptionPaymentController extends Controller
         }
 
         /*
-         * CASH.
+         * CASH requires central admin confirmation before registration.
          */
         if (
             strtoupper($data['payment_method']) === 'CASH'
         ) {
-            $payment = $this->centralAuthService
-                ->completeCentralCashPayment($payment);
-
-            if ($returnUrl) {
-                return $this->redirectPaymentFrontend(
-                    $payment,
-                    $returnUrl,
-                    'Payment completed successfully.'
-                );
-            }
-
             return $this->planPaymentInitiationResponse(
                 $subscription->fresh()->load('plan'),
                 $invoice->fresh(),
                 $payment,
-                'Cash payment completed successfully.'
+                'Cash payment is awaiting central admin confirmation.'
             );
         }
 
@@ -871,13 +860,15 @@ class CentralSubscriptionPaymentController extends Controller
             ],
         ]);
 
-        if (! in_array($payment->status, ['PENDING', 'SUCCESS', 'COMPLETED'], true)) {
+        if (! in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
             return response()->json([
                 'success' => false,
                 'message' =>
-                'Payment must be pending or successfully completed before creating a tenant.',
+                'Payment must be successfully completed before creating a tenant.',
             ], 422);
         }
+
+        $invoice = $payment->invoice;
 
         $result =
             $this->centralAuthService
@@ -889,7 +880,7 @@ class CentralSubscriptionPaymentController extends Controller
         return response()->json([
             'success' => true,
             'message' =>
-            'Payment completed and tenant activated successfully.',
+            'Payment verified and tenant registered successfully. The tenant is pending admin review.',
             'data' => (new CentralPaymentTenantCompletionResource($result))
                 ->resolve($request),
         ], 201);
@@ -987,12 +978,8 @@ class CentralSubscriptionPaymentController extends Controller
                 );
 
                 /*
-                 * Complete payment.
-                 *
-                 * Payment -> SUCCESS
-                 * Invoice -> PAID
-                 * Subscription -> ACTIVE
-                 * Tenant -> ACTIVE
+                 * Apply this payment to the invoice. The subscription is
+                 * activated only when the full invoice balance is paid.
                  */
                 $this->centralAuthService
                     ->completeCentralCashPayment(
@@ -1313,6 +1300,20 @@ class CentralSubscriptionPaymentController extends Controller
     public function complete(
         SubscriptionPayment $payment
     ): JsonResponse {
+        if ($payment->payment_method !== 'CASH') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only cash payments can be confirmed by an admin.',
+            ], 422);
+        }
+
+        if ($payment->status !== 'PENDING') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only pending cash payments can be confirmed.',
+            ], 422);
+        }
+
         $this->centralAuthService
             ->completeCentralCashPayment(
                 $payment
@@ -1330,6 +1331,132 @@ class CentralSubscriptionPaymentController extends Controller
                     'invoice',
                 ]),
         ]);
+    }
+
+    /**
+     * Initiate an additional payment against a central invoice balance.
+     */
+    public function payInvoice(Request $request): JsonResponse
+    {
+        $this->normalizePaymentMethod($request);
+
+        $data = $request->validate([
+            'invoice_id' => [
+                'required',
+                'integer',
+                'exists:invoices,id',
+            ],
+            'amount' => [
+                'required',
+                'numeric',
+                'gt:0',
+            ],
+            'payment_method' => [
+                'required',
+                'string',
+                'in:KHALTI,ESEWA',
+            ],
+            'return_url' => [
+                'nullable',
+                'url',
+            ],
+        ]);
+
+        $invoice = CentralInvoice::query()
+            ->with(['subscription.plan', 'tenant.domains'])
+            ->findOrFail($data['invoice_id']);
+
+        $subscription = $invoice->subscription;
+        if (! $subscription || ! $subscription->plan) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Subscription plan not found for this invoice.',
+            ], 422);
+        }
+
+        $remainingAmount = max(
+            0,
+            round((float) $invoice->total_amount - (float) $invoice->paid_amount, 2)
+        );
+
+        if ($remainingAmount <= 0 || $invoice->status === 'paid') {
+            $completedPayment = $invoice->payments()
+                ->whereIn('status', ['SUCCESS', 'COMPLETED'])
+                ->latest('id')
+                ->first();
+
+            if ($completedPayment) {
+                $completedPayment->load([
+                    'subscription.plan',
+                    'tenant.domains',
+                    'invoice',
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Invoice is already fully paid.',
+                    'data' => $this->buildPaymentSummary($completedPayment),
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Invoice has no remaining balance, but no completed payment record was found.',
+            ], 422);
+        }
+
+        $requestedAmount = round((float) $data['amount'], 2);
+        if ($requestedAmount > $remainingAmount) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment amount cannot be greater than the invoice remaining amount.',
+                'errors' => [
+                    'amount' => [
+                        "The payment amount cannot exceed the remaining balance of {$remainingAmount}.",
+                    ],
+                ],
+            ], 422);
+        }
+
+        $payment = SubscriptionPayment::create([
+            'subscription_id' => $subscription->id,
+            'invoice_id' => $invoice->id,
+            'tenant_id' => $invoice->tenant_id,
+            'amount' => $requestedAmount,
+            'payment_method' => $data['payment_method'],
+            'status' => 'PENDING',
+        ]);
+
+        $payment->load([
+            'subscription.plan',
+            'tenant.domains',
+            'invoice',
+        ]);
+
+        $returnUrl = $data['return_url'] ?? null;
+
+        try {
+            $gateway = $data['payment_method'] === 'KHALTI'
+                ? $this->khaltiService->initiateSubscription($payment, $returnUrl)
+                : $this->esewaService->initiateSubscription($payment, $returnUrl);
+        } catch (Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $data['payment_method'].' initiation failed: '.$e->getMessage(),
+            ], 500);
+        }
+
+        $payment->refresh()->load([
+            'subscription.plan',
+            'tenant.domains',
+            'invoice',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => $data['payment_method'].' payment initiated for the invoice balance.',
+            'data' => $this->buildPaymentSummary($payment, $gateway, $returnUrl),
+        ], 201);
     }
 
     /**
@@ -1630,6 +1757,32 @@ class CentralSubscriptionPaymentController extends Controller
                 ]
                 : null,
 
+            'payments' => $payment->invoice
+                ? $payment->invoice->payments()
+                    ->orderBy('id')
+                    ->get([
+                        'id',
+                        'invoice_id',
+                        'subscription_id',
+                        'amount',
+                        'payment_method',
+                        'status',
+                        'transaction_id',
+                        'paid_at',
+                    ])
+                    ->map(fn (SubscriptionPayment $invoicePayment): array => [
+                        'id' => $invoicePayment->id,
+                        'invoice_id' => $invoicePayment->invoice_id,
+                        'subscription_id' => $invoicePayment->subscription_id,
+                        'amount' => $invoicePayment->amount,
+                        'payment_method' => $invoicePayment->payment_method,
+                        'status' => $invoicePayment->status,
+                        'transaction_id' => $invoicePayment->transaction_id,
+                        'paid_at' => $invoicePayment->paid_at,
+                    ])
+                    ->all()
+                : [],
+
             'subscription' =>
             $payment->subscription
                 ? [
@@ -1736,26 +1889,39 @@ class CentralSubscriptionPaymentController extends Controller
                 );
             }
         } else {
-            $summary['next_step'] =
-                'Complete the pending payment to activate the tenant.';
+            $remainingAmount = (float) $payment->invoice?->remaining_amount;
+            $summary['next_step'] = $remainingAmount > 0
+                ? 'Pay the remaining invoice balance to complete the subscription payment.'
+                : ($tenant?->status === 'pending'
+                    ? 'Invoice paid. Tenant registration is pending central admin review.'
+                    : 'Invoice paid. Complete tenant registration using this payment.');
 
-            $summary['pay'] = [
-                'method' => 'POST',
-
-                'url' => route(
-                    'central.subscription-payments.pay',
-                    [
-                        'payment' =>
-                        $payment->id,
+            if ($remainingAmount > 0) {
+                $summary['pay'] = $payment->tenant_id !== null
+                    ? [
+                        'method' => 'POST',
+                        'url' => route(
+                            'central.subscription-payments.pay',
+                            ['payment' => $payment->id]
+                        ),
+                        'allowed_payment_methods' => ['CASH', 'KHALTI', 'ESEWA'],
                     ]
-                ),
-
-                'allowed_payment_methods' => [
-                    'CASH',
-                    'KHALTI',
-                    'ESEWA',
-                ],
-            ];
+                    : [
+                        'method' => 'POST',
+                        'url' => route('central.subscription-payments.pay-invoice'),
+                        'invoice_id' => $payment->invoice?->id,
+                        'amount' => $payment->invoice?->remaining_amount,
+                        'allowed_payment_methods' => ['KHALTI', 'ESEWA'],
+                    ];
+            } elseif (! $tenant) {
+                $summary['tenant_registration'] = [
+                    'method' => 'POST',
+                    'url' => route(
+                        'central.subscription-payments.complete-and-create-tenant',
+                        ['payment' => $payment->id]
+                    ),
+                ];
+            }
 
             $summary['status_url'] = route(
                 'central.subscription-payments.status',

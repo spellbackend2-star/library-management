@@ -84,10 +84,10 @@ Route::middleware([
         Route::apiResource('members', MemberController::class);
 
         // Staff owner setup
-        Route::patch(
-            'staff/setup-owner',
-            [StaffController::class, 'setupOwner']
-        );
+        // Route::patch(
+        //     'staff/setup-owner',
+        //     [StaffController::class, 'setupOwner']
+        // );
 
         // Staff CRUD
         Route::apiResource('staff', StaffController::class)

@@ -94,7 +94,7 @@ class CentralInvoice extends Model
 
     public function payments(): HasMany
     {
-        return $this->hasMany(SubscriptionPayment::class);
+        return $this->hasMany(SubscriptionPayment::class, 'invoice_id');
     }
 
     /**

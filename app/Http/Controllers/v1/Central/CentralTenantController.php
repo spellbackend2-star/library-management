@@ -10,6 +10,8 @@ use App\Models\Tenant;
 use App\Repositories\Eloquent\CentralInvoiceRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CentralTenantController extends Controller
 {
@@ -221,6 +223,13 @@ class CentralTenantController extends Controller
             'status' => ['required', 'in:active,inactive,suspended'],
         ]);
 
+        if ($tenant->status === 'pending') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Review this tenant using the tenant review endpoint.',
+            ], 422);
+        }
+
         $tenant->update([
             'status' => $data['status'],
             'suspension_reason' => $data['status'] === 'suspended'
@@ -237,6 +246,51 @@ class CentralTenantController extends Controller
                 'tenant_code' => $tenant->tenant_code,
                 'status' => $tenant->status,
                 'suspension_reason' => $tenant->suspension_reason,
+            ],
+        ]);
+    }
+
+    /**
+     * Approve or reject a tenant waiting for central admin review.
+     */
+    public function review(Request $request, Tenant $tenant): JsonResponse
+    {
+        $data = $request->validate([
+            'decision' => ['required', 'in:approve,reject'],
+        ]);
+
+        $tenant = DB::transaction(function () use ($tenant, $data): Tenant {
+            $tenant = Tenant::query()
+                ->lockForUpdate()
+                ->findOrFail($tenant->id);
+
+            if ($tenant->status !== 'pending') {
+                throw ValidationException::withMessages([
+                    'tenant' => ['Only tenants with pending status can be reviewed.'],
+                ]);
+            }
+
+            $tenant->update([
+                'status' => $data['decision'] === 'approve'
+                    ? 'active'
+                    : 'rejected',
+                'suspension_reason' => null,
+            ]);
+
+            return $tenant;
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => $data['decision'] === 'approve'
+                ? 'Tenant approved and activated successfully.'
+                : 'Tenant rejected successfully.',
+            'data' => [
+                'id' => $tenant->id,
+                'company_name' => $tenant->company_name,
+                'tenant_code' => $tenant->tenant_code,
+                'status' => $tenant->status,
+                'domain' => $tenant->domains()->first()?->domain,
             ],
         ]);
     }

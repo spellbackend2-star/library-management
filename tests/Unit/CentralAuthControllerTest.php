@@ -197,13 +197,13 @@ class CentralAuthControllerTest extends TestCase
 
         $invoice = new CentralInvoice([
             'invoice_number' => 'INV-2026-60',
-            'subtotal' => '2000.00',
+            'subtotal' => '5000.00',
             'coupon_id' => 5,
-            'coupon_discount' => '100.00',
-            'total_amount' => '1900.00',
-            'paid_amount' => '1900.00',
-            'remaining_amount' => '0.00',
-            'status' => 'paid',
+            'coupon_discount' => '500.00',
+            'total_amount' => '4500.00',
+            'paid_amount' => '4000.00',
+            'remaining_amount' => '500.00',
+            'status' => 'partially_paid',
         ]);
         $invoice->id = 60;
 
@@ -213,14 +213,15 @@ class CentralAuthControllerTest extends TestCase
             'tenant_code' => 'radhe1',
             'owner_name' => 'radhe',
             'owner_email' => 'owner@example.com',
-            'status' => 'active',
+            'status' => 'pending',
         ]);
 
         $payment->id = 64;
-        $payment->amount = '1900.00';
+        $payment->amount = '4000.00';
         $payment->payment_method = 'KHALTI';
         $payment->transaction_id = 'AgidLxrprTyXEAJHWiJP66';
         $payment->paid_at = '2026-10-04T10:49:34.000000Z';
+        $payment->setRelation('invoice', $invoice);
 
         $service->shouldReceive('completePaymentAndCreateTenant')
             ->once()
@@ -254,7 +255,7 @@ class CentralAuthControllerTest extends TestCase
         $this->assertSame(201, $response->getStatusCode());
         $this->assertTrue($payload['success']);
         $this->assertSame(
-            'Payment completed and tenant activated successfully.',
+            'Payment verified and tenant registered successfully. The tenant is pending admin review.',
             $payload['message']
         );
         $this->assertSame([
@@ -265,8 +266,12 @@ class CentralAuthControllerTest extends TestCase
             'subscription',
         ], array_keys($payload['data']));
         $this->assertSame(5, $payload['data']['invoice']['coupon_id']);
-        $this->assertSame('100.00', $payload['data']['invoice']['coupon_discount']);
-        $this->assertSame('1900.00', $payload['data']['payment']['amount']);
+        $this->assertSame('500.00', $payload['data']['invoice']['coupon_discount']);
+        $this->assertSame('4000.00', $payload['data']['payment']['amount']);
+        $this->assertSame('4000.00', $payload['data']['invoice']['paid_amount']);
+        $this->assertSame('500.00', $payload['data']['invoice']['remaining_amount']);
+        $this->assertSame('partially_paid', $payload['data']['invoice']['status']);
+        $this->assertSame('pending', $payload['data']['tenant']['status']);
         $this->assertSame('radhe1.example.com', $payload['data']['domain']);
         $this->assertSame('active', $payload['data']['subscription']['status']);
     }

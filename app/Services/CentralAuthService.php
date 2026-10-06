@@ -460,11 +460,11 @@ class CentralAuthService
         SubscriptionPayment $payment,
         array $data
     ): array {
-        $payment->loadMissing(['subscription.plan', 'invoice']);
+        $payment->load(['subscription.plan', 'invoice']);
 
-        if (! in_array($payment->status, ['PENDING', 'SUCCESS', 'COMPLETED'], true)) {
+        if (! in_array($payment->status, ['SUCCESS', 'COMPLETED'], true)) {
             throw new \RuntimeException(
-                'Payment must be pending or successfully completed before creating a tenant.'
+                'Payment must be successfully completed before creating a tenant.'
             );
         }
 
@@ -489,7 +489,7 @@ class CentralAuthService
             'tenant_code' => $data['subdomain'],
             'owner_email' => $data['email'],
             'owner_name' => $data['owner'],
-            'status' => 'inactive',
+            'status' => 'pending',
         ]);
 
         $domain = $tenant->domains()->create([
@@ -540,42 +540,27 @@ class CentralAuthService
             );
         }
 
-        if ($payment->status === 'PENDING') {
-            $payment = $this->completeCentralCashPayment($payment);
-        } else {
-            $tenant->update([
+        if ($subscription->status !== 'active') {
+            $startDate = now();
+            $expiresAt = match (strtolower($subscription->plan->duration_unit ?? 'month')) {
+                'day' => $startDate->copy()->addDays((int) $subscription->plan->duration),
+                'month' => $startDate->copy()->addMonths((int) $subscription->plan->duration),
+                'year' => $startDate->copy()->addYears((int) $subscription->plan->duration),
+                default => $startDate->copy()->addMonths((int) $subscription->plan->duration),
+            };
+
+            $subscription->update([
                 'status' => 'active',
-                'suspension_reason' => null,
-            ]);
-
-            if ($subscription->status !== 'active') {
-                $startDate = now();
-                $expiresAt = match (strtolower($subscription->plan->duration_unit ?? 'month')) {
-                    'day' => $startDate->copy()->addDays((int) $subscription->plan->duration),
-                    'month' => $startDate->copy()->addMonths((int) $subscription->plan->duration),
-                    'year' => $startDate->copy()->addYears((int) $subscription->plan->duration),
-                    default => $startDate->copy()->addMonths((int) $subscription->plan->duration),
-                };
-
-                $subscription->update([
-                    'status' => 'active',
-                    'starts_at' => $startDate->toDateString(),
-                    'expires_at' => $expiresAt->toDateString(),
-                ]);
-            }
-
-            $payment->invoice?->update([
-                'status' => 'paid',
-                'paid_amount' => $payment->invoice->total_amount,
-                'remaining_amount' => 0,
-            ]);
-
-            $payment = $payment->fresh()->load([
-                'subscription.plan',
-                'tenant',
-                'invoice',
+                'starts_at' => $startDate->toDateString(),
+                'expires_at' => $expiresAt->toDateString(),
             ]);
         }
+
+        $payment = $payment->fresh()->load([
+            'subscription.plan',
+            'tenant',
+            'invoice',
+        ]);
 
         return [
             'tenant' => $tenant->fresh(),
@@ -652,7 +637,7 @@ class CentralAuthService
                 'paid_at' => now(),
             ]);
 
-            if ($subscription->status !== 'active') {
+            if ($newRemaining <= 0 && $subscription->status !== 'active') {
                 $startDate = now();
                 $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
                     'day' => $startDate->copy()->addDays((int) $plan->duration),
@@ -667,13 +652,19 @@ class CentralAuthService
                 ]);
             }
 
-            $subscription->update([
-                'status' => 'active',
-            ]);
+            if ($newRemaining <= 0) {
+                $subscription->update([
+                    'status' => 'active',
+                ]);
+            }
 
             $tenant = $payment->tenant()->first() ?? $subscription->tenant()->first();
 
-            if ($tenant) {
+            if (
+                $newRemaining <= 0
+                && $tenant
+                && ! in_array($tenant->status, ['pending', 'rejected'], true)
+            ) {
                 $tenant->update([
                     'status' => 'active',
                     'suspension_reason' => null,

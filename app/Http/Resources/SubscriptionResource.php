@@ -22,6 +22,7 @@ class SubscriptionResource extends JsonResource
                     'company_name' => $this->tenant->company_name,
                     'tenant_code' => $this->tenant->tenant_code,
                     'owner_email' => $this->tenant->owner_email,
+                    'phone' => $this->tenant->phone,
                     'status' => $this->tenant->status,
                 ] : null;
             }),

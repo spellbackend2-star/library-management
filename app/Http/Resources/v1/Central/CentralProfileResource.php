@@ -35,6 +35,7 @@ class CentralProfileResource extends JsonResource
             'tenant' => $tenant ? [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
+                'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'domain' => $domain?->domain,
             ] : null,

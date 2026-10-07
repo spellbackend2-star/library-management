@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Central\CompletePaymentAndCreateTenantRequest;
 use App\Http\Resources\v1\Central\CentralPaymentTenantCompletionResource;
 use App\Http\Resources\v1\Central\CentralPlanPaymentInitiationResource;
 use App\Models\CentralInvoice;
@@ -114,6 +115,7 @@ class CentralSubscriptionPaymentController extends Controller
                     ? [
                         'id' => $tenant->id,
                         'company_name' => $tenant->company_name,
+                        'phone' => $tenant->phone,
                         'tenant_code' => $tenant->tenant_code,
                     ]
                     : null,
@@ -346,9 +348,9 @@ class CentralSubscriptionPaymentController extends Controller
                     'tenant',
                     'invoice',
                 ]),
-                'Cash payment completed successfully.'
+                'Cash payment completed successfully.',
+                201
             );
-            , 201);
         }
 
         /*
@@ -726,42 +728,10 @@ class CentralSubscriptionPaymentController extends Controller
      * Complete payment and create tenant.
      */
     public function completeAndCreateTenant(
-        Request $request,
+        CompletePaymentAndCreateTenantRequest $request,
         SubscriptionPayment $payment
     ): JsonResponse {
-        $data = $request->validate([
-            'owner' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            'company_name' => [
-                'required',
-                'string',
-                'max:255',
-            ],
-
-            'email' => [
-                'required',
-                'string',
-                'email',
-                'max:255',
-            ],
-
-            'password' => [
-                'required',
-                'string',
-                'min:8',
-            ],
-
-            'subdomain' => [
-                'required',
-                'string',
-                'max:255',
-                'unique:tenants,tenant_code',
-            ],
-        ]);
+        $data = $request->validated();
 
         $hasSuccessfulPayment = in_array(
             $payment->status,

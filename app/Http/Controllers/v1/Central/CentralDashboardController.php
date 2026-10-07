@@ -85,6 +85,7 @@ class CentralDashboardController extends Controller
             ->get([
                 'id',
                 'company_name',
+                'phone',
                 'tenant_code',
                 'owner_email',
                 'status',
@@ -94,6 +95,7 @@ class CentralDashboardController extends Controller
                 return [
                     'id' => $tenant->id,
                     'company_name' => $tenant->company_name,
+                    'phone' => $tenant->phone,
                     'tenant_code' => $tenant->tenant_code,
                     'owner_email' => $tenant->owner_email,
                     'status' => $tenant->status,
@@ -128,6 +130,7 @@ class CentralDashboardController extends Controller
                     'tenant' => $payment->tenant ? [
                         'id' => $payment->tenant->id,
                         'company_name' => $payment->tenant->company_name,
+                        'phone' => $payment->tenant->phone,
                         'tenant_code' => $payment->tenant->tenant_code,
                     ] : null,
                 ];

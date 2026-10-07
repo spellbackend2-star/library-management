@@ -38,6 +38,7 @@ class CentralPaymentTenantCompletionResource extends JsonResource
             'tenant' => [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
+                'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'owner_name' => $tenant->owner_name,
                 'owner_email' => $tenant->owner_email,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Central\CentralTenantUpdateRequest;
 use App\Models\CentralInvoice;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
@@ -31,6 +32,7 @@ class CentralTenantController extends Controller
             return [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
+                'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'owner_email' => $tenant->owner_email,
                 'owner_name' => $tenant->owner_name,
@@ -86,6 +88,7 @@ class CentralTenantController extends Controller
                 'profile' => [
                     'id' => $tenant->id,
                     'company_name' => $tenant->company_name,
+                    'phone' => $tenant->phone,
                     'tenant_code' => $tenant->tenant_code,
                     'owner_email' => $tenant->owner_email,
                     'owner_name' => $tenant->owner_name,
@@ -187,13 +190,9 @@ class CentralTenantController extends Controller
     /**
      * Update tenant company information.
      */
-    public function update(Request $request, Tenant $tenant): JsonResponse
+    public function update(CentralTenantUpdateRequest $request, Tenant $tenant): JsonResponse
     {
-        $data = $request->validate([
-            'company_name' => ['sometimes', 'string', 'max:255'],
-            'owner_email' => ['sometimes', 'email', 'max:255'],
-            'owner_name' => ['sometimes', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         $tenant->update($data);
 
@@ -203,6 +202,7 @@ class CentralTenantController extends Controller
             'data' => [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
+                'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'owner_email' => $tenant->owner_email,
                 'owner_name' => $tenant->owner_name,
@@ -243,6 +243,7 @@ class CentralTenantController extends Controller
             'data' => [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
+                'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'status' => $tenant->status,
                 'suspension_reason' => $tenant->suspension_reason,
@@ -288,6 +289,7 @@ class CentralTenantController extends Controller
             'data' => [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
+                'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'status' => $tenant->status,
                 'domain' => $tenant->domains()->first()?->domain,

@@ -32,6 +32,7 @@ class CentralLoginResource extends JsonResource
             $response['tenant'] = [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
+                'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'domain' => $domain?->domain,
             ];

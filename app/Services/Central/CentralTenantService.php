@@ -63,6 +63,7 @@ class CentralTenantService
             'tenant_code' => $data['subdomain'],
             'owner_email' => $data['email'],
             'owner_name' => $data['owner'],
+            'phone' => $data['phone'] ?? null,
             'status' => 'inactive',
         ]);
 
@@ -261,6 +262,7 @@ class CentralTenantService
             'tenant_code' => $data['subdomain'],
             'owner_email' => $data['email'],
             'owner_name' => $data['owner'],
+            'phone' => $data['phone'] ?? null,
             'status' => 'pending',
         ]);
 

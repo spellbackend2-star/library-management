@@ -18,6 +18,8 @@ class CentralRegisterRequest extends FormRequest
 
             'company_name' => ['required', 'string', 'max:255'],
 
+            'phone' => ['nullable', 'string', 'max:50'],
+
             'email' => [
                 'required',
                 'string',

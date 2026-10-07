@@ -31,6 +31,21 @@ class SubscriptionService
         return $this->subscriptionRepository->update($id, $data);
     }
 
+    public function updateStatus(int $id, string $status): Subscription
+    {
+        return $this->subscriptionRepository->updateStatus($id, $status);
+    }
+
+    public function cancel(int $id): Subscription
+    {
+        return $this->subscriptionRepository->cancel($id);
+    }
+
+    public function changePlan(int $id, int $planId): Subscription
+    {
+        return $this->subscriptionRepository->changePlan($id, $planId);
+    }
+
     public function delete(int $id): bool
     {
         return $this->subscriptionRepository->delete($id);

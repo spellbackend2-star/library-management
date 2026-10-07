@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\v1\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Subscription\CancelSubscriptionRequest;
+use App\Http\Requests\Subscription\ChangePlanRequest;
 use App\Http\Requests\Subscription\StoreSubscriptionRequest;
 use App\Http\Requests\Subscription\UpdateSubscriptionRequest;
+use App\Http\Requests\Subscription\UpdateSubscriptionStatusRequest;
 use App\Http\Resources\SubscriptionResource;
 use App\Models\Subscription;
 use App\Services\SubscriptionService;
 use App\Traits\ResponseMessage;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -26,7 +30,7 @@ class SubscriptionController extends Controller
             $request->all()
         );
 
-        $items = new \Illuminate\Database\Eloquent\Collection($result['data'] ?? []);
+        $items = new Collection($result['data'] ?? []);
         $items = $items->loadMissing(['plan', 'tenant']);
 
         return response()->json([
@@ -77,6 +81,54 @@ class SubscriptionController extends Controller
         return $this->successResponse(
             new SubscriptionResource($subscription->load(['plan', 'payments'])),
             'Subscription updated successfully.'
+        );
+    }
+
+    public function updateStatus(
+        UpdateSubscriptionStatusRequest $request,
+        Subscription $subscription
+    ): JsonResponse {
+        $validated = $request->validated();
+
+        $subscription = $this->subscriptionService->updateStatus(
+            $subscription->id,
+            $validated['status']
+        );
+
+        return $this->successResponse(
+            new SubscriptionResource($subscription->load(['plan', 'tenant', 'payments'])),
+            'Subscription status updated successfully.'
+        );
+    }
+
+    public function cancel(
+        CancelSubscriptionRequest $request,
+        Subscription $subscription
+    ): JsonResponse {
+        $subscription = $this->subscriptionService->cancel(
+            $subscription->id
+        );
+
+        return $this->successResponse(
+            new SubscriptionResource($subscription->load(['plan', 'tenant', 'payments'])),
+            'Subscription cancelled successfully.'
+        );
+    }
+
+    public function changePlan(
+        ChangePlanRequest $request,
+        Subscription $subscription
+    ): JsonResponse {
+        $validated = $request->validated();
+
+        $subscription = $this->subscriptionService->changePlan(
+            $subscription->id,
+            $validated['subscription_plan_id']
+        );
+
+        return $this->successResponse(
+            new SubscriptionResource($subscription->load(['plan', 'tenant', 'payments'])),
+            'Subscription plan changed successfully.'
         );
     }
 

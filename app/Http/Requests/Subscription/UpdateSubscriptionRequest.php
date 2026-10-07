@@ -30,11 +30,6 @@ class UpdateSubscriptionRequest extends FormRequest
                 'date',
                 'after_or_equal:starts_at',
             ],
-            'status' => [
-                'sometimes',
-                'string',
-                'in:pending,active,expired,cancelled',
-            ],
         ];
     }
 }

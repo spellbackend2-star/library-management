@@ -18,7 +18,7 @@ class CentralRegisterRequest extends FormRequest
 
             'company_name' => ['required', 'string', 'max:255'],
 
-            'phone' => ['nullable', 'string', 'max:50'],
+            'phone' => ['required', 'string', 'max:50', 'unique:tenants,phone'],
 
             'email' => [
                 'required',
@@ -55,6 +55,8 @@ class CentralRegisterRequest extends FormRequest
     {
         return [
             'email.unique' => 'This email is already registered. Please use another email.',
+
+            'phone.unique' => 'This phone number is already registered. Please use another phone number.',
 
             'subdomain.unique' => 'This subdomain is already taken. Please choose another one.',
         ];

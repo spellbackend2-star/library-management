@@ -4,7 +4,6 @@ namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Central\CentralTenantUpdateRequest;
-use App\Models\CentralInvoice;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\Tenant;
@@ -19,12 +18,13 @@ class CentralTenantController extends Controller
     public function __construct(
         protected CentralInvoiceRepository $centralInvoiceRepository
     ) {}
+
     /**
      * Get all tenants with pagination.
      */
     public function index(): JsonResponse
     {
-        $tenants = Tenant::with('domains')
+        $tenants = Tenant::with('domains', 'currentSubscription.plan')
             ->latest('id')
             ->paginate(request()->get('per_page', 15));
 
@@ -39,6 +39,23 @@ class CentralTenantController extends Controller
                 'status' => $tenant->status,
                 'suspension_reason' => $tenant->suspension_reason,
                 'domain' => $tenant->domains->first()?->domain,
+                'subscription' => $tenant->currentSubscription
+                    ? [
+                        'id' => $tenant->currentSubscription->id,
+                        'status' => $tenant->currentSubscription->status,
+                        'starts_at' => $tenant->currentSubscription->starts_at,
+                        'expires_at' => $tenant->currentSubscription->expires_at,
+                        'plan' => $tenant->currentSubscription->plan
+                            ? [
+                                'id' => $tenant->currentSubscription->plan->id,
+                                'name' => $tenant->currentSubscription->plan->name,
+                                'price' => $tenant->currentSubscription->plan->price,
+                                'duration' => $tenant->currentSubscription->plan->duration,
+                                'duration_unit' => $tenant->currentSubscription->plan->duration_unit,
+                            ]
+                            : null,
+                    ]
+                    : null,
                 'created_at' => $tenant->created_at,
             ];
         });
@@ -97,7 +114,7 @@ class CentralTenantController extends Controller
                     'domain' => $tenant->domains->first()?->domain,
                     'created_at' => $tenant->created_at,
                 ],
-                'current_subscription' => $subscription
+                'subscription' => $subscription
                     ? [
                         'id' => $subscription->id,
                         'status' => $subscription->status,
@@ -149,40 +166,40 @@ class CentralTenantController extends Controller
                     ];
                 }),
                 'invoices' => [
-                        'data' => collect($invoices['data'])->map(function ($invoice) {
-                            return [
-                                'id' => $invoice->id,
-                                'invoice_number' => $invoice->invoice_number,
-                                'invoice_type' => $invoice->invoice_type,
-                                'subtotal' => $invoice->subtotal,
-                                'tax' => $invoice->tax,
-                                'discount' => $invoice->discount,
-                                'total_amount' => $invoice->total_amount,
-                                'paid_amount' => $invoice->paid_amount,
-                                'remaining_amount' => $invoice->remaining_amount,
-                                'currency' => $invoice->currency,
-                                'currency_symbol' => $invoice->currency_symbol,
-                                'status' => $invoice->status,
-                                'due_date' => $invoice->due_date,
-                                'notes' => $invoice->notes,
-                                'subscription' => $invoice->subscription
-                                    ? [
-                                        'id' => $invoice->subscription->id,
-                                        'status' => $invoice->subscription->status,
-                                        'plan' => $invoice->subscription->plan
-                                            ? [
-                                                'id' => $invoice->subscription->plan->id,
-                                                'name' => $invoice->subscription->plan->name,
-                                                'price' => $invoice->subscription->plan->price,
-                                            ]
-                                            : null,
-                                    ]
-                                    : null,
-                                'created_at' => $invoice->created_at,
-                            ];
-                        }),
-                        'pagination' => $invoices['meta'],
-                    ],
+                    'data' => collect($invoices['data'])->map(function ($invoice) {
+                        return [
+                            'id' => $invoice->id,
+                            'invoice_number' => $invoice->invoice_number,
+                            'invoice_type' => $invoice->invoice_type,
+                            'subtotal' => $invoice->subtotal,
+                            'tax' => $invoice->tax,
+                            'discount' => $invoice->discount,
+                            'total_amount' => $invoice->total_amount,
+                            'paid_amount' => $invoice->paid_amount,
+                            'remaining_amount' => $invoice->remaining_amount,
+                            'currency' => $invoice->currency,
+                            'currency_symbol' => $invoice->currency_symbol,
+                            'status' => $invoice->status,
+                            'due_date' => $invoice->due_date,
+                            'notes' => $invoice->notes,
+                            'subscription' => $invoice->subscription
+                                ? [
+                                    'id' => $invoice->subscription->id,
+                                    'status' => $invoice->subscription->status,
+                                    'plan' => $invoice->subscription->plan
+                                        ? [
+                                            'id' => $invoice->subscription->plan->id,
+                                            'name' => $invoice->subscription->plan->name,
+                                            'price' => $invoice->subscription->plan->price,
+                                        ]
+                                        : null,
+                                ]
+                                : null,
+                            'created_at' => $invoice->created_at,
+                        ];
+                    }),
+                    'pagination' => $invoices['meta'],
+                ],
             ],
         ]);
     }

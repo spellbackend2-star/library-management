@@ -32,6 +32,7 @@ class CentralDashboardController extends Controller
         $total = Tenant::count();
         $active = Tenant::where('status', 'active')->count();
         $inactive = Tenant::where('status', 'inactive')->count();
+        $suspended = Tenant::where('status', 'suspended')->count();
         $totalUsers = Tenant::whereNotNull('owner_email')
             ->where('owner_email', '!=', '')
             ->count();
@@ -40,6 +41,7 @@ class CentralDashboardController extends Controller
             'total' => $total,
             'active' => $active,
             'inactive' => $inactive,
+            'suspended' => $suspended,
             'total_users' => $totalUsers,
         ];
     }

@@ -16,10 +16,15 @@ class CentralTenantResource extends JsonResource
             'company_name' => $tenant->company_name,
             'phone' => $tenant->phone,
             'tenant_code' => $tenant->tenant_code,
+
+
             'owner_email' => $tenant->owner_email,
             'owner_name' => $tenant->owner_name,
             'status' => $tenant->status,
             'domain' => $this->resource['domain'],
+
+            
         ];
+
     }
 }

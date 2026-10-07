@@ -16,5 +16,11 @@ interface SubscriptionInterface
 
     public function update(int $id, array $data): Subscription;
 
+    public function updateStatus(int $id, string $status): Subscription;
+
+    public function cancel(int $id): Subscription;
+
+    public function changePlan(int $id, int $planId): Subscription;
+
     public function delete(int $id): bool;
 }

@@ -25,9 +25,10 @@ class CompletePaymentAndCreateTenantRequest extends FormRequest
                 'max:255',
             ],
             'phone' => [
-                'nullable',
+                'required',
                 'string',
                 'max:50',
+                'unique:tenants,phone',
             ],
             'email' => [
                 'required',

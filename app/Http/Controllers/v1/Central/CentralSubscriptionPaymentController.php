@@ -24,6 +24,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class CentralSubscriptionPaymentController extends Controller
@@ -1232,13 +1233,27 @@ class CentralSubscriptionPaymentController extends Controller
             'payment_method' => [
                 'required',
                 'string',
-                'in:KHALTI,ESEWA',
+                'in:CASH,KHALTI',
             ],
             'return_url' => [
                 'nullable',
                 'url',
             ],
         ]);
+
+        // This route stays public for online Khalti checkout, but recording
+        // cash changes the invoice immediately and must be done by central
+        // staff who can create subscription payments.
+        if ($data['payment_method'] === 'CASH') {
+            $centralUser = $request->user('api');
+
+            if (! $centralUser || ! $centralUser->can('subscription_payments.create')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are not authorized to record cash payments.',
+                ], 403);
+            }
+        }
 
         $invoice = CentralInvoice::query()
             ->with(['subscription.plan', 'tenant.domains'])
@@ -1296,14 +1311,121 @@ class CentralSubscriptionPaymentController extends Controller
             ], 422);
         }
 
-        $payment = SubscriptionPayment::create([
-            'subscription_id' => $subscription->id,
-            'invoice_id' => $invoice->id,
-            'tenant_id' => $invoice->tenant_id,
-            'amount' => $requestedAmount,
-            'payment_method' => $data['payment_method'],
-            'status' => 'PENDING',
-        ]);
+        $paymentResult = DB::transaction(function () use (
+            $invoice,
+            $subscription,
+            $requestedAmount,
+            $data
+        ): array {
+            $lockedInvoice = CentralInvoice::query()
+                ->lockForUpdate()
+                ->findOrFail($invoice->id);
+
+            $lockedRemaining = max(
+                0,
+                round((float) $lockedInvoice->total_amount - (float) $lockedInvoice->paid_amount, 2)
+            );
+
+            if ($lockedRemaining <= 0 || $requestedAmount > $lockedRemaining) {
+                throw ValidationException::withMessages([
+                    'amount' => ['The requested amount exceeds the invoice remaining balance.'],
+                ]);
+            }
+
+            $pendingPayments = SubscriptionPayment::query()
+                ->where('invoice_id', $lockedInvoice->id)
+                ->where('status', 'PENDING')
+                ->lockForUpdate()
+                ->get();
+
+            if ($pendingPayments->isNotEmpty()) {
+                $pendingPayment = $pendingPayments->count() === 1
+                    ? $pendingPayments->first()
+                    : null;
+                $gatewayResponse = $pendingPayment?->gateway_response ?? [];
+                $pendingPidx = is_array($gatewayResponse)
+                    ? ($gatewayResponse['pidx'] ?? $pendingPayment?->transaction_id)
+                    : $pendingPayment?->transaction_id;
+                $pendingPaymentUrl = is_array($gatewayResponse)
+                    ? ($gatewayResponse['payment_url'] ?? null)
+                    : null;
+
+                if (
+                    $pendingPayment
+                    && $data['payment_method'] === 'KHALTI'
+                    && $pendingPayment->payment_method === 'KHALTI'
+                    && round((float) $pendingPayment->amount, 2) === $requestedAmount
+                    && $pendingPidx
+                    && $pendingPaymentUrl
+                ) {
+                    return [
+                        'payment' => $pendingPayment,
+                        'gateway' => $gatewayResponse,
+                        'reused_gateway' => true,
+                    ];
+                }
+
+                $canReuseDraft = $pendingPayment
+                    && (float) $lockedInvoice->paid_amount === 0.0
+                    && $pendingPayment->payment_method === 'CASH'
+                    && ! $pendingPayment->transaction_id
+                    && ! $pendingPayment->gateway_response;
+
+                if (! $canReuseDraft) {
+                    throw ValidationException::withMessages([
+                        'invoice_id' => [
+                            'A payment attempt is already pending for this invoice. Complete or verify it before starting another payment.',
+                        ],
+                    ]);
+                }
+
+                $pendingPayment->update([
+                    'amount' => $requestedAmount,
+                    'payment_method' => $data['payment_method'],
+                    'transaction_id' => null,
+                    'gateway_response' => null,
+                    'paid_at' => null,
+                ]);
+                $payment = $pendingPayment->fresh();
+            } else {
+                $payment = SubscriptionPayment::create([
+                    'subscription_id' => $subscription->id,
+                    'invoice_id' => $lockedInvoice->id,
+                    'tenant_id' => $lockedInvoice->tenant_id,
+                    'amount' => $requestedAmount,
+                    'payment_method' => $data['payment_method'],
+                    'status' => 'PENDING',
+                ]);
+            }
+
+            if ($data['payment_method'] === 'CASH') {
+                $payment = $this->centralPaymentService
+                    ->completeCentralCashPayment($payment);
+            }
+
+            return [
+                'payment' => $payment,
+                'gateway' => null,
+                'reused_gateway' => false,
+            ];
+        }, 3);
+
+        /** @var SubscriptionPayment $payment */
+        $payment = $paymentResult['payment'];
+
+        if ($paymentResult['reused_gateway']) {
+            $payment->load([
+                'subscription.plan',
+                'tenant.domains',
+                'invoice',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'A Khalti payment is already pending. Continue with the existing payment link.',
+                'data' => $this->buildPaymentSummary($payment, $paymentResult['gateway']),
+            ]);
+        }
 
         $payment->load([
             'subscription.plan',
@@ -1313,10 +1435,22 @@ class CentralSubscriptionPaymentController extends Controller
 
         $returnUrl = $data['return_url'] ?? null;
 
+        if ($data['payment_method'] === 'CASH') {
+            $payment->refresh()->load([
+                'subscription.plan',
+                'tenant.domains',
+                'invoice',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Cash payment recorded successfully.',
+                'data' => $this->buildPaymentSummary($payment),
+            ], 201);
+        }
+
         try {
-            $gateway = $data['payment_method'] === 'KHALTI'
-                ? $this->khaltiService->initiateSubscription($payment, $returnUrl)
-                : $this->esewaService->initiateSubscription($payment, $returnUrl);
+            $gateway = $this->khaltiService->initiateSubscription($payment, $returnUrl);
         } catch (Throwable $e) {
             return response()->json([
                 'success' => false,

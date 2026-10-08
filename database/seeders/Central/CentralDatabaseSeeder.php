@@ -9,9 +9,9 @@ class CentralDatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
+            CentralRolePermissionSeeder::class,
             CentralUserSeeder::class,
             CentralPassportSeeder::class,
-            CentralRolePermissionSeeder::class,
             CentralSettingsTableSeeder::class,
         ]);
     }

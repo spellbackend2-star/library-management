@@ -13,13 +13,17 @@ class CentralUserSeeder extends Seeder
         $email = env('CENTRAL_ADMIN_EMAIL', 'admin@library.test');
         $password = env('CENTRAL_ADMIN_PASSWORD', 'password');
 
-        User::updateOrCreate(
+        $user = User::updateOrCreate(
             ['email' => $email],
             [
                 'name' => 'Central Admin',
                 'password' => Hash::make($password),
             ]
         );
+
+        // The configured Central Admin account is the system administrator.
+        // Ensure it has the role created by CentralRolePermissionSeeder.
+        $user->assignRole('super_admin');
 
         $this->command?->info("Central admin ready: {$email} / {$password}");
     }

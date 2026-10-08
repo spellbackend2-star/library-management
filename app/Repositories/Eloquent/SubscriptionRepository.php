@@ -40,7 +40,15 @@ class SubscriptionRepository extends BaseRepository implements SubscriptionInter
             $query->whereHas('tenant', function ($q) use ($filters) {
                 $q->where('status', $filters['tenant_status']);
             });
+        } else {
+            // By default, exclude pending tenants
+            $query->whereHas('tenant', function ($q) {
+                $q->where('status', '!=', 'pending');
+            });
         }
+
+        // Do NOT filter subscription status by default
+        // All subscription statuses will be included
         if (isset($filters['status']) && $filters['status'] !== '') {
             $query->where('status', $filters['status']);
         }

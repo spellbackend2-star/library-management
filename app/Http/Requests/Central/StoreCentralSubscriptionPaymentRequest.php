@@ -15,7 +15,7 @@ class StoreCentralSubscriptionPaymentRequest extends FormRequest
     {
         if ($this->filled('payment_method')) {
             $this->merge([
-                'payment_method' => strtoupper((string) $this->input('payment_method')),
+                'payment_method' => strtoupper(trim((string) $this->input('payment_method'))),
             ]);
         }
     }
@@ -39,7 +39,7 @@ class StoreCentralSubscriptionPaymentRequest extends FormRequest
                 'gt:0',
             ],
             'return_url' => [
-                'nullable',
+                'required',
                 'url',
             ],
             'coupon_id' => [

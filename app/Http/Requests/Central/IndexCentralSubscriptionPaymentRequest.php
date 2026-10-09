@@ -15,7 +15,7 @@ class IndexCentralSubscriptionPaymentRequest extends FormRequest
     {
         if ($this->filled('payment_method')) {
             $this->merge([
-                'payment_method' => strtoupper((string) $this->input('payment_method')),
+                'payment_method' => strtoupper(trim((string) $this->input('payment_method'))),
             ]);
         }
     }

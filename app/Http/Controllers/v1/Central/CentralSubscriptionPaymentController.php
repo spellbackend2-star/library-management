@@ -4,10 +4,15 @@ namespace App\Http\Controllers\v1\Central;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Central\CompletePaymentAndCreateTenantRequest;
+use App\Http\Requests\Central\IndexCentralSubscriptionPaymentRequest;
+use App\Http\Requests\Central\InitiatePlanSubscriptionPaymentRequest;
+use App\Http\Requests\Central\PayCentralInvoiceRequest;
+use App\Http\Requests\Central\PaySubscriptionPaymentRequest;
+use App\Http\Requests\Central\StoreCentralSubscriptionPaymentRequest;
 use App\Http\Resources\v1\Central\CentralPaymentTenantCompletionResource;
 use App\Http\Resources\v1\Central\CentralPlanPaymentInitiationResource;
+use App\Http\Resources\v1\Central\CentralSubscriptionPaymentListResource;
 use App\Models\CentralInvoice;
-use App\Models\Coupon;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
@@ -16,6 +21,7 @@ use App\Services\Central\CentralInvoiceService;
 use App\Services\Central\CentralPaymentService;
 use App\Services\Central\CentralTenantService;
 use App\Services\Central\CentralSubscriptionService;
+use App\Services\Central\CentralSubscriptionPaymentListingService;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
 use App\Traits\ResponseMessage;
@@ -24,7 +30,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -38,6 +43,7 @@ class CentralSubscriptionPaymentController extends Controller
         protected CentralTenantService $centralTenantService,
         protected CentralSubscriptionService $centralSubscriptionService,
         protected CentralCouponService $centralCouponService,
+        protected CentralSubscriptionPaymentListingService $subscriptionPaymentListingService,
         protected KhaltiService $khaltiService,
         protected EsewaService $esewaService
     ) {}
@@ -45,125 +51,12 @@ class CentralSubscriptionPaymentController extends Controller
     /**
      * Get all subscription payments.
      */
-    public function index(Request $request): JsonResponse
+    public function index(IndexCentralSubscriptionPaymentRequest $request): JsonResponse
     {
-        $this->normalizePaymentMethod($request);
-
-        $validated = $request->validate([
-            'tenant_id' => ['nullable', 'string'],
-            'subscription_id' => ['nullable', 'integer'],
-            'status' => [
-                'nullable',
-                'string',
-                'in:PENDING,SUCCESS,FAILED',
-            ],
-            'payment_method' => [
-                'nullable',
-                'string',
-                'in:CASH,KHALTI,ESEWA',
-            ],
-            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
-        ]);
-
-        $query = SubscriptionPayment::query();
-
-        if (! empty($validated['tenant_id'])) {
-            $query->where('tenant_id', $validated['tenant_id']);
-        }
-
-        if (! empty($validated['subscription_id'])) {
-            $query->where('subscription_id', $validated['subscription_id']);
-        }
-
-        if (! empty($validated['status'])) {
-            $query->where('status', $validated['status']);
-        }
-
-        if (! empty($validated['payment_method'])) {
-            $query->where('payment_method', $validated['payment_method']);
-        }
-
-        $perPage = $validated['per_page'] ?? 20;
-
-        $payments = $query
-            ->with([
-                'subscription.plan',
-                'tenant',
-                'invoice',
-            ])
-            ->latest('id')
-            ->paginate($perPage);
-
-        $data = $payments->getCollection()->map(function ($payment) {
-            $tenant = $payment->tenant;
-            $subscription = $payment->subscription;
-            $plan = $subscription?->plan;
-            $invoice = $payment->invoice;
-
-            return [
-                'id' => $payment->id,
-                'transaction_id' => $payment->transaction_id,
-                'amount' => $payment->amount,
-                'currency' => $invoice?->currency ?? 'NPR',
-                'payment_method' => $payment->payment_method,
-                'status' => $payment->status,
-                'paid_at' => $payment->paid_at
-                    ? \Carbon\Carbon::parse($payment->paid_at)->format('Y-m-d\TH:i:s\Z')
-                    : null,
-                'created_at' => $payment->created_at
-                    ? \Carbon\Carbon::parse($payment->created_at)->format('Y-m-d\TH:i:s\Z')
-                    : null,
-                'tenant' => $tenant
-                    ? [
-                        'id' => $tenant->id,
-                        'company_name' => $tenant->company_name,
-                        'phone' => $tenant->phone,
-                        'tenant_code' => $tenant->tenant_code,
-                    ]
-                    : null,
-                'plan' => $plan
-                    ? [
-                        'id' => $plan->id,
-                        'name' => $plan->name,
-                    ]
-                    : null,
-                'subscription' => $subscription
-                    ? [
-                        'id' => $subscription->id,
-                        'status' => $subscription->status,
-                        'starts_at' => $subscription->starts_at ? (string) $subscription->starts_at : null,
-                        'expires_at' => $subscription->expires_at ? (string) $subscription->expires_at : null,
-                    ]
-                    : null,
-                'invoice' => $invoice
-                    ? [
-                        'id' => $invoice->id,
-                        'invoice_number' => $invoice->invoice_number,
-                        'status' => $invoice->status,
-                    ]
-                    : null,
-            ];
-        });
-
-        // Summary stats
-        $allPayments = SubscriptionPayment::query();
-        if (! empty($validated['tenant_id'])) {
-            $allPayments->where('tenant_id', $validated['tenant_id']);
-        }
-        if (! empty($validated['subscription_id'])) {
-            $allPayments->where('subscription_id', $validated['subscription_id']);
-        }
-        if (! empty($validated['payment_method'])) {
-            $allPayments->where('payment_method', $validated['payment_method']);
-        }
-
-        $totalCollected = (string) $allPayments
-            ->whereIn('status', ['SUCCESS', 'COMPLETED'])
-            ->sum('amount');
-
-        $successCount = $allPayments->whereIn('status', ['SUCCESS', 'COMPLETED'])->count();
-        $pendingCount = $allPayments->where('status', 'PENDING')->count();
-        $failedCount = $allPayments->where('status', 'FAILED')->count();
+        $filters = $request->validated();
+        $payments = $this->subscriptionPaymentListingService->getPaginated($filters);
+        $data = $payments->getCollection()
+            ->map(fn ($payment) => (new CentralSubscriptionPaymentListResource($payment))->resolve());
 
         return response()->json([
             'success' => true,
@@ -175,52 +68,16 @@ class CentralSubscriptionPaymentController extends Controller
                 'total' => $payments->total(),
                 'last_page' => $payments->lastPage(),
             ],
-            'summary' => [
-                'total_collected' => $totalCollected,
-                'success_count' => $successCount,
-                'pending_count' => $pendingCount,
-                'failed_count' => $failedCount,
-            ],
+            'summary' => $this->subscriptionPaymentListingService->getSummary($filters),
         ]);
     }
 
     /**
      * Create invoice and subscription payment.
      */
-    public function store(Request $request): JsonResponse|RedirectResponse
+    public function store(StoreCentralSubscriptionPaymentRequest $request): JsonResponse|RedirectResponse
     {
-        $this->normalizePaymentMethod($request);
-
-        $data = $request->validate([
-            'subscription_id' => [
-                'required',
-                'integer',
-                'exists:subscriptions,id',
-            ],
-
-            'payment_method' => [
-                'required',
-                'string',
-                'regex:/^(CASH|KHALTI|ESEWA)$/i',
-            ],
-
-            'amount' => [
-                'nullable',
-                'numeric',
-                'gt:0',
-            ],
-
-            'return_url' => [
-                'required',
-                'url',
-            ],
-
-            'coupon_id' => [
-                'nullable',
-                'integer',
-                'exists:coupons,id',
-            ],
-        ]);
+        $data = $request->validated();
 
         $returnUrl = $data['return_url'] ?? null;
 
@@ -471,39 +328,9 @@ class CentralSubscriptionPaymentController extends Controller
      * Create subscription from plan and initiate payment.
      */
     public function initiateFromPlan(
-        Request $request
+        InitiatePlanSubscriptionPaymentRequest $request
     ): JsonResponse|RedirectResponse {
-        $this->normalizePaymentMethod($request);
-
-        $data = $request->validate([
-            'subscription_plan_id' => [
-                'required',
-                'integer',
-                'exists:subscription_plans,id',
-            ],
-
-            'payment_method' => [
-                'required',
-                'string',
-                'in:CASH,KHALTI,ESEWA',
-            ],
-            'amount' => [
-                'required',
-                'numeric',
-                'gt:0',
-            ],
-
-            'return_url' => [
-                'nullable',
-                'url',
-            ],
-
-            'coupon_id' => [
-                'nullable',
-                'integer',
-                'exists:coupons,id',
-            ],
-        ]);
+        $data = $request->validated();
 
         $returnUrl = $data['return_url'] ?? null;
 
@@ -1214,31 +1041,9 @@ class CentralSubscriptionPaymentController extends Controller
     /**
      * Initiate an additional payment against a central invoice balance.
      */
-    public function payInvoice(Request $request): JsonResponse
+    public function payInvoice(PayCentralInvoiceRequest $request): JsonResponse
     {
-        $this->normalizePaymentMethod($request);
-
-        $data = $request->validate([
-            'invoice_id' => [
-                'required',
-                'integer',
-                'exists:invoices,id',
-            ],
-            'amount' => [
-                'required',
-                'numeric',
-                'gt:0',
-            ],
-            'payment_method' => [
-                'required',
-                'string',
-                Rule::in(['CASH', 'KHALTI']),
-            ],
-            'return_url' => [
-                'nullable',
-                'url',
-            ],
-        ]);
+        $data = $request->validated();
 
         // This route stays public for online Khalti checkout, but recording
         // cash changes the invoice immediately and must be done by central
@@ -1474,29 +1279,10 @@ class CentralSubscriptionPaymentController extends Controller
      * Pay existing pending tenant subscription payment.
      */
     public function pay(
-        Request $request,
+        PaySubscriptionPaymentRequest $request,
         SubscriptionPayment $payment
     ): JsonResponse|RedirectResponse {
-        $this->normalizePaymentMethod($request);
-
-        $data = $request->validate([
-            'payment_method' => [
-                'required',
-                'string',
-                'in:CASH,KHALTI,ESEWA',
-            ],
-
-            'amount' => [
-                'required',
-                'numeric',
-                'gt:0',
-            ],
-
-            'return_url' => [
-                'nullable',
-                'url',
-            ],
-        ]);
+        $data = $request->validated();
 
         $returnUrl = $data['return_url'] ?? null;
 
@@ -1943,20 +1729,6 @@ class CentralSubscriptionPaymentController extends Controller
         }
 
         return $summary;
-    }
-
-    /**
-     * Get configured frontend URL.
-     */
-    private function normalizePaymentMethod(Request $request): void
-    {
-        if ($request->filled('payment_method')) {
-            $request->merge([
-                'payment_method' => strtoupper(
-                    trim((string) $request->input('payment_method'))
-                ),
-            ]);
-        }
     }
 
     private function frontendUrl(): string

@@ -4,11 +4,13 @@ namespace App\Services;
 
 use App\Models\Subscription;
 use App\Repositories\Interface\SubscriptionInterface;
+use App\Services\Central\CentralSubscriptionPlanChangeService;
 
 class SubscriptionService
 {
     public function __construct(
-        protected SubscriptionInterface $subscriptionRepository
+        protected SubscriptionInterface $subscriptionRepository,
+        protected CentralSubscriptionPlanChangeService $planChangeService
     ) {}
 
     public function getAll(array $filters = [])
@@ -43,7 +45,7 @@ class SubscriptionService
 
     public function changePlan(int $id, int $planId): Subscription
     {
-        return $this->subscriptionRepository->changePlan($id, $planId);
+        return $this->planChangeService->changePlan($id, $planId);
     }
 
     public function delete(int $id): bool

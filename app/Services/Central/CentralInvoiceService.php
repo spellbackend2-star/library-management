@@ -4,6 +4,7 @@ namespace App\Services\Central;
 
 use App\Models\CentralInvoice;
 use App\Models\Subscription;
+use App\Models\SubscriptionPlan;
 use App\Models\SubscriptionPayment;
 use App\Repositories\Interface\CentralInvoiceInterface;
 use InvalidArgumentException;
@@ -103,6 +104,55 @@ class CentralInvoiceService
             'status' => 'unpaid',
             'due_date' => now()->addDays(7)->toDateString(),
             'notes' => null,
+        ]);
+    }
+
+    public function createPlanChangeSettlementInvoice(
+        Subscription $subscription,
+        float $amount
+    ): CentralInvoice {
+        return $this->create([
+            'tenant_id' => $subscription->tenant_id,
+            'subscription_id' => $subscription->id,
+            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
+            'invoice_type' => 'plan_change_settlement',
+            'subtotal' => $amount,
+            'tax' => 0,
+            'discount' => 0,
+            'coupon_discount' => 0,
+            'total_amount' => $amount,
+            'paid_amount' => 0,
+            'remaining_amount' => $amount,
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+            'notes' => 'Outstanding charges due before changing subscription plans.',
+        ]);
+    }
+
+    public function createPlanChangeInvoice(
+        Subscription $subscription,
+        SubscriptionPlan $plan,
+        float $credit
+    ): CentralInvoice {
+        $price = round((float) $plan->price, 2);
+        $credit = min($price, round($credit, 2));
+        $due = max(0, round($price - $credit, 2));
+
+        return $this->create([
+            'tenant_id' => $subscription->tenant_id,
+            'subscription_id' => $subscription->id,
+            'invoice_number' => CentralInvoice::generateInvoiceNumber(),
+            'invoice_type' => 'plan_change',
+            'subtotal' => $price,
+            'tax' => 0,
+            'discount' => $credit,
+            'coupon_discount' => 0,
+            'total_amount' => $due,
+            'paid_amount' => 0,
+            'remaining_amount' => $due,
+            'status' => $due <= 0 ? 'paid' : 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+            'notes' => 'Plan-change invoice for '.$plan->name,
         ]);
     }
 

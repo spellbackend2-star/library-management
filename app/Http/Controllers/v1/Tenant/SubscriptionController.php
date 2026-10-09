@@ -8,8 +8,10 @@ use App\Http\Requests\Subscription\ChangePlanRequest;
 use App\Http\Requests\Subscription\StoreSubscriptionRequest;
 use App\Http\Requests\Subscription\UpdateSubscriptionRequest;
 use App\Http\Requests\Subscription\UpdateSubscriptionStatusRequest;
+use App\Http\Resources\CentralInvoiceResource;
 use App\Http\Resources\SubscriptionResource;
 use App\Models\Subscription;
+use App\Services\Central\PlanChangeSettlementRequired;
 use App\Services\SubscriptionService;
 use App\Traits\ResponseMessage;
 use Illuminate\Database\Eloquent\Collection;
@@ -134,10 +136,23 @@ class SubscriptionController extends Controller
     ): JsonResponse {
         $validated = $request->validated();
 
-        $subscription = $this->subscriptionService->changePlan(
-            $subscription->id,
-            $validated['subscription_plan_id']
-        );
+        try {
+            $subscription = $this->subscriptionService->changePlan(
+                $subscription->id,
+                $validated['subscription_plan_id']
+            );
+        } catch (PlanChangeSettlementRequired $exception) {
+            $invoice = $exception->invoice;
+
+            return $this->errorResponse(
+                $exception->getMessage(),
+                422,
+                [
+                    'outstanding_amount' => $invoice->remaining_amount,
+                    'invoice' => new CentralInvoiceResource($invoice),
+                ]
+            );
+        }
 
         return $this->successResponse(
             new SubscriptionResource($subscription->load(['plan', 'tenant', 'invoices', 'payments'])),

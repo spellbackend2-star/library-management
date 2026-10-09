@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Fillable([
     'tenant_id',
     'subscription_plan_id',
+    'replaces_subscription_id',
     'amount',
     'starts_at',
     'expires_at',
@@ -47,5 +48,10 @@ class Subscription extends Model
     public function invoices(): HasMany
     {
         return $this->hasMany(CentralInvoice::class);
+    }
+
+    public function replacedSubscription(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'replaces_subscription_id');
     }
 }

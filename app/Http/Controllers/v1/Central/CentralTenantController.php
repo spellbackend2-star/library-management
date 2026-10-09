@@ -22,11 +22,11 @@ class CentralTenantController extends Controller
     /**
      * Get all tenants with pagination.
      */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         $tenants = Tenant::with('domains', 'currentSubscription.plan')
             ->latest('id')
-            ->paginate(request()->get('per_page', 15));
+            ->paginate($request->get('per_page', 15));
 
         $tenants->getCollection()->transform(function ($tenant) {
             return [
@@ -63,7 +63,17 @@ class CentralTenantController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Tenants retrieved successfully.',
-            'data' => $tenants,
+            'data' => $tenants->getCollection(),
+            'meta' => [
+                'total' => $tenants->total(),
+                'last_page' => $tenants->lastPage(),
+                'current_page' => $tenants->currentPage(),
+                'per_page' => $tenants->perPage(),
+                'first_page_url' => $tenants->url(1),
+                'last_page_url' => $tenants->url($tenants->lastPage()),
+                'next_page_url' => $tenants->nextPageUrl(),
+                'prev_page_url' => $tenants->previousPageUrl(),
+            ],
         ]);
     }
 

@@ -37,6 +37,13 @@ class CentralPaymentService
             $totalAmount = round((float) $invoice->total_amount, 2);
             $currentPaid = round((float) $invoice->paid_amount, 2);
             $paymentAmount = round((float) $payment->amount, 2);
+
+            if ($paymentAmount <= 0) {
+                throw ValidationException::withMessages([
+                    'amount' => ['A successful subscription payment must be greater than zero.'],
+                ]);
+            }
+
             $remainingAmount = max(0, round($totalAmount - $currentPaid, 2));
 
             if ($paymentAmount > $remainingAmount) {
@@ -75,22 +82,27 @@ class CentralPaymentService
 
             // A successful installment starts the subscription immediately.
             // The invoice remains partially paid until the balance is settled.
-            $this->centralSubscriptionService->activateSubscription($subscription, $plan, true);
+            if ($invoice->invoice_type !== 'plan_change_settlement') {
+                $this->centralSubscriptionService->activateSubscription($subscription, $plan, true);
+                $this->centralSubscriptionService->retireReplacedSubscription($subscription);
+            }
 
-            $tenant = $payment->tenant()->first() ?? $subscription->tenant()->first();
+            if ($invoice->invoice_type !== 'plan_change_settlement') {
+                $tenant = $payment->tenant()->first() ?? $subscription->tenant()->first();
 
-            if (
-                $tenant
-                && ! in_array($tenant->status, ['pending', 'rejected'], true)
-            ) {
-                $tenant->update([
-                    'status' => 'active',
-                    'suspension_reason' => null,
-                ]);
+                if (
+                    $tenant
+                    && ! in_array($tenant->status, ['pending', 'rejected'], true)
+                ) {
+                    $tenant->update([
+                        'status' => 'active',
+                        'suspension_reason' => null,
+                    ]);
 
-                $payment->update(['tenant_id' => $tenant->id]);
-                $subscription->update(['tenant_id' => $tenant->id]);
-                $invoice->update(['tenant_id' => $tenant->id]);
+                    $payment->update(['tenant_id' => $tenant->id]);
+                    $subscription->update(['tenant_id' => $tenant->id]);
+                    $invoice->update(['tenant_id' => $tenant->id]);
+                }
             }
 
             $invoice->update([

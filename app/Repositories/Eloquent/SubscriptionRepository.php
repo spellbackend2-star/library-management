@@ -3,10 +3,8 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Subscription;
-use App\Models\SubscriptionPlan;
 use App\Repositories\BaseRepository;
 use App\Repositories\Interface\SubscriptionInterface;
-use Carbon\Carbon;
 
 class SubscriptionRepository extends BaseRepository implements SubscriptionInterface
 {
@@ -81,6 +79,13 @@ class SubscriptionRepository extends BaseRepository implements SubscriptionInter
         return Subscription::with(['plan', 'payments'])->find($id);
     }
 
+    public function findForUpdate(int $id): Subscription
+    {
+        return Subscription::query()
+            ->lockForUpdate()
+            ->findOrFail($id);
+    }
+
     public function create(array $data): Subscription
     {
         return Subscription::create($data);
@@ -121,50 +126,6 @@ class SubscriptionRepository extends BaseRepository implements SubscriptionInter
     public function cancel(int $id): Subscription
     {
         return $this->updateStatus($id, 'cancelled');
-    }
-
-    public function changePlan(int $id, int $planId): Subscription
-    {
-        $subscription = Subscription::lockForUpdate()->findOrFail($id);
-
-        if ($subscription->status === 'cancelled') {
-            throw new \InvalidArgumentException(
-                'Cannot change plan for a cancelled subscription.'
-            );
-        }
-
-        $plan = SubscriptionPlan::findOrFail($planId);
-
-        $startDate = now();
-        $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
-            'day' => $startDate->copy()->addDays((int) $plan->duration),
-            'month' => $startDate->copy()->addMonths((int) $plan->duration),
-            'year' => $startDate->copy()->addYears((int) $plan->duration),
-            default => $startDate->copy()->addMonths((int) $plan->duration),
-        };
-
-        if (
-            in_array($subscription->status, ['active', 'pending'], true)
-            && $subscription->expires_at
-            && $subscription->expires_at >= $startDate->toDateString()
-        ) {
-            $startDate = Carbon::parse($subscription->expires_at);
-            $expiresAt = match (strtolower($plan->duration_unit ?? 'month')) {
-                'day' => $startDate->copy()->addDays((int) $plan->duration),
-                'month' => $startDate->copy()->addMonths((int) $plan->duration),
-                'year' => $startDate->copy()->addYears((int) $plan->duration),
-                default => $startDate->copy()->addMonths((int) $plan->duration),
-            };
-        }
-
-        $subscription->update([
-            'subscription_plan_id' => $planId,
-            'starts_at' => $startDate->toDateString(),
-            'expires_at' => $expiresAt->toDateString(),
-            'status' => 'active',
-        ]);
-
-        return $subscription->fresh(['plan', 'payments']);
     }
 
     public function delete(int $id): bool

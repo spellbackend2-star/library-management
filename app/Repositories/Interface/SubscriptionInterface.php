@@ -12,6 +12,8 @@ interface SubscriptionInterface
 
     public function find(int $id): ?Subscription;
 
+    public function findForUpdate(int $id): Subscription;
+
     public function create(array $data): Subscription;
 
     public function update(int $id, array $data): Subscription;
@@ -19,8 +21,6 @@ interface SubscriptionInterface
     public function updateStatus(int $id, string $status): Subscription;
 
     public function cancel(int $id): Subscription;
-
-    public function changePlan(int $id, int $planId): Subscription;
 
     public function delete(int $id): bool;
 }

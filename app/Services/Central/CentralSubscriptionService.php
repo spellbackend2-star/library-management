@@ -16,7 +16,7 @@ class CentralSubscriptionService
         ?Carbon $startsAt = null
     ): Subscription {
         $expiresAt = $startsAt
-            ? $this->expiryDate($startsAt, $plan)
+            ? $this->expiryDateForPlan($startsAt, $plan)
             : null;
 
         return Subscription::create([
@@ -42,7 +42,7 @@ class CentralSubscriptionService
                 : now();
             $expiresAt = $preserveEffectiveDate && $subscription->expires_at
                 ? Carbon::parse($subscription->expires_at)
-                : $this->expiryDate($startDate, $plan);
+                : $this->expiryDateForPlan($startDate, $plan);
 
             $dates = [
                 'starts_at' => $startDate->toDateString(),
@@ -63,7 +63,7 @@ class CentralSubscriptionService
         return $subscription;
     }
 
-    private function expiryDate(Carbon $startDate, SubscriptionPlan $plan): Carbon
+    public function expiryDateForPlan(Carbon $startDate, SubscriptionPlan $plan): Carbon
     {
         return match (strtolower($plan->duration_unit ?? 'month')) {
             'day' => $startDate->copy()->addDays((int) $plan->duration),

@@ -160,6 +160,21 @@ class SubscriptionController extends Controller
         );
     }
 
+    public function previewChangePlan(
+        ChangePlanRequest $request,
+        Subscription $subscription
+    ): JsonResponse {
+        $preview = $this->subscriptionService->previewPlanChange(
+            $subscription->id,
+            $request->validated()['subscription_plan_id']
+        );
+
+        return $this->successResponse(
+            $preview,
+            'Subscription plan change preview calculated successfully.'
+        );
+    }
+
     public function destroy(Subscription $subscription): JsonResponse
     {
         $this->subscriptionService->delete($subscription->id);

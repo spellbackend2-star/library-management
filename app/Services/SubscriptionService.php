@@ -48,6 +48,11 @@ class SubscriptionService
         return $this->planChangeService->changePlan($id, $planId);
     }
 
+    public function previewPlanChange(int $id, int $planId): array
+    {
+        return $this->planChangeService->preview($id, $planId);
+    }
+
     public function delete(int $id): bool
     {
         return $this->subscriptionRepository->delete($id);

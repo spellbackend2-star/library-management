@@ -23,6 +23,7 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('subscriptions', SubscriptionController::class);
         Route::patch('/subscriptions/{subscription}/status', [SubscriptionController::class, 'updateStatus']);
         Route::patch('/subscriptions/{subscription}/cancel', [SubscriptionController::class, 'cancel']);
+        Route::post('/subscriptions/{subscription}/change-plan/preview', [SubscriptionController::class, 'previewChangePlan']);
         Route::patch('/subscriptions/{subscription}/change-plan', [SubscriptionController::class, 'changePlan']);
     });
 

@@ -89,6 +89,90 @@ class CentralSubscriptionPlanChangeService
         return $result;
     }
 
+    public function preview(int $subscriptionId, int $planId): array
+    {
+        $current = $this->subscriptionRepository->find($subscriptionId);
+
+        if (! $current) {
+            throw new \Illuminate\Database\Eloquent\ModelNotFoundException();
+        }
+
+        if ($current->status === 'cancelled') {
+            throw new InvalidArgumentException(
+                'Cannot change plan for a cancelled subscription.'
+            );
+        }
+
+        $current->loadMissing(['plan', 'tenant']);
+        $newPlan = SubscriptionPlan::query()->findOrFail($planId);
+        $effectiveDate = now()->startOfDay();
+        $financials = $this->calculateCurrentPlanBalance($current, $effectiveDate);
+        $settlementRequired = $financials['outstanding'] > 0;
+        $credit = $settlementRequired ? 0.0 : $financials['credit'];
+        $newPlanPrice = round((float) $newPlan->price, 2);
+        $newAmountDue = max(0, round($newPlanPrice - $credit, 2));
+        $newExpiresAt = $this->centralSubscriptionService
+            ->expiryDateForPlan($effectiveDate, $newPlan);
+
+        $settlementInvoice = $current->invoices()
+            ->where('invoice_type', 'plan_change_settlement')
+            ->whereIn('status', ['unpaid', 'partially_paid', 'overdue'])
+            ->latest('id')
+            ->first();
+        $previousInvoices = $current->invoices()
+            ->whereIn('invoice_type', ['subscription', 'renewal'])
+            ->latest('id')
+            ->get()
+            ->map(fn (CentralInvoice $invoice) => [
+                'id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'invoice_type' => $invoice->invoice_type,
+                'total_amount' => $invoice->total_amount,
+                'paid_amount' => $invoice->paid_amount,
+                'remaining_amount' => $invoice->remaining_amount,
+                'status' => $invoice->status,
+            ])
+            ->values();
+
+        return [
+            'effective_date' => $effectiveDate->toDateString(),
+            'can_change_plan' => ! $settlementRequired,
+            'settlement_required' => $settlementRequired,
+            'current_plan' => [
+                'subscription_id' => $current->id,
+                'plan_id' => $current->plan?->id,
+                'plan_name' => $current->plan?->name,
+                'accrued_charges' => $financials['accrued'],
+                'amount_paid' => $financials['paid'],
+                'outstanding_amount' => $financials['outstanding'],
+                'eligible_credit' => $credit,
+                'invoices' => $previousInvoices,
+            ],
+            'settlement_invoice' => $settlementInvoice
+                ? [
+                    'id' => $settlementInvoice->id,
+                    'invoice_number' => $settlementInvoice->invoice_number,
+                    'status' => $settlementInvoice->status,
+                    'remaining_amount' => $settlementInvoice->remaining_amount,
+                ]
+                : null,
+            'new_plan' => [
+                'id' => $newPlan->id,
+                'name' => $newPlan->name,
+                'price' => $newPlanPrice,
+                'credit_applied' => $credit,
+                'amount_due' => $newAmountDue,
+                'duration' => $newPlan->duration,
+                'duration_unit' => $newPlan->duration_unit,
+                'starts_at' => $effectiveDate->toDateString(),
+                'expires_at' => $newExpiresAt->toDateString(),
+                'activation_condition' => $newAmountDue <= 0
+                    ? 'immediate'
+                    : 'first_successful_positive_payment',
+            ],
+        ];
+    }
+
     /**
      * Prorate the subscription's locked-in amount over its actual service
      * period. Only successful payments count toward the accrued charges.
@@ -103,6 +187,8 @@ class CentralSubscriptionPlanChangeService
 
         if (! $subscription->starts_at || ! $subscription->expires_at) {
             return [
+                'accrued' => 0.0,
+                'paid' => $paid,
                 'outstanding' => 0.0,
                 'credit' => 0.0,
             ];
@@ -114,6 +200,8 @@ class CentralSubscriptionPlanChangeService
 
         if ($termDays <= 0) {
             return [
+                'accrued' => 0.0,
+                'paid' => $paid,
                 'outstanding' => 0.0,
                 'credit' => 0.0,
             ];
@@ -123,14 +211,11 @@ class CentralSubscriptionPlanChangeService
         $serviceEnd = $effectiveDate->greaterThan($expiresAt)
             ? $expiresAt
             : $effectiveDate;
-        $usedDays = $serviceEnd->lessThanOrEqualTo($startsAt)
+        $elapsedDays = $serviceEnd->lessThan($startsAt)
             ? 0
-            : min($termDays, $startsAt->diffInDays($serviceEnd));
-        $remainingDays = $effectiveDate->greaterThanOrEqualTo($expiresAt)
-            ? 0
-            : max(0, $effectiveDate->greaterThan($startsAt)
-                ? $effectiveDate->diffInDays($expiresAt)
-                : $termDays);
+            : $startsAt->diffInDays($serviceEnd) + 1;
+        $usedDays = min($termDays, $elapsedDays);
+        $remainingDays = max(0, $termDays - $usedDays);
 
         $accrued = round($price * ($usedDays / $termDays), 2);
         $outstanding = round(max(0, $accrued - $paid), 2);
@@ -139,6 +224,8 @@ class CentralSubscriptionPlanChangeService
         $credit = round(min($unpaidCredit, $remainingPeriodValue), 2);
 
         return [
+            'accrued' => $accrued,
+            'paid' => $paid,
             'outstanding' => $outstanding,
             'credit' => $credit,
         ];

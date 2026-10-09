@@ -13,6 +13,13 @@ use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
+
+    /*
+    |--------------------------------------------------------------------------
+    | Routing
+    |--------------------------------------------------------------------------
+    */
+
     ->withRouting(
         web: __DIR__ . '/../routes/web.php',
         api: __DIR__ . '/../routes/api.php',
@@ -20,29 +27,35 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
 
+    /*
+    |--------------------------------------------------------------------------
+    | Middleware
+    |--------------------------------------------------------------------------
+    */
+
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+        ]);
     })
+
+    /*
+    |--------------------------------------------------------------------------
+    | Exception Handling
+    |--------------------------------------------------------------------------
+    */
 
     ->withExceptions(function (Exceptions $exceptions): void {
 
-        /*
-        |--------------------------------------------------------------------------
-        | JSON Response
-        |--------------------------------------------------------------------------
-        */
-
+        // Return JSON for API requests.
         $exceptions->shouldRenderJsonWhen(
-            fn(Request $request) =>
-            $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request): bool =>
+                $request->is('api/*') || $request->expectsJson()
         );
 
-        /*
-        |--------------------------------------------------------------------------
-        | Model Not Found
-        |--------------------------------------------------------------------------
-        */
-
+        // Model not found.
         $exceptions->render(function (
             ModelNotFoundException $e,
             Request $request
@@ -50,17 +63,12 @@ return Application::configure(basePath: dirname(__DIR__))
             return response()->json([
                 'success' => false,
                 'message' => $e->getModel()
-                    ? class_basename($e->getModel()) . ' not found.'
-                    : 'Resource not found.',
+                    ? class_basename($e->getModel()) . ' ID not found.'
+                    : 'Requested resource not found.',
             ], 404);
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Validation Error
-        |--------------------------------------------------------------------------
-        */
-
+        // Validation errors.
         $exceptions->render(function (
             ValidationException $e,
             Request $request
@@ -72,12 +80,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 422);
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Authentication
-        |--------------------------------------------------------------------------
-        */
-
+        // Authentication errors.
         $exceptions->render(function (
             AuthenticationException $e,
             Request $request
@@ -88,12 +91,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 401);
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Authorization
-        |--------------------------------------------------------------------------
-        */
-
+        // Authorization errors.
         $exceptions->render(function (
             AuthorizationException $e,
             Request $request
@@ -104,28 +102,34 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 403);
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Route Not Found
-        |--------------------------------------------------------------------------
-        */
-
+        // Endpoint not found.
         $exceptions->render(function (
             NotFoundHttpException $e,
             Request $request
         ) {
+            // A model exception may be wrapped in a route exception.
+            $previous = $e->getPrevious();
+
+            while ($previous !== null) {
+                if ($previous instanceof ModelNotFoundException) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $previous->getModel()
+                            ? class_basename($previous->getModel()) . ' ID not found.'
+                            : 'Requested resource not found.',
+                    ], 404);
+                }
+
+                $previous = $previous->getPrevious();
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Endpoint not found.',
             ], 404);
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Method Not Allowed
-        |--------------------------------------------------------------------------
-        */
-
+        // HTTP method not allowed.
         $exceptions->render(function (
             MethodNotAllowedHttpException $e,
             Request $request
@@ -136,12 +140,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 405);
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Database Errors
-        |--------------------------------------------------------------------------
-        */
-
+        // Duplicate database records.
         $exceptions->render(function (
             QueryException $e,
             Request $request
@@ -150,22 +149,36 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            if (str_contains(
+                $e->getMessage(),
+                'booking_seats_show_seat_id_is_active_unique'
+            )) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Seat already booked.',
+                ], 409);
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Duplicate record already exists.',
             ], 409);
         });
 
-        /*
-        |--------------------------------------------------------------------------
-        | Global Exception
-        |--------------------------------------------------------------------------
-        */
-
+        // Unexpected exceptions.
         $exceptions->render(function (
             \Throwable $e,
             Request $request
         ) {
+            if (
+                ! $request->is('api/*')
+                && ! $request->expectsJson()
+            ) {
+                return null;
+            }
+
+            report($e);
+
             return response()->json([
                 'success' => false,
                 'message' => config('app.debug')

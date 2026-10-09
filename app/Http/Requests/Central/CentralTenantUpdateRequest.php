@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Central;
 
+use App\Models\Tenant;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CentralTenantUpdateRequest extends FormRequest
 {
@@ -13,6 +15,9 @@ class CentralTenantUpdateRequest extends FormRequest
 
     public function rules(): array
     {
+        $tenant = $this->route('tenant');
+        $tenantId = $tenant instanceof Tenant ? $tenant->getKey() : $tenant;
+
         return [
             'company_name' => [
                 'sometimes',
@@ -31,6 +36,7 @@ class CentralTenantUpdateRequest extends FormRequest
                 'sometimes',
                 'email',
                 'max:255',
+                Rule::unique('tenants', 'owner_email')->ignore($tenantId),
             ],
 
             'owner_name' => [
@@ -39,5 +45,22 @@ class CentralTenantUpdateRequest extends FormRequest
                 'max:255',
             ],
         ];
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator): void {
+            if (! $this->hasAny([
+                'company_name',
+                'owner_name',
+                'owner_email',
+                'phone',
+            ])) {
+                $validator->errors()->add(
+                    'tenant',
+                    'Provide at least one tenant profile field to update.'
+                );
+            }
+        });
     }
 }

@@ -194,8 +194,6 @@ class KhaltiService
 
         $payment->update([
             'transaction_id' => $result['pidx'],
-            'gateway_reference' => $result['pidx'],
-            'payment_url' => $result['payment_url'] ?? null,
             'gateway_response' => $result,
         ]);
 
@@ -236,5 +234,49 @@ class KhaltiService
 
             'gateway_response' => $result,
         ];
+    }
+
+    /**
+     * Verify a central subscription payment and ensure the Khalti lookup
+     * belongs to this payment and amount. Khalti amounts are in paisa;
+     * this application stores payment amounts in NPR.
+     */
+    public function verifySubscriptionPayment(SubscriptionPayment $payment): array
+    {
+        $gatewayResponse = $payment->gateway_response ?? [];
+        $pidx = is_array($gatewayResponse)
+            ? ($gatewayResponse['pidx'] ?? $payment->transaction_id)
+            : $payment->transaction_id;
+
+        if (! is_string($pidx) || trim($pidx) === '') {
+            throw new \RuntimeException('Khalti pidx is missing for this payment.');
+        }
+
+        $result = $this->verify($pidx);
+        $lookup = $result['gateway_response'] ?? [];
+        $returnedPidx = $lookup['pidx'] ?? null;
+
+        if (! is_string($returnedPidx) || ! hash_equals($pidx, $returnedPidx)) {
+            throw new \RuntimeException('Khalti returned a different or missing pidx for this payment.');
+        }
+
+        $expectedPaisa = (int) round((float) $payment->amount * 100);
+        $receivedPaisa = $lookup['total_amount'] ?? null;
+
+        if (! is_numeric($receivedPaisa) || (int) $receivedPaisa !== $expectedPaisa) {
+            throw new \RuntimeException('Khalti payment amount does not match the invoice payment amount.');
+        }
+
+        $returnedOrderId = $lookup['purchase_order_id'] ?? null;
+        $expectedOrderId = 'SUB-' . $payment->id;
+
+        if (
+            $returnedOrderId !== null
+            && (! is_string($returnedOrderId) || ! hash_equals($expectedOrderId, $returnedOrderId))
+        ) {
+            throw new \RuntimeException('Khalti returned a different purchase order for this payment.');
+        }
+
+        return $result;
     }
 }

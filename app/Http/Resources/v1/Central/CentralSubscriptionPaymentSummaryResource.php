@@ -49,7 +49,6 @@ class CentralSubscriptionPaymentSummaryResource extends JsonResource
                 'payment_method' => $payment->payment_method,
                 'status' => $payment->status,
                 'transaction_id' => $payment->transaction_id,
-                'gateway_reference' => $payment->gateway_reference,
                 'payment_url' => $payment->payment_url,
                 'paid_at' => $payment->paid_at,
             ],

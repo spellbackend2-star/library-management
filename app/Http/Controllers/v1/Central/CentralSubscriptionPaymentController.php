@@ -24,6 +24,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -816,10 +817,8 @@ class CentralSubscriptionPaymentController extends Controller
             /*
              * Ask Khalti for actual payment status.
              */
-            $result =
-                $this->khaltiService->verify(
-                    $payment->transaction_id
-                );
+            $result = $this->khaltiService
+                ->verifySubscriptionPayment($payment);
 
             $gatewayStatus = strtoupper(
                 (string) ($result['status'] ?? '')
@@ -1233,7 +1232,7 @@ class CentralSubscriptionPaymentController extends Controller
             'payment_method' => [
                 'required',
                 'string',
-                'in:CASH,KHALTI',
+                Rule::in(['CASH', 'KHALTI']),
             ],
             'return_url' => [
                 'nullable',
@@ -1732,8 +1731,6 @@ class CentralSubscriptionPaymentController extends Controller
                 'status' => $payment->status,
                 'transaction_id' =>
                 $payment->transaction_id,
-                'gateway_reference' =>
-                $payment->gateway_reference,
                 'payment_url' =>
                 $payment->payment_url,
                 'paid_at' => $payment->paid_at,
@@ -1917,14 +1914,14 @@ class CentralSubscriptionPaymentController extends Controller
                             'central.subscription-payments.pay',
                             ['payment' => $payment->id]
                         ),
-                        'allowed_payment_methods' => ['CASH', 'KHALTI', 'ESEWA'],
+                        'allowed_payment_methods' => ['CASH', 'KHALTI'],
                     ]
                     : [
                         'method' => 'POST',
                         'url' => route('central.subscription-payments.pay-invoice'),
                         'invoice_id' => $payment->invoice?->id,
                         'amount' => $payment->invoice?->remaining_amount,
-                        'allowed_payment_methods' => ['KHALTI', 'ESEWA'],
+                        'allowed_payment_methods' => ['KHALTI'],
                     ];
             } elseif (! $tenant) {
                 $summary['tenant_registration'] = [
@@ -1956,7 +1953,7 @@ class CentralSubscriptionPaymentController extends Controller
         if ($request->filled('payment_method')) {
             $request->merge([
                 'payment_method' => strtoupper(
-                    $request->input('payment_method')
+                    trim((string) $request->input('payment_method'))
                 ),
             ]);
         }

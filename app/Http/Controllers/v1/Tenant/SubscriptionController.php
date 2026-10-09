@@ -31,7 +31,12 @@ class SubscriptionController extends Controller
         );
 
         $items = new Collection($result['data'] ?? []);
-        $items = $items->loadMissing(['plan', 'tenant']);
+        $items = $items->loadMissing([
+            'plan',
+            'tenant',
+            'invoices',
+            'payments',
+        ]);
 
         return response()->json([
             'success' => true,
@@ -53,7 +58,11 @@ class SubscriptionController extends Controller
         $subscription = $this->subscriptionService->create($data);
 
         return $this->successResponse(
-            new SubscriptionResource($subscription->load(['plan', 'payments'])),
+            new SubscriptionResource($subscription->load([
+                'plan',
+                'payments',
+                'invoices',
+            ])),
             'Subscription created successfully.',
             201
         );
@@ -61,7 +70,7 @@ class SubscriptionController extends Controller
 
     public function show(Subscription $subscription): JsonResponse
     {
-        $subscription->load(['plan', 'tenant', 'payments']);
+        $subscription->load(['plan', 'tenant', 'invoices', 'payments']);
 
         return $this->successResponse(
             new SubscriptionResource($subscription),
@@ -79,7 +88,11 @@ class SubscriptionController extends Controller
         );
 
         return $this->successResponse(
-            new SubscriptionResource($subscription->load(['plan', 'payments'])),
+            new SubscriptionResource($subscription->load([
+                'plan',
+                'payments',
+                'invoices',
+            ])),
             'Subscription updated successfully.'
         );
     }
@@ -96,7 +109,7 @@ class SubscriptionController extends Controller
         );
 
         return $this->successResponse(
-            new SubscriptionResource($subscription->load(['plan', 'tenant', 'payments'])),
+            new SubscriptionResource($subscription->load(['plan', 'tenant', 'invoices', 'payments'])),
             'Subscription status updated successfully.'
         );
     }
@@ -110,7 +123,7 @@ class SubscriptionController extends Controller
         );
 
         return $this->successResponse(
-            new SubscriptionResource($subscription->load(['plan', 'tenant', 'payments'])),
+            new SubscriptionResource($subscription->load(['plan', 'tenant', 'invoices', 'payments'])),
             'Subscription cancelled successfully.'
         );
     }
@@ -127,7 +140,7 @@ class SubscriptionController extends Controller
         );
 
         return $this->successResponse(
-            new SubscriptionResource($subscription->load(['plan', 'tenant', 'payments'])),
+            new SubscriptionResource($subscription->load(['plan', 'tenant', 'invoices', 'payments'])),
             'Subscription plan changed successfully.'
         );
     }

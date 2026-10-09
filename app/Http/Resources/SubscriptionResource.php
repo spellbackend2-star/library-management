@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Http\Resources\CentralInvoiceResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -27,7 +28,23 @@ class SubscriptionResource extends JsonResource
                 ] : null;
             }),
             'plan' => $this->whenLoaded('plan', fn () => new SubscriptionPlanResource($this->plan)),
-            'payments' => $this->whenLoaded('payments', fn () => $this->payments),
+            'invoices' => CentralInvoiceResource::collection(
+                $this->whenLoaded('invoices')
+            ),
+            'payments' => $this->whenLoaded('payments', fn () => $this->payments->map(
+                fn ($payment) => [
+                    'id' => $payment->id,
+                    'subscription_id' => $payment->subscription_id,
+                    'invoice_id' => $payment->invoice_id,
+                    'tenant_id' => $payment->tenant_id,
+                    'amount' => $payment->amount,
+                    'payment_method' => $payment->payment_method,
+                    'status' => $payment->status,
+                    'transaction_id' => $payment->transaction_id,
+                    'paid_at' => $payment->paid_at,
+                    'created_at' => $payment->created_at,
+                ]
+            )),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

@@ -28,7 +28,22 @@ class SubscriptionPayment extends Model
         return [
             'amount' => 'decimal:2',
             'paid_at' => 'datetime',
+            'gateway_response' => 'array',
         ];
+    }
+
+    /**
+     * The central subscription_payments table stores the Khalti response,
+     * including its checkout URL, in gateway_response rather than a
+     * separate payment_url column.
+     */
+    public function getPaymentUrlAttribute(): ?string
+    {
+        $gatewayResponse = $this->gateway_response;
+
+        return is_array($gatewayResponse)
+            ? ($gatewayResponse['payment_url'] ?? null)
+            : null;
     }
 
     public function subscription(): BelongsTo

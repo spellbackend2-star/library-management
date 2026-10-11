@@ -31,7 +31,7 @@ class InitiatePlanSubscriptionPaymentRequest extends FormRequest
             'payment_method' => [
                 'required',
                 'string',
-                'in:CASH,KHALTI,ESEWA',
+                'in:KHALTI,ESEWA',
             ],
             'amount' => [
                 'required',

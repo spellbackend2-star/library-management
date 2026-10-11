@@ -166,11 +166,12 @@ class CentralSubscriptionPaymentSummaryResource extends JsonResource
             }
         } else {
             $remainingAmount = (float) $payment->invoice?->remaining_amount;
-            $summary['next_step'] = $remainingAmount > 0
-                ? 'Pay the remaining invoice balance to complete the subscription payment.'
-                : ($tenant?->status === 'pending'
-                    ? 'Invoice paid. Tenant registration is pending central admin review.'
-                    : 'Invoice paid. Complete tenant registration using this payment.');
+            $paidAmount = (float) $payment->invoice?->paid_amount;
+            $summary['next_step'] = $tenant?->status === 'pending'
+                ? 'Tenant registration is pending central admin review.'
+                : ($paidAmount > 0
+                    ? 'Payment received. Continue tenant registration; the invoice still has a remaining balance of '.$remainingAmount.'.'
+                    : 'Complete the subscription payment to continue tenant registration.');
 
             if ($remainingAmount > 0) {
                 $summary['pay'] = $payment->tenant_id !== null
@@ -189,12 +190,14 @@ class CentralSubscriptionPaymentSummaryResource extends JsonResource
                         'amount' => $payment->invoice?->remaining_amount,
                         'allowed_payment_methods' => ['KHALTI', 'ESEWA'],
                     ];
-            } elseif (! $tenant) {
+            }
+
+            if (! $tenant && $paidAmount > 0) {
                 $summary['tenant_registration'] = [
                     'method' => 'POST',
                     'url' => route(
                         'central.subscription-payments.complete-and-create-tenant',
-                        ['payment' => $payment->id]
+                        ['invoice' => $payment->invoice_id]
                     ),
                 ];
             }

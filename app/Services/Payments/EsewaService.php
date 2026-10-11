@@ -75,7 +75,10 @@ class EsewaService
         ];
     }
 
-    public function initiateSubscription(SubscriptionPayment $payment): array
+    public function initiateSubscription(
+        SubscriptionPayment $payment,
+        ?string $returnUrl = null
+    ): array
     {
         $subscription = $payment->subscription;
 
@@ -123,11 +126,11 @@ class EsewaService
 
                 'success_url' => route(
                     'central.subscription-payments.verify-esewa',
-                    ['payment' => $payment->id]
+                    ['payment' => $payment->id, 'return_url' => $returnUrl]
                 ),
                 'failure_url' => route(
                     'central.subscription-payments.verify-esewa',
-                    ['payment' => $payment->id]
+                    ['payment' => $payment->id, 'return_url' => $returnUrl]
                 ),
 
                 'signed_field_names' => 'total_amount,transaction_uuid,product_code',

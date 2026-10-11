@@ -18,6 +18,7 @@ class CentralPaymentTenantCompletionResource extends JsonResource
         return [
             'payment' => [
                 'id' => $payment->id,
+                'invoice_id' => $payment->invoice_id,
                 'amount' => $payment->amount,
                 'payment_method' => $payment->payment_method,
                 'status' => $payment->status,

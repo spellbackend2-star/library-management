@@ -170,9 +170,9 @@ class CentralAuthControllerTest extends TestCase
         $this->assertSame('1750.00', $payload['payment']['amount']);
     }
 
-    public function test_partial_invoice_payment_can_be_used_to_create_tenant(): void
+    public function test_invoice_completion_uses_invoice_id_after_partial_payment(): void
     {
-        $payment = new SubscriptionPayment(['status' => 'PENDING']);
+        $payment = new SubscriptionPayment(['status' => 'SUCCESS']);
         $input = [
             'owner' => 'Name',
             'company_name' => 'Company',
@@ -229,7 +229,7 @@ class CentralAuthControllerTest extends TestCase
 
         $service->shouldReceive('completePaymentAndCreateTenant')
             ->once()
-            ->with($payment, $input)
+            ->with($invoice, $input)
             ->andReturn([
                 'subscription_payment' => $payment,
                 'invoice' => $invoice,
@@ -257,7 +257,7 @@ class CentralAuthControllerTest extends TestCase
         };
         $request->replace($input);
 
-        $response = $controller->completeAndCreateTenant($request, $payment);
+        $response = $controller->completeAndCreateTenant($request, $invoice);
         $payload = json_decode($response->getContent(), true);
 
         $this->assertSame(201, $response->getStatusCode());
@@ -324,6 +324,7 @@ class CentralAuthControllerTest extends TestCase
         ]);
 
         $payment = new SubscriptionPayment([
+            'invoice_id' => 60,
             'amount' => '1900.00',
             'payment_method' => 'KHALTI',
             'status' => 'SUCCESS',
@@ -348,6 +349,7 @@ class CentralAuthControllerTest extends TestCase
             'subscription',
         ], array_keys($payload));
         $this->assertSame(64, $payload['payment']['id']);
+        $this->assertSame(60, $payload['payment']['invoice_id']);
         $this->assertSame('SUCCESS', $payload['payment']['status']);
         $this->assertSame(5, $payload['invoice']['coupon_id']);
         $this->assertSame('100.00', $payload['invoice']['coupon_discount']);
@@ -388,6 +390,7 @@ class CentralAuthControllerTest extends TestCase
         $invoice->id = 56;
 
         $payment = new SubscriptionPayment([
+            'invoice_id' => 56,
             'amount' => '1900.00',
             'payment_method' => 'KHALTI',
             'status' => 'PENDING',
@@ -431,6 +434,7 @@ class CentralAuthControllerTest extends TestCase
         ], array_keys($payload['invoice']));
         $this->assertSame([
             'id',
+            'invoice_id',
             'amount',
             'payment_method',
             'status',

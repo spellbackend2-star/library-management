@@ -42,7 +42,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/subscription-payments/initiate-from-plan', [CentralSubscriptionPaymentController::class, 'initiateFromPlan']);
         Route::post('/subscription-payments/pay', [CentralSubscriptionPaymentController::class, 'payInvoice'])
             ->name('central.subscription-payments.pay-invoice');
-        Route::post('/subscription-payments/{payment}/complete-and-create-tenant', [CentralSubscriptionPaymentController::class, 'completeAndCreateTenant'])
+        Route::post('/subscription-payments/{invoice}/complete-and-create-tenant', [CentralSubscriptionPaymentController::class, 'completeAndCreateTenant'])
             ->name('central.subscription-payments.complete-and-create-tenant');
 
         Route::middleware('auth:api')->group(function () {

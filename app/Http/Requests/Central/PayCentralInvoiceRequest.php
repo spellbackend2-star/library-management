@@ -36,7 +36,7 @@ class PayCentralInvoiceRequest extends FormRequest
             'payment_method' => [
                 'required',
                 'string',
-                'in:CASH,KHALTI',
+                'in:CASH,KHALTI,ESEWA',
             ],
             'return_url' => [
                 'nullable',

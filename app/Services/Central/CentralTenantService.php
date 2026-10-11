@@ -223,64 +223,116 @@ class CentralTenantService
     }
 
     public function completePaymentAndCreateTenant(
-        SubscriptionPayment $payment,
+        CentralInvoice $invoice,
         array $data
     ): array {
-        $payment->load(['subscription.plan', 'invoice']);
-
-        $hasSuccessfulPayment = in_array(
-            $payment->status,
-            ['SUCCESS', 'COMPLETED'],
-            true
-        );
-        $hasPartialInvoicePayment = (float) $payment->invoice?->paid_amount > 0;
-
-        if (! $hasSuccessfulPayment && ! $hasPartialInvoicePayment) {
-            throw new \RuntimeException(
-                'A successful payment or partial invoice payment is required before creating a tenant.'
-            );
-        }
-
-        $subscription = $payment->subscription;
-
-        if (! $subscription || ! $subscription->plan) {
-            throw new \RuntimeException('Subscription plan not found for this payment.');
-        }
-
-        if ($payment->tenant_id || $subscription->tenant_id) {
-            throw new \RuntimeException('This payment is already linked to a tenant.');
-        }
-
         $centralDomain = config('tenancy.central_domains.0');
 
         if (! $centralDomain) {
             throw new \RuntimeException('The central domain is not configured.');
         }
 
-        $tenant = Tenant::create([
-            'company_name' => $data['company_name'],
-            'tenant_code' => $data['subdomain'],
-            'owner_email' => $data['email'],
-            'owner_name' => $data['owner'],
-            'phone' => $data['phone'] ?? null,
-            'status' => 'pending',
-        ]);
+        [$subscription, $payment, $tenant] = DB::transaction(function () use ($invoice, $data): array {
+            $invoice = CentralInvoice::query()
+                ->lockForUpdate()
+                ->with(['subscription.plan', 'payments'])
+                ->findOrFail($invoice->id);
 
-        $domain = $tenant->domains()->create([
-            'domain' => $data['subdomain'].'.'.$centralDomain,
-        ]);
+            if ($invoice->invoice_type !== 'subscription') {
+                throw ValidationException::withMessages([
+                    'invoice' => ['This invoice is not for a subscription registration.'],
+                ]);
+            }
 
-        $subscription->update(['tenant_id' => $tenant->id]);
-        $payment->update(['tenant_id' => $tenant->id]);
-        $payment->invoice?->update(['tenant_id' => $tenant->id]);
+            $subscription = $invoice->subscription;
+
+            if (! $subscription || ! $subscription->plan) {
+                throw ValidationException::withMessages([
+                    'invoice' => ['Subscription plan not found for this invoice.'],
+                ]);
+            }
+
+            if ($subscription->tenant_id && $subscription->tenant_id !== $invoice->tenant_id) {
+                throw ValidationException::withMessages([
+                    'invoice' => ['This invoice is already linked to a tenant.'],
+                ]);
+            }
+
+            $successfulPayments = $invoice->payments
+                ->whereIn('status', ['SUCCESS', 'COMPLETED']);
+
+            if ($successfulPayments->isEmpty() || (float) $invoice->paid_amount <= 0) {
+                throw ValidationException::withMessages([
+                    'invoice' => ['A successful payment is required before creating a tenant.'],
+                ]);
+            }
+
+            // Keep the existing response shape, using the latest successful attempt.
+            $payment = $successfulPayments->sortByDesc('id')->first();
+            $tenant = $invoice->tenant_id
+                ? Tenant::findOrFail($invoice->tenant_id)
+                : null;
+
+            if ($tenant && (
+                $tenant->company_name !== $data['company_name']
+                || $tenant->tenant_code !== $data['subdomain']
+                || strtolower((string) $tenant->owner_email) !== strtolower($data['email'])
+                || $tenant->owner_name !== $data['owner']
+                || (string) $tenant->phone !== (string) ($data['phone'] ?? '')
+            )) {
+                throw ValidationException::withMessages([
+                    'invoice' => ['This invoice is already linked to a different tenant registration.'],
+                ]);
+            }
+
+            return [$subscription, $payment, $tenant];
+        });
+
+        // Tenant creation fires database-creation events, which implicitly commit on MySQL.
+        // Keep it outside the central DB transaction, then link it to the invoice afterward.
+        if (! $tenant) {
+            $tenant = Tenant::create([
+                'company_name' => $data['company_name'],
+                'tenant_code' => $data['subdomain'],
+                'owner_email' => $data['email'],
+                'owner_name' => $data['owner'],
+                'phone' => $data['phone'] ?? null,
+                'status' => 'pending',
+            ]);
+        }
+
+        $domain = $tenant->domains()->first();
+        if (! $domain) {
+            $domain = $tenant->domains()->create([
+                'domain' => $data['subdomain'].'.'.$centralDomain,
+            ]);
+        }
+
+        DB::transaction(function () use ($invoice, $subscription, $tenant): void {
+            $lockedInvoice = CentralInvoice::query()
+                ->lockForUpdate()
+                ->findOrFail($invoice->id);
+
+            if ($lockedInvoice->tenant_id && $lockedInvoice->tenant_id !== $tenant->id) {
+                throw ValidationException::withMessages([
+                    'invoice' => ['This invoice is already linked to a different tenant.'],
+                ]);
+            }
+
+            $subscription->update(['tenant_id' => $tenant->id]);
+            $lockedInvoice->update(['tenant_id' => $tenant->id]);
+            $lockedInvoice->payments()->update(['tenant_id' => $tenant->id]);
+        });
 
         try {
             $tenant->run(function () use ($data, $tenant): void {
-                $owner = User::create([
-                    'name' => $data['owner'],
-                    'email' => $data['email'],
-                    'password' => Hash::make($data['password']),
-                ]);
+                $owner = User::firstOrCreate(
+                    ['email' => $data['email']],
+                    [
+                        'name' => $data['owner'],
+                        'password' => Hash::make($data['password']),
+                    ]
+                );
 
                 Artisan::call('db:seed', [
                     '--class' => RolePermissionSeeder::class,
@@ -295,17 +347,19 @@ class CentralTenantService
                     $owner->assignRole($adminRole->name);
                 }
 
-                $client = app(ClientRepository::class)
-                    ->createPasswordGrantClient(
-                        name: $data['company_name'].' Password Grant Client',
-                        provider: 'users',
-                        confidential: true,
-                    );
+                if (! $tenant->passport_client_id || ! $tenant->passport_client_secret) {
+                    $client = app(ClientRepository::class)
+                        ->createPasswordGrantClient(
+                            name: $data['company_name'].' Password Grant Client',
+                            provider: 'users',
+                            confidential: true,
+                        );
 
-                $tenant->update([
-                    'passport_client_id' => $client->id,
-                    'passport_client_secret' => $client->plainSecret,
-                ]);
+                    $tenant->update([
+                        'passport_client_id' => $client->id,
+                        'passport_client_secret' => $client->plainSecret,
+                    ]);
+                }
             });
         } catch (\Throwable $e) {
             throw new \RuntimeException(

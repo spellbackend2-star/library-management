@@ -18,6 +18,11 @@ class AssignRoleRequest extends FormRequest
                 'required',
                 'string',
                 'in:admin,manager,librarian,clerk',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === 'admin' && ! $this->user()?->hasRole('admin', 'api')) {
+                        $fail('Only a tenant admin can assign the admin role.');
+                    }
+                },
             ],
         ];
     }

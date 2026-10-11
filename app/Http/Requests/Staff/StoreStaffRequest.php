@@ -50,6 +50,11 @@ class StoreStaffRequest extends FormRequest
                 'required',
                 'string',
                 'exists:roles,name',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if ($value === 'admin' && ! $this->user()?->hasRole('admin', 'api')) {
+                        $fail('Only a tenant admin can assign the admin role.');
+                    }
+                },
             ],
 
             'hire_date' => [

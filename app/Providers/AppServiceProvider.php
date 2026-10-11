@@ -13,6 +13,7 @@ use App\Repositories\Eloquent\BorrowRepository;
 use App\Repositories\Eloquent\CategoryRepository;
 use App\Repositories\Eloquent\CentralSettingRepository;
 use App\Repositories\Eloquent\CentralInvoiceRepository;
+use App\Repositories\Eloquent\CentralStaffRepository;
 use App\Repositories\Eloquent\CentralSubscriptionPaymentRepository;
 use App\Repositories\Eloquent\CopyRepository;
 use App\Repositories\Eloquent\CouponRepository;
@@ -43,6 +44,7 @@ use App\Repositories\Interface\BorrowInterface;
 use App\Repositories\Interface\CategoryInterface;
 use App\Repositories\Interface\CentralSettingInterface;
 use App\Repositories\Interface\CentralInvoiceInterface;
+use App\Repositories\Interface\CentralStaffInterface;
 use App\Repositories\Interface\CentralSubscriptionPaymentInterface;
 use App\Repositories\Interface\CopyInterface;
 use App\Repositories\Interface\CouponInterface;
@@ -63,6 +65,8 @@ use App\Repositories\Interface\SubscriptionInterface;
 use App\Repositories\Interface\SubscriptionPlanInterface;
 use App\Repositories\Interface\TenantInterface;
 use App\Repositories\Interface\InvoiceInterface;
+use App\Services\Central\CentralStaffService;
+use App\Services\Interface\CentralStaffServiceInterface;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passport\Passport;
 
@@ -188,6 +192,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             CentralInvoiceInterface::class,
             CentralInvoiceRepository::class
+        );
+        $this->app->bind(
+            CentralStaffInterface::class,
+            CentralStaffRepository::class
+        );
+        $this->app->bind(
+            CentralStaffServiceInterface::class,
+            CentralStaffService::class
         );
         $this->app->bind(
             CentralSubscriptionPaymentInterface::class,

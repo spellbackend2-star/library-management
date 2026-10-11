@@ -50,6 +50,9 @@ Route::middleware([
     |--------------------------------------------------------------------------
     */
 
+    // Browser login page for every registered tenant domain.
+    Route::get('/login', fn () => view('tenant-login'));
+
     // Tenant login
     Route::post('/login', [AuthController::class, 'login']);
 

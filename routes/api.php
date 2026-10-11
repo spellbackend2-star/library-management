@@ -17,8 +17,8 @@ use App\Services\CentralSettingService;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
+      Route::get('subscription-plans/all', [SubscriptionPlanController::class, 'all']);
     Route::middleware('auth:api')->group(function () {
-        Route::get('subscription-plans/all', [SubscriptionPlanController::class, 'all']);
         Route::apiResource('subscription-plans', SubscriptionPlanController::class);
         Route::apiResource('subscriptions', SubscriptionController::class);
         Route::patch('/subscriptions/{subscription}/status', [SubscriptionController::class, 'updateStatus']);
@@ -27,7 +27,8 @@ Route::prefix('v1')->group(function () {
         Route::patch('/subscriptions/{subscription}/change-plan', [SubscriptionController::class, 'changePlan']);
     });
 
-    Route::prefix('central')->group(function () {
+    Route::prefix('central')->group(function () 
+    {
 
         Route::post('/login', [CentralAuthController::class, 'login']);
 

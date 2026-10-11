@@ -7,48 +7,36 @@ use App\Http\Requests\Central\AssignCentralStaffRoleRequest;
 use App\Http\Requests\Central\StoreCentralStaffRequest;
 use App\Http\Requests\Central\UpdateCentralStaffRequest;
 use App\Http\Resources\CentralStaffResource;
-use App\Models\User;
+use App\Services\Interface\CentralStaffServiceInterface;
 use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
+use Illuminate\Http\Request;
 
 class CentralStaffController extends Controller
 {
     use ResponseMessage;
 
-    public function index(): JsonResponse
+    public function __construct(
+        protected CentralStaffServiceInterface $centralStaffService
+    ) {}
+
+    public function index(Request $request): JsonResponse
     {
-        $staff = User::with(['roles', 'permissions'])
-            ->latest('id')
-            ->get();
+        $result = $this->centralStaffService->getAll(
+            $request->only(['per_page', 'sort_by', 'sort_order'])
+        );
 
         return $this->successResponse(
-            CentralStaffResource::collection($staff),
-            'Central staff retrieved successfully.'
+            CentralStaffResource::collection($result['data']),
+            'Central staff retrieved successfully.',
+            200,
+            $result['meta']
         );
     }
 
     public function store(StoreCentralStaffRequest $request): JsonResponse
     {
-        $staff = DB::transaction(function () use ($request) {
-            $user = User::create([
-                'name' => $request->validated('name'),
-                'email' => $request->validated('email'),
-                'password' => $request->validated('password'),
-            ]);
-
-            $roleName = $request->validated('role');
-            $role = Role::where('name', $roleName)
-                ->where('guard_name', 'api')
-                ->first();
-
-            if ($role) {
-                $user->assignRole($role);
-            }
-
-            return $user->load(['roles', 'permissions']);
-        });
+        $staff = $this->centralStaffService->create($request->validated());
 
         return $this->successResponse(
             new CentralStaffResource($staff),
@@ -59,8 +47,7 @@ class CentralStaffController extends Controller
 
     public function show(int $staff): JsonResponse
     {
-        $staffData = User::with(['roles', 'permissions'])
-            ->find($staff);
+        $staffData = $this->centralStaffService->find($staff);
 
         abort_if(
             ! $staffData,
@@ -78,22 +65,10 @@ class CentralStaffController extends Controller
         UpdateCentralStaffRequest $request,
         int $staff
     ): JsonResponse {
-        $staffData = User::with(['roles', 'permissions'])
-            ->findOrFail($staff);
-
-        $staffData = DB::transaction(function () use ($request, $staffData) {
-            $validated = $request->validated();
-            $role = $validated['role'] ?? null;
-            unset($validated['role']);
-
-            $staffData->update($validated);
-
-            if ($role) {
-                $staffData->syncRoles([$role]);
-            }
-
-            return $staffData->fresh(['roles', 'permissions']);
-        });
+        $staffData = $this->centralStaffService->update(
+            $staff,
+            $request->validated()
+        );
 
         return $this->successResponse(
             new CentralStaffResource($staffData),
@@ -103,11 +78,7 @@ class CentralStaffController extends Controller
 
     public function destroy(int $staff): JsonResponse
     {
-        $staffData = User::findOrFail($staff);
-
-        DB::transaction(function () use ($staffData) {
-            $staffData->delete();
-        });
+        $this->centralStaffService->delete($staff);
 
         return $this->successResponse(
             null,
@@ -119,17 +90,13 @@ class CentralStaffController extends Controller
         AssignCentralStaffRoleRequest $request,
         int $staff
     ): JsonResponse {
-        $staffData = User::with(['roles', 'permissions'])
-            ->findOrFail($staff);
-
-        $role = Role::where('name', $request->validated('role'))
-            ->where('guard_name', 'api')
-            ->firstOrFail();
-
-        $staffData->syncRoles([$role->name]);
+        $staffData = $this->centralStaffService->assignRole(
+            $staff,
+            $request->validated('role')
+        );
 
         return $this->successResponse(
-            new CentralStaffResource($staffData->fresh(['roles', 'permissions'])),
+            new CentralStaffResource($staffData),
             'Central staff role assigned successfully.'
         );
     }

@@ -93,6 +93,20 @@ class AuthController extends Controller
 
         $result = json_decode((string) $response->getContent(), true);
 
+        if (
+            $response->getStatusCode() >= 400
+            || ! is_array($result)
+            || empty($result['access_token'])
+        ) {
+            return response()->json([
+                'message' => $result['message']
+                    ?? $result['error_description']
+                    ?? 'Unable to authenticate this tenant account.',
+            ], $response->getStatusCode() >= 400
+                ? $response->getStatusCode()
+                : 401);
+        }
+
         return response()->json([
             'message' => 'Successfully logged in',
             'data' => [

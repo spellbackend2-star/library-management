@@ -34,6 +34,7 @@ class UpdateCentralStaffRequest extends FormRequest
             'role' => [
                 'sometimes',
                 'string',
+                Rule::in(['super_admin', 'admin', 'support', 'billing']),
                 'exists:roles,name',
             ],
         ];

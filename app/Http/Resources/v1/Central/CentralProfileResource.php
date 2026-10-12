@@ -24,21 +24,30 @@ class CentralProfileResource extends JsonResource
         }
 
         $tenant = $this->resource['tenant'];
-        $domain = $tenant?->domains()->first();
 
-        return [
+        $response = [
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
             ],
-            'tenant' => $tenant ? [
+            'roles' => $user->getRoleNames()->values(),
+            'permissions' => $user->getAllPermissions()
+                ->pluck('name')
+                ->values(),
+        ];
+
+        if ($tenant) {
+            $domain = $tenant->domains()->first();
+            $response['tenant'] = [
                 'id' => $tenant->id,
                 'company_name' => $tenant->company_name,
                 'phone' => $tenant->phone,
                 'tenant_code' => $tenant->tenant_code,
                 'domain' => $domain?->domain,
-            ] : null,
-        ];
+            ];
+        }
+
+        return $response;
     }
 }

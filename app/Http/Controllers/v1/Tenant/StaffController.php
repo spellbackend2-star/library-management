@@ -20,6 +20,25 @@ class StaffController extends Controller
         protected StaffService $staffService
     ) {}
 
+    public function me(Request $request): JsonResponse
+    {
+        $staff = $request->user()?->staff;
+
+        if (! $staff) {
+            return $this->errorResponse('Staff profile not found.', 404);
+        }
+
+        return $this->successResponse(
+            new StaffResource($staff),
+            'Staff profile retrieved successfully.'
+        );
+    }
+
+    public function profile(Request $request): JsonResponse
+    {
+        return $this->me($request);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $result = $this->staffService->getAll($request->all());

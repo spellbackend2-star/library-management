@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Central;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreCentralStaffRequest extends FormRequest
 {
@@ -31,6 +32,7 @@ class StoreCentralStaffRequest extends FormRequest
             'role' => [
                 'required',
                 'string',
+                Rule::in(['super_admin', 'admin', 'support', 'billing']),
                 'exists:roles,name',
             ],
         ];

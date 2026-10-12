@@ -129,6 +129,7 @@ class CentralRolePermissionSeeder extends Seeder
             'users.view',
             'users.create',
             'users.update',
+            'users.delete',
 
             // Tenants
             'tenants.view',

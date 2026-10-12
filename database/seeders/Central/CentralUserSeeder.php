@@ -23,7 +23,7 @@ class CentralUserSeeder extends Seeder
 
         // The configured Central Admin account is the system administrator.
         // Ensure it has the role created by CentralRolePermissionSeeder.
-        $user->assignRole('super_admin');
+        $user->syncRoles(['super_admin']);
 
         $this->command?->info("Central admin ready: {$email} / {$password}");
     }

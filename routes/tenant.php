@@ -93,6 +93,8 @@ Route::middleware([
         // );
 
         // Staff CRUD
+        Route::get('staff/me', [StaffController::class, 'me']);
+        Route::get('staff/profile', [StaffController::class, 'profile']);
         Route::apiResource('staff', StaffController::class)
             ->middlewareFor('index', 'can:staff.view')
             ->middlewareFor('show', 'can:staff.view')

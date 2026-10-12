@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Central;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AssignCentralStaffRoleRequest extends FormRequest
 {
@@ -17,6 +18,7 @@ class AssignCentralStaffRoleRequest extends FormRequest
             'role' => [
                 'required',
                 'string',
+                Rule::in(['super_admin', 'admin', 'support', 'billing']),
                 'exists:roles,name',
             ],
         ];

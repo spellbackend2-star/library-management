@@ -43,11 +43,6 @@ class CentralRegisterRequest extends FormRequest
                 'exists:subscription_plans,id',
             ],
 
-            'coupon_id' => [
-                'nullable',
-                'integer',
-                'exists:coupons,id',
-            ],
         ];
     }
 

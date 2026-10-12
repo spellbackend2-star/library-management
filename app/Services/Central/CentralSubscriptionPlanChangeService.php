@@ -8,6 +8,7 @@ use App\Models\SubscriptionPlan;
 use App\Repositories\Interface\SubscriptionInterface;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class CentralSubscriptionPlanChangeService
@@ -30,7 +31,14 @@ class CentralSubscriptionPlanChangeService
             }
 
             $current->loadMissing(['plan', 'tenant']);
-            $newPlan = SubscriptionPlan::query()->findOrFail($planId);
+            $newPlan = $this->resolveUpgradePlan($current, $planId);
+
+            if ($this->hasOpenReplacementSubscription($current)) {
+                throw ValidationException::withMessages([
+                    'subscription_plan_id' => ['An upgrade is already pending for this subscription.'],
+                ]);
+            }
+
             $effectiveDate = now()->startOfDay();
             $financials = $this->calculateCurrentPlanBalance($current, $effectiveDate);
 
@@ -104,7 +112,7 @@ class CentralSubscriptionPlanChangeService
         }
 
         $current->loadMissing(['plan', 'tenant']);
-        $newPlan = SubscriptionPlan::query()->findOrFail($planId);
+        $newPlan = $this->resolveUpgradePlan($current, $planId);
         $effectiveDate = now()->startOfDay();
         $financials = $this->calculateCurrentPlanBalance($current, $effectiveDate);
         $settlementRequired = $financials['outstanding'] > 0;
@@ -181,15 +189,38 @@ class CentralSubscriptionPlanChangeService
         Subscription $subscription,
         Carbon $effectiveDate
     ): array {
-        $paid = round((float) $subscription->payments()
-            ->whereIn('status', ['SUCCESS', 'COMPLETED'])
+        $successfulPayments = $subscription->payments()
+            ->whereIn('status', ['SUCCESS', 'COMPLETED']);
+
+        // Payments against settlement invoices cover old-plan dues; they
+        // must never be treated as prepaid value eligible for upgrade credit.
+        $paid = round((float) (clone $successfulPayments)
+            ->where(function ($query) {
+                $query->whereNull('invoice_id')
+                    ->orWhereHas('invoice', function ($invoiceQuery) {
+                        $invoiceQuery->whereIn('invoice_type', [
+                            'subscription',
+                            'renewal',
+                            'plan_change',
+                        ]);
+                    });
+            })
             ->sum('amount'), 2);
+
+        $settlementPaid = round((float) (clone $successfulPayments)
+            ->whereHas('invoice', fn ($query) => $query->where(
+                'invoice_type',
+                'plan_change_settlement'
+            ))
+            ->sum('amount'), 2);
+
+        $price = round((float) ($subscription->amount ?? $subscription->plan?->price ?? 0), 2);
 
         if (! $subscription->starts_at || ! $subscription->expires_at) {
             return [
-                'accrued' => 0.0,
+                'accrued' => $price,
                 'paid' => $paid,
-                'outstanding' => 0.0,
+                'outstanding' => round(max(0, $price - $paid - $settlementPaid), 2),
                 'credit' => 0.0,
             ];
         }
@@ -200,14 +231,13 @@ class CentralSubscriptionPlanChangeService
 
         if ($termDays <= 0) {
             return [
-                'accrued' => 0.0,
+                'accrued' => $price,
                 'paid' => $paid,
-                'outstanding' => 0.0,
+                'outstanding' => round(max(0, $price - $paid - $settlementPaid), 2),
                 'credit' => 0.0,
             ];
         }
 
-        $price = round((float) ($subscription->amount ?? $subscription->plan?->price ?? 0), 2);
         $serviceEnd = $effectiveDate->greaterThan($expiresAt)
             ? $expiresAt
             : $effectiveDate;
@@ -218,7 +248,7 @@ class CentralSubscriptionPlanChangeService
         $remainingDays = max(0, $termDays - $usedDays);
 
         $accrued = round($price * ($usedDays / $termDays), 2);
-        $outstanding = round(max(0, $accrued - $paid), 2);
+        $outstanding = round(max(0, $accrued - $paid - $settlementPaid), 2);
         $unpaidCredit = max(0, $paid - $accrued);
         $remainingPeriodValue = round($price * ($remainingDays / $termDays), 2);
         $credit = round(min($unpaidCredit, $remainingPeriodValue), 2);
@@ -229,6 +259,49 @@ class CentralSubscriptionPlanChangeService
             'outstanding' => $outstanding,
             'credit' => $credit,
         ];
+    }
+
+    private function resolveUpgradePlan(
+        Subscription $current,
+        int $planId
+    ): SubscriptionPlan {
+        $currentPlan = $current->plan;
+        $newPlan = SubscriptionPlan::query()->findOrFail($planId);
+
+        if ($currentPlan && $newPlan->id === $currentPlan->id) {
+            throw ValidationException::withMessages([
+                'subscription_plan_id' => ['The selected plan is already active.'],
+            ]);
+        }
+
+        if (! $newPlan->is_active) {
+            throw ValidationException::withMessages([
+                'subscription_plan_id' => ['The selected subscription plan is inactive.'],
+            ]);
+        }
+
+        if ($currentPlan && (float) $newPlan->price <= (float) $currentPlan->price) {
+            throw ValidationException::withMessages([
+                'subscription_plan_id' => ['You can only upgrade to a higher-priced subscription plan.'],
+            ]);
+        }
+
+        return $newPlan;
+    }
+
+    private function hasOpenReplacementSubscription(Subscription $subscription): bool
+    {
+        return Subscription::query()
+            ->where('replaces_subscription_id', $subscription->id)
+            ->where(function ($query) {
+                $query->whereIn('status', ['pending', 'active'])
+                    ->orWhereHas('invoices', function ($invoiceQuery) {
+                        $invoiceQuery
+                            ->where('invoice_type', 'plan_change')
+                            ->whereIn('status', ['unpaid', 'partially_paid', 'overdue']);
+                    });
+            })
+            ->exists();
     }
 
     private function cancelOpenPlanInvoices(Subscription $subscription): void

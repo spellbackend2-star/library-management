@@ -1042,6 +1042,105 @@ class CentralSubscriptionPaymentController extends Controller
             ], 422);
         }
 
+        if (isset($data['coupon_id'])) {
+            $centralUser = $request->user('api');
+
+            if (! $centralUser || ! $centralUser->can('invoices.update')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You are not authorized to apply a coupon to this invoice.',
+                ], 403);
+            }
+
+            $couponId = (int) $data['coupon_id'];
+
+            $invoice = DB::transaction(function () use (
+                $invoice,
+                $couponId
+            ): CentralInvoice {
+                $lockedInvoice = CentralInvoice::query()
+                    ->lockForUpdate()
+                    ->findOrFail($invoice->id);
+
+                if (
+                    $lockedInvoice->invoice_type !== 'subscription'
+                    || (float) $lockedInvoice->paid_amount > 0
+                    || $lockedInvoice->status !== 'unpaid'
+                ) {
+                    throw ValidationException::withMessages([
+                        'invoice_id' => ['A coupon can only be applied to an unpaid subscription invoice.'],
+                    ]);
+                }
+
+                $previousCouponId = $lockedInvoice->coupon_id
+                    ? (int) $lockedInvoice->coupon_id
+                    : null;
+
+                if ($previousCouponId === $couponId) {
+                    return $lockedInvoice->fresh([
+                        'subscription.plan',
+                        'tenant.domains',
+                    ]);
+                }
+
+                $pendingPayments = $lockedInvoice->payments()
+                    ->where('status', 'PENDING')
+                    ->lockForUpdate()
+                    ->get();
+
+                $paymentAlreadyStarted = $pendingPayments->contains(
+                    fn ($payment): bool => strtoupper((string) $payment->payment_method) !== 'CASH'
+                        || $payment->transaction_id !== null
+                        || ! empty($payment->gateway_response)
+                );
+
+                if ($paymentAlreadyStarted) {
+                    throw ValidationException::withMessages([
+                        'invoice_id' => ['A coupon cannot be changed after a payment attempt has started.'],
+                    ]);
+                }
+
+                $discountBase = round(
+                    (float) $lockedInvoice->subtotal
+                        + (float) $lockedInvoice->tax
+                        - (float) $lockedInvoice->discount,
+                    2
+                );
+                $couponData = $this->centralCouponService->calculatePaymentCoupon(
+                    $couponId,
+                    $discountBase
+                );
+
+                if ($couponData['error'] !== null) {
+                    throw ValidationException::withMessages([
+                        'coupon_id' => [$couponData['error']],
+                    ]);
+                }
+
+                $lockedInvoice->coupon_id = $couponData['coupon_id'];
+                $lockedInvoice->coupon_discount = $couponData['coupon_discount'];
+                $lockedInvoice->save();
+                $lockedInvoice->recalculate();
+
+                $this->centralCouponService->recordUsage($couponData['coupon_id']);
+                $this->centralCouponService->releaseUsage($previousCouponId);
+
+                $draftPayment = $pendingPayments->first();
+                if ($draftPayment) {
+                    $draftPayment->update([
+                        'amount' => $lockedInvoice->remaining_amount,
+                    ]);
+                }
+
+                return $lockedInvoice->fresh([
+                    'subscription.plan',
+                    'tenant.domains',
+                ]);
+            }, 3);
+
+            $subscription = $invoice->subscription;
+        }
+
         $remainingAmount = max(
             0,
             round((float) $invoice->total_amount - (float) $invoice->paid_amount, 2)

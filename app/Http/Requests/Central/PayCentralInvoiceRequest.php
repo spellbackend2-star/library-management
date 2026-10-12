@@ -42,6 +42,12 @@ class PayCentralInvoiceRequest extends FormRequest
                 'nullable',
                 'url',
             ],
+            'coupon_id' => [
+                'sometimes',
+                'nullable',
+                'integer',
+                'exists:coupons,id',
+            ],
         ];
     }
 }

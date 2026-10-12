@@ -3,7 +3,6 @@
 namespace App\Services\Central;
 
 use App\Models\CentralInvoice;
-use App\Models\Coupon;
 use App\Models\Subscription;
 use App\Models\SubscriptionPayment;
 use App\Models\SubscriptionPlan;
@@ -20,7 +19,6 @@ use Spatie\Permission\Models\Role;
 class CentralTenantService
 {
     public function __construct(
-        protected CentralCouponService $centralCouponService,
         protected CentralInvoiceService $centralInvoiceService,
         protected CentralSubscriptionService $centralSubscriptionService
     ) {}
@@ -43,14 +41,6 @@ class CentralTenantService
                 'The selected subscription plan is inactive.'
             );
         }
-
-        $couponId = isset($data['coupon_id'])
-            ? (int) $data['coupon_id']
-            : null;
-        $this->centralCouponService->calculateRegistrationCoupon(
-            $couponId,
-            (float) $plan->price
-        );
 
         /*
         |--------------------------------------------------------------------------
@@ -167,22 +157,14 @@ class CentralTenantService
 
             [$subscription, $invoice, $subscriptionPayment] = DB::transaction(function () use (
                 $tenant,
-                $plan,
-                $couponId
+                $plan
             ): array {
-                $couponData = $this->centralCouponService->calculateRegistrationCoupon(
-                    $couponId,
-                    (float) $plan->price
-                );
-
                 $subscription = $this->centralSubscriptionService->createPendingSubscription($tenant, $plan);
 
                 $invoice = $this->centralInvoiceService->createSubscriptionInvoice(
                     $subscription,
                     $tenant->id,
-                    (float) $plan->price,
-                    $couponData['coupon_id'],
-                    $couponData['coupon_discount']
+                    (float) $plan->price
                 );
 
                 $subscriptionPayment = SubscriptionPayment::create([
@@ -200,8 +182,6 @@ class CentralTenantService
                 $invoice->update([
                     'subscription_payment_id' => $subscriptionPayment->id,
                 ]);
-
-                $this->centralCouponService->recordUsage($couponData['coupon_id']);
 
                 return [$subscription, $invoice, $subscriptionPayment];
             });

@@ -127,4 +127,13 @@ class CentralCouponService
             Coupon::whereKey($couponId)->increment('used_count');
         }
     }
+
+    public function releaseUsage(?int $couponId): void
+    {
+        if ($couponId) {
+            Coupon::whereKey($couponId)
+                ->where('used_count', '>', 0)
+                ->decrement('used_count');
+        }
+    }
 }

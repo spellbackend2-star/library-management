@@ -205,33 +205,42 @@ class KhaltiService
      */
     public function verify(string $pidx): array
     {
-
-
+        $url = rtrim($this->baseUrl, '/') . '/epayment/lookup/';
         $response = Http::withHeaders([
             'Authorization' => 'Key ' . $this->secretKey,
             'Content-Type' => 'application/json',
-        ])->post(
-            rtrim($this->baseUrl, '/') . '/epayment/lookup/',
-            [
-                'pidx' => $pidx,
-            ]
-        );
+        ])->post($url, [
+            'pidx' => $pidx,
+        ]);
 
         if ($response->failed()) {
-            throw new \Exception(
-                'Khalti verification failed: ' .
-                    $response->body()
+            Log::error('KHALTI LOOKUP API FAILED', [
+                'http_status' => $response->status(),
+                'url' => $url,
+                'response_body' => mb_substr(
+                    $response->body(),
+                    0,
+                    1500
+                ),
+            ]);
+
+            throw new \RuntimeException(
+                'Khalti lookup failed with HTTP ' .
+                    $response->status()
             );
         }
 
         $result = $response->json();
 
+        if (! is_array($result)) {
+            throw new \RuntimeException(
+                'Khalti lookup returned an invalid response.'
+            );
+        }
+
         return [
             'status' => $result['status'] ?? 'Unknown',
-
-            'transaction_id' => $result['transaction_id']
-                ?? $pidx,
-
+            'transaction_id' => $result['transaction_id'] ?? $pidx,
             'gateway_response' => $result,
         ];
     }

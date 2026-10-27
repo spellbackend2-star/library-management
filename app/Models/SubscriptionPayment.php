@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'amount',
     'payment_method',
     'status',
+    'payment_reference',
     'transaction_id',
     'gateway_response',
     'paid_at',

@@ -32,6 +32,32 @@ class SubscriptionController extends Controller
             $request->all()
         );
 
+        return $this->subscriptionListResponse(
+            $result,
+            'Subscriptions retrieved successfully.'
+        );
+    }
+
+    public function pendingTenants(Request $request): JsonResponse
+    {
+        $filters = array_merge(
+            $request->all(),
+            ['tenant_status' => 'pending']
+        );
+
+        $result = $this->subscriptionService->getAll($filters);
+
+        return $this->subscriptionListResponse(
+            $result,
+            'Pending tenant subscriptions retrieved successfully.'
+        );
+    }
+
+    private function subscriptionListResponse(
+        array $result,
+        string $message
+    ): JsonResponse {
+
         $items = new Collection($result['data'] ?? []);
         $items = $items->loadMissing([
             'plan',
@@ -42,7 +68,7 @@ class SubscriptionController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Subscriptions retrieved successfully.',
+            'message' => $message,
             'data' => SubscriptionResource::collection($items),
             'meta' => $result['meta'],
         ]);

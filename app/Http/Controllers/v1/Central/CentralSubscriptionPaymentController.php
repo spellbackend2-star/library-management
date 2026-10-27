@@ -30,6 +30,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -56,7 +57,7 @@ class CentralSubscriptionPaymentController extends Controller
         $filters = $request->validated();
         $payments = $this->subscriptionPaymentListingService->getPaginated($filters);
         $data = $payments->getCollection()
-            ->map(fn ($payment) => (new CentralSubscriptionPaymentListResource($payment))->resolve());
+            ->map(fn($payment) => (new CentralSubscriptionPaymentListResource($payment))->resolve());
 
         return response()->json([
             'success' => true,
@@ -170,6 +171,7 @@ class CentralSubscriptionPaymentController extends Controller
             'invoice_id' => $invoice->id,
             'tenant_id' => $subscription->tenant_id,
             'amount' => $paymentAmount,
+            'payment_reference' => 'PAY-' . strtoupper(uniqid()),
             'payment_method' =>
             strtoupper($data['payment_method']),
             'status' => 'PENDING',
@@ -625,11 +627,7 @@ class CentralSubscriptionPaymentController extends Controller
             /*
              * Payment successful.
              */
-            if (in_array(
-                $gatewayStatus,
-                ['COMPLETED', 'SUCCESS'],
-                true
-            )) {
+            if ($gatewayStatus === 'COMPLETED') {
                 $payment->update([
                     'gateway_response' =>
                     $result['gateway_response'] ?? null,
@@ -710,7 +708,7 @@ class CentralSubscriptionPaymentController extends Controller
             /*
              * Payment still pending.
              */
-            if ($gatewayStatus === 'PENDING') {
+            if (in_array($gatewayStatus, ['PENDING', 'INITIATED'], true)) {
                 $payment->update([
                     'status' => 'PENDING',
 
@@ -738,32 +736,61 @@ class CentralSubscriptionPaymentController extends Controller
             }
 
             /*
-             * Payment failed/cancelled.
+             * Only known terminal statuses are marked failed. Unknown
+             * gateway statuses stay pending so they cannot be retried as
+             * failed before the payment state is confirmed with Khalti.
              */
+            if (in_array(
+                $gatewayStatus,
+                ['FAILED', 'EXPIRED', 'USER CANCELED', 'CANCELED', 'REFUNDED', 'PARTIALLY REFUNDED'],
+                true
+            )) {
+                /*
+                 * Payment failed/cancelled or was refunded.
+                 */
+                $payment->update([
+                    'status' => 'FAILED',
+                    'gateway_response' => $result['gateway_response'] ?? null,
+                ]);
+
+                $payment->refresh();
+
+                Log::warning(
+                    'CENTRAL KHALTI PAYMENT FAILED',
+                    [
+                        'payment_id' => $payment->id,
+                        'invoice_id' => $payment->invoice_id,
+                        'gateway_status' => $gatewayStatus,
+                    ]
+                );
+
+                return $this->redirectKhaltiFrontend(
+                    $payment,
+                    'failed',
+                    'Payment failed or was cancelled.',
+                    $returnUrl
+                );
+            }
+
             $payment->update([
-                'status' => 'FAILED',
-
-                'gateway_response' =>
-                $result['gateway_response'] ?? null,
+                'status' => 'PENDING',
+                'gateway_response' => $result['gateway_response'] ?? null,
             ]);
-
             $payment->refresh();
 
             Log::warning(
-                'CENTRAL KHALTI PAYMENT FAILED',
+                'CENTRAL KHALTI PAYMENT STATUS UNCONFIRMED',
                 [
                     'payment_id' => $payment->id,
-                    'invoice_id' =>
-                    $payment->invoice_id,
-                    'gateway_status' =>
-                    $gatewayStatus,
+                    'invoice_id' => $payment->invoice_id,
+                    'gateway_status' => $gatewayStatus,
                 ]
             );
 
             return $this->redirectKhaltiFrontend(
                 $payment,
-                'failed',
-                'Payment failed or was cancelled.',
+                'pending',
+                'Payment status is not confirmed yet.',
                 $returnUrl
             );
         } catch (Throwable $e) {
@@ -1089,7 +1116,7 @@ class CentralSubscriptionPaymentController extends Controller
                     ->get();
 
                 $paymentAlreadyStarted = $pendingPayments->contains(
-                    fn ($payment): bool => strtoupper((string) $payment->payment_method) !== 'CASH'
+                    fn($payment): bool => strtoupper((string) $payment->payment_method) !== 'CASH'
                         || $payment->transaction_id !== null
                         || ! empty($payment->gateway_response)
                 );
@@ -1267,6 +1294,7 @@ class CentralSubscriptionPaymentController extends Controller
                     'invoice_id' => $lockedInvoice->id,
                     'tenant_id' => $lockedInvoice->tenant_id,
                     'amount' => $requestedAmount,
+                    'payment_reference' => 'PAY-' . strtoupper(Str::uuid()),
                     'payment_method' => $data['payment_method'],
                     'status' => 'PENDING',
                 ]);
@@ -1426,6 +1454,7 @@ class CentralSubscriptionPaymentController extends Controller
                     'invoice_id' => $invoice->id,
                     'tenant_id' => $completedPayment->tenant_id,
                     'amount' => $requestedAmount,
+                    'payment_reference' => 'PAY-' . strtoupper(Str::uuid()),
                     'payment_method' => $method,
                     'status' => 'PENDING',
                 ]);
@@ -1583,6 +1612,7 @@ class CentralSubscriptionPaymentController extends Controller
         $summary = [
             'payment' => [
                 'id' => $payment->id,
+                 'payment_reference' => $payment->payment_reference,
                 'amount' => $payment->amount,
                 'payment_method' =>
                 $payment->payment_method,
@@ -1631,6 +1661,7 @@ class CentralSubscriptionPaymentController extends Controller
                 ->get([
                     'id',
                     'invoice_id',
+                       'payment_reference',
                     'subscription_id',
                     'amount',
                     'payment_method',
@@ -1643,10 +1674,12 @@ class CentralSubscriptionPaymentController extends Controller
                     'invoice_id' => $invoicePayment->invoice_id,
                     'subscription_id' => $invoicePayment->subscription_id,
                     'amount' => $invoicePayment->amount,
+                    
                     'payment_method' => $invoicePayment->payment_method,
                     'status' => $invoicePayment->status,
                     'transaction_id' => $invoicePayment->transaction_id,
                     'paid_at' => $invoicePayment->paid_at,
+                    'payment_reference' => $invoicePayment->payment_reference,
                 ])
                 ->all()
                 : [],
@@ -1762,7 +1795,7 @@ class CentralSubscriptionPaymentController extends Controller
             $summary['next_step'] = $tenant?->status === 'pending'
                 ? 'Tenant registration is pending central admin review.'
                 : ($paidAmount > 0
-                    ? 'Payment received. Continue tenant registration; the invoice still has a remaining balance of '.$remainingAmount.'.'
+                    ? 'Payment received. Continue tenant registration; the invoice still has a remaining balance of ' . $remainingAmount . '.'
                     : 'Complete the subscription payment to continue tenant registration.');
 
             if ($remainingAmount > 0) {

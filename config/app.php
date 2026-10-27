@@ -65,7 +65,7 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'Asia/Kathmandu',
 
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
 

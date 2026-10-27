@@ -20,6 +20,7 @@ Route::prefix('v1')->group(function () {
       Route::get('subscription-plans/all', [SubscriptionPlanController::class, 'all']);
     Route::middleware('auth:api')->group(function () {
         Route::apiResource('subscription-plans', SubscriptionPlanController::class);
+        Route::get('subscriptions/pending-tenants', [SubscriptionController::class, 'pendingTenants']);
         Route::apiResource('subscriptions', SubscriptionController::class);
         Route::patch('/subscriptions/{subscription}/status', [SubscriptionController::class, 'updateStatus']);
         Route::patch('/subscriptions/{subscription}/cancel', [SubscriptionController::class, 'cancel']);

@@ -15,6 +15,7 @@ class CentralUserSeeder extends Seeder
 
         $user = User::updateOrCreate(
             ['email' => $email],
+ 
             [
                 'name' => 'Central Admin',
                 'password' => Hash::make($password),

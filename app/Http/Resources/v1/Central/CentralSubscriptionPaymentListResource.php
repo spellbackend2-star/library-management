@@ -22,6 +22,7 @@ class CentralSubscriptionPaymentListResource extends JsonResource
             'amount' => $payment->amount,
             'currency' => $invoice?->currency ?? 'NPR',
             'payment_method' => $payment->payment_method,
+            'payment_reference' => $payment->payment_reference,
             'status' => $payment->status,
             'paid_at' => $payment->paid_at
                 ? Carbon::parse($payment->paid_at)->format('Y-m-d\TH:i:s\Z')

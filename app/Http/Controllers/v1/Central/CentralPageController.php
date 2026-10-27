@@ -45,7 +45,7 @@ class CentralPageController extends Controller
 
     public function store(StoreCentralPageRequest $request): JsonResponse
     {
-        $page = $this->centralPageService->create($request->validated());
+        $page = $this->centralPageService->create($request->validated(), $request->user('api')?->id);
 
         return $this->successResponse(
             new CentralPageResource($page),
@@ -68,7 +68,7 @@ class CentralPageController extends Controller
         UpdateCentralPageRequest $request,
         CentralPage $page
     ): JsonResponse {
-        $updatedPage = $this->centralPageService->update($page, $request->validated());
+        $updatedPage = $this->centralPageService->update($page, $request->validated(), $request->user('api')?->id);
 
         return $this->successResponse(
             new CentralPageResource($updatedPage),

@@ -4,12 +4,13 @@ namespace App\Http\Requests\Central;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Rules\AssignableCentralRole;
 
 class UpdateCentralStaffRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return $this->user('api')?->can('users.update') ?? false;
     }
 
     public function rules(): array
@@ -34,8 +35,8 @@ class UpdateCentralStaffRequest extends FormRequest
             'role' => [
                 'sometimes',
                 'string',
-                Rule::in(['super_admin', 'admin', 'support', 'billing']),
-                'exists:roles,name',
+                Rule::exists('roles', 'name')->where('guard_name', 'api'),
+                new AssignableCentralRole(),
             ],
         ];
     }

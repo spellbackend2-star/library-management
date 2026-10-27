@@ -30,6 +30,10 @@ class CentralRolePermissionSeeder extends Seeder
             'users.update',
             'users.delete',
 
+            // Roles
+            'roles.view',
+            'roles.create',
+
             // Tenants
             'tenants.view',
             'tenants.create',
@@ -130,6 +134,10 @@ class CentralRolePermissionSeeder extends Seeder
             'users.create',
             'users.update',
             'users.delete',
+
+            // Roles
+            'roles.view',
+            'roles.create',
 
             // Tenants
             'tenants.view',

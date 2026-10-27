@@ -13,6 +13,7 @@ use App\Repositories\Eloquent\BorrowRepository;
 use App\Repositories\Eloquent\CategoryRepository;
 use App\Repositories\Eloquent\CentralSettingRepository;
 use App\Repositories\Eloquent\CentralInvoiceRepository;
+use App\Repositories\Eloquent\CentralRoleRepository;
 use App\Repositories\Eloquent\CentralStaffRepository;
 use App\Repositories\Eloquent\CentralSubscriptionPaymentRepository;
 use App\Repositories\Eloquent\CopyRepository;
@@ -44,6 +45,7 @@ use App\Repositories\Interface\BorrowInterface;
 use App\Repositories\Interface\CategoryInterface;
 use App\Repositories\Interface\CentralSettingInterface;
 use App\Repositories\Interface\CentralInvoiceInterface;
+use App\Repositories\Interface\CentralRoleInterface;
 use App\Repositories\Interface\CentralStaffInterface;
 use App\Repositories\Interface\CentralSubscriptionPaymentInterface;
 use App\Repositories\Interface\CopyInterface;
@@ -192,6 +194,10 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             CentralInvoiceInterface::class,
             CentralInvoiceRepository::class
+        );
+        $this->app->bind(
+            CentralRoleInterface::class,
+            CentralRoleRepository::class
         );
         $this->app->bind(
             CentralStaffInterface::class,

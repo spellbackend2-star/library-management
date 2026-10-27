@@ -23,9 +23,10 @@ class CentralPageService
     /**
      * Create a new central page.
      */
-    public function create(array $data): CentralPage
+    public function create(array $data, ?int $userId = null): CentralPage
     {
-        $data['created_by'] = auth()->id();
+        $data['created_by'] = $userId;
+        $data['updated_by'] = $userId;
 
         return CentralPage::create($data);
     }
@@ -41,9 +42,9 @@ class CentralPageService
     /**
      * Update a central page.
      */
-    public function update(CentralPage $page, array $data): CentralPage
+    public function update(CentralPage $page, array $data, ?int $userId = null): CentralPage
     {
-        $data['updated_by'] = auth()->id();
+        $data['updated_by'] = $userId;
 
         $page->update($data);
 

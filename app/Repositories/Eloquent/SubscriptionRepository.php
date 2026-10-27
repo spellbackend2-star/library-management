@@ -28,9 +28,15 @@ class SubscriptionRepository extends BaseRepository implements SubscriptionInter
     {
         $query = Subscription::query();
 
-        if (isset($filters['search']) && $filters['search'] !== '') {
-            $query->where(function ($q) use ($filters) {
-                $q->where('status', 'like', '%' . $filters['search'] . '%');
+        $search = trim((string) ($filters['search'] ?? ''));
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('status', 'like', '%' . $search . '%')
+                    ->orWhereHas('tenant', function ($tenantQuery) use ($search) {
+                        $tenantQuery->where('company_name', 'like', '%' . $search . '%')
+                            ->orWhere('phone', 'like', '%' . $search . '%')
+                            ->orWhere('owner_email', 'like', '%' . $search . '%');
+                    });
             });
         }
         // Tenant status filter

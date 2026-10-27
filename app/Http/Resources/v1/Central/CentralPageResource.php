@@ -18,6 +18,12 @@ class CentralPageResource extends JsonResource
 
             'meta_title' => $this->meta_title,
             'meta_description' => $this->meta_description,
+            'hero_title' => $this->hero_title,
+            'hero_subtitle' => $this->hero_subtitle,
+            'hero_image' => $this->hero_image,
+            'hero_cta_label' => $this->hero_cta_label,
+            'hero_cta_url' => $this->hero_cta_url,
+            'sort_order' => $this->sort_order,
 
             'is_published' => $this->is_published,
             'published_at' => $this->published_at,

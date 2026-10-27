@@ -44,7 +44,9 @@ class SubscriptionPlanRepository extends BaseRepository implements SubscriptionP
 
     public function all()
     {
-        return SubscriptionPlan::latest()->get();
+        return SubscriptionPlan::where('is_active', true)
+            ->latest()
+            ->get();
     }
 
     public function getAll(array $filters = [])

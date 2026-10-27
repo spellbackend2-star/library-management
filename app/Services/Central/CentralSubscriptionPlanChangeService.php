@@ -78,6 +78,14 @@ class CentralSubscriptionPlanChangeService
                 $this->centralSubscriptionService->retireReplacedSubscription(
                     $newSubscription
                 );
+            } elseif (
+                $current->tenant
+                && ! in_array($current->tenant->status, ['pending', 'rejected'], true)
+            ) {
+                $current->tenant->update([
+                    'status' => 'suspended',
+                    'suspension_reason' => 'Payment is required for the plan change invoice.',
+                ]);
             }
 
             return $newSubscription->fresh([

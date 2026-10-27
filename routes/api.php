@@ -4,12 +4,19 @@ use App\Http\Controllers\v1\Central\CentralAuthController;
 use App\Http\Controllers\v1\Central\CentralCouponController;
 use App\Http\Controllers\v1\Central\CentralDashboardController;
 use App\Http\Controllers\v1\Central\CentralInvoiceController;
+use App\Http\Controllers\v1\Central\CentralBlogCategoryController;
+use App\Http\Controllers\v1\Central\CentralBlogController;
+use App\Http\Controllers\v1\Central\CentralContactMessageController;
 use App\Http\Controllers\v1\Central\CentralPasswordController;
 use App\Http\Controllers\v1\Central\CentralProfileController;
+use App\Http\Controllers\v1\Central\CentralPageController;
+use App\Http\Controllers\v1\Central\CentralRoleController;
 use App\Http\Controllers\v1\Central\CentralRegistrationController;
 use App\Http\Controllers\v1\Central\CentralSettingController;
 use App\Http\Controllers\v1\Central\CentralStaffController;
 use App\Http\Controllers\v1\Central\CentralSubscriptionPaymentController;
+use App\Http\Controllers\v1\Central\CentralTestimonialController;
+use App\Http\Controllers\v1\Central\CentralPublicWebsiteController;
 use App\Http\Controllers\v1\Central\CentralTenantController;
 use App\Http\Controllers\v1\Tenant\SubscriptionController;
 use App\Http\Controllers\v1\Tenant\SubscriptionPlanController;
@@ -33,6 +40,19 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/login', [CentralAuthController::class, 'login']);
 
+        // Public marketing website content.
+        Route::prefix('/public')->group(function () {
+            Route::get('/home', [CentralPublicWebsiteController::class, 'home']);
+            Route::get('/settings', [CentralPublicWebsiteController::class, 'settings']);
+            Route::get('/pages/{slug}', [CentralPublicWebsiteController::class, 'page']);
+            Route::get('/plans', [CentralPublicWebsiteController::class, 'plans']);
+            Route::get('/blog-categories', [CentralPublicWebsiteController::class, 'categories']);
+            Route::get('/blogs', [CentralPublicWebsiteController::class, 'blogs']);
+            Route::get('/blogs/{slug}', [CentralPublicWebsiteController::class, 'blog']);
+            Route::get('/testimonials', [CentralPublicWebsiteController::class, 'testimonials']);
+            Route::post('/contact', [CentralPublicWebsiteController::class, 'contact'])->middleware('throttle:5,1');
+        });
+
         // Public callback routes for payment gateways (no auth required)
         Route::get('/subscription-payments/{payment}/verify-khalti', [CentralSubscriptionPaymentController::class, 'verifyKhalti'])->name('central.subscription-payments.verify-khalti');
         Route::get('/subscription-payments/{payment}/verify-esewa', [CentralSubscriptionPaymentController::class, 'verifyEsewa'])->name('central.subscription-payments.verify-esewa');
@@ -54,6 +74,39 @@ Route::prefix('v1')->group(function () {
             Route::put('/profile', [CentralProfileController::class, 'update']);
             Route::post('/profile/change-password', [CentralPasswordController::class, 'changePassword']);
             Route::post('/logout', [CentralAuthController::class, 'logout']);
+
+            Route::apiResource('/pages', CentralPageController::class)
+                ->names('central.pages')
+                ->middleware('can:settings.update');
+            Route::apiResource('/blog-categories', CentralBlogCategoryController::class)
+                ->names('central.blog-categories')
+                ->parameters(['blog-categories' => 'blogCategory'])
+                ->middleware('can:settings.update');
+            Route::apiResource('/blogs', CentralBlogController::class)
+                ->names('central.blogs')
+                ->middleware('can:settings.update');
+            Route::apiResource('/testimonials', CentralTestimonialController::class)
+                ->names('central.testimonials')
+                ->middleware('can:settings.update');
+            Route::get('/contact-messages', [CentralContactMessageController::class, 'index'])
+                ->middleware('can:settings.view');
+            Route::get('/contact-messages/{message}', [CentralContactMessageController::class, 'show'])
+                ->middleware('can:settings.view');
+            Route::patch('/contact-messages/{message}', [CentralContactMessageController::class, 'update'])
+                ->middleware('can:settings.update');
+            Route::delete('/contact-messages/{message}', [CentralContactMessageController::class, 'destroy'])
+                ->middleware('can:settings.update');
+
+            Route::get('/roles', [CentralRoleController::class, 'index'])
+                ->middleware('can:roles.view');
+            Route::get('/roles/{role}', [CentralRoleController::class, 'show'])
+                ->middleware('can:roles.view');
+            Route::get('/permissions', [CentralRoleController::class, 'permissions'])
+                ->middleware('can:roles.view');
+            Route::post('/permissions', [CentralRoleController::class, 'storePermission'])
+                ->middleware('can:roles.create');
+            Route::post('/roles', [CentralRoleController::class, 'store'])
+                ->middleware('can:roles.create');
 
             Route::patch('/staff/{staff}/role', [CentralStaffController::class, 'assignRole'])
                 ->name('central.staff.assign-role');

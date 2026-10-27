@@ -34,6 +34,12 @@ class UpdateCentralPageRequest extends FormRequest
                 'sometimes',
                 'string',
             ],
+            'hero_title' => ['nullable', 'string', 'max:255'],
+            'hero_subtitle' => ['nullable', 'string', 'max:2000'],
+            'hero_image' => ['nullable', 'string', 'max:2048'],
+            'hero_cta_label' => ['nullable', 'string', 'max:100'],
+            'hero_cta_url' => ['nullable', 'string', 'max:2048'],
+            'sort_order' => ['sometimes', 'integer', 'min:0'],
 
             'meta_title' => [
                 'nullable',

@@ -97,6 +97,8 @@ Route::prefix('v1')->group(function () {
             Route::delete('/contact-messages/{message}', [CentralContactMessageController::class, 'destroy'])
                 ->middleware('can:settings.update');
 
+            Route::get('/roles/all', [CentralRoleController::class, 'all'])
+                ->middleware('can:roles.view');
             Route::get('/roles', [CentralRoleController::class, 'index'])
                 ->middleware('can:roles.view');
             Route::get('/roles/{role}', [CentralRoleController::class, 'show'])
@@ -105,8 +107,16 @@ Route::prefix('v1')->group(function () {
                 ->middleware('can:roles.view');
             Route::post('/permissions', [CentralRoleController::class, 'storePermission'])
                 ->middleware('can:roles.create');
+            Route::patch('/permissions/{permission}', [CentralRoleController::class, 'updatePermission'])
+                ->middleware('can:roles.update');
+            Route::delete('/permissions/{permission}', [CentralRoleController::class, 'destroyPermission'])
+                ->middleware('can:roles.delete');
             Route::post('/roles', [CentralRoleController::class, 'store'])
                 ->middleware('can:roles.create');
+            Route::patch('/roles/{role}', [CentralRoleController::class, 'update'])
+                ->middleware('can:roles.update');
+            Route::delete('/roles/{role}', [CentralRoleController::class, 'destroy'])
+                ->middleware('can:roles.delete');
 
             Route::patch('/staff/{staff}/role', [CentralStaffController::class, 'assignRole'])
                 ->name('central.staff.assign-role');

@@ -1,0 +1,197 @@
+{
+  "info": {
+    "name": "Library Management - Central Roles API",
+    "description": "Postman requests for updating and deleting central roles.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://library-management.test/api",
+      "type": "string"
+    },
+    {
+      "key": "auth_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "role_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "permission_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{auth_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "List Central Roles Without Pagination",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "string"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/central/roles/all",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "central", "roles", "all"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create Central Role",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "string"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "string"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/central/roles",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "central", "roles"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"content_editor\",\n  \"permissions\": [\n    \"settings.view\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Update Central Role",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "string"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "string"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/central/roles/{{role_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "central", "roles", "{{role_id}}"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"content_editor\",\n  \"permissions\": [\n    \"settings.view\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Central Role",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "string"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/central/roles/{{role_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "central", "roles", "{{role_id}}"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Update Central Permission",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "string"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "string"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/central/permissions/{{permission_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "central", "permissions", "{{permission_id}}"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"custom_reports.view\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Central Permission",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "string"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/v1/central/permissions/{{permission_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["v1", "central", "permissions", "{{permission_id}}"]
+        }
+      },
+      "response": []
+    }
+  ]
+}

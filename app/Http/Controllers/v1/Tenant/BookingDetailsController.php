@@ -83,6 +83,43 @@ class BookingDetailsController extends Controller
         );
     }
 
+    public function bookedSeatBookings(Request $request): JsonResponse
+    {
+        $filters = $request->only([
+            'booking_id',
+            'seat_id',
+            'sort_by',
+            'sort_order',
+            'per_page',
+        ]);
+        $filters['status'] = 'booked';
+
+        $result = $this->bookingService->getAllSeatBookings($filters);
+
+        return $this->successResponse(
+            [
+                'seats' => BookingSeatResource::collection($result['data']),
+            ],
+            'Booked seat bookings retrieved successfully.',
+            200,
+            $result['meta']
+        );
+    }
+
+    public function showSeatBooking(int $seat): JsonResponse
+    {
+        $bookingSeat = $this->bookingService->getSeatBookingById($seat);
+
+        if (!$bookingSeat) {
+            return $this->errorResponse('Seat booking not found.', 404);
+        }
+
+        return $this->successResponse(
+            new BookingSeatResource($bookingSeat),
+            'Seat booking retrieved successfully.'
+        );
+    }
+
     public function completeSeatBooking(Request $request, int $seat): JsonResponse
     {
         try {

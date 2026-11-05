@@ -574,9 +574,14 @@ class BookingService
         });
     }
 
-    public function getAllSeatBookings()
+    public function getAllSeatBookings(array $filters = []): array
     {
-        return $this->bookingSeatRepository->all();
+        return $this->bookingSeatRepository->getAll($filters);
+    }
+
+    public function getSeatBookingById(int $id): ?\App\Models\BookingSeat
+    {
+        return $this->bookingSeatRepository->find($id);
     }
 
     public function completeSeatBooking(int $id): \App\Models\BookingSeat

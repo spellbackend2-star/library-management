@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Package;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePackageRequest extends FormRequest
 {
@@ -79,7 +80,7 @@ class StorePackageRequest extends FormRequest
                 'required_if:locker_allowed,true',
                 'string',
                 'max:50',
-                'in:small,medium,big',
+                Rule::exists('lockers', 'locker_type'),
             ],
 
             'max_locker_hours_per_day' => [

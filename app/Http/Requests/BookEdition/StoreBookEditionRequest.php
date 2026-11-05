@@ -3,10 +3,18 @@
 namespace App\Http\Requests\BookEdition;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
+use App\Rules\ValidIsbn;
+use App\Support\Isbn;
 
 class StoreBookEditionRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('isbn'))) {
+            $this->merge(['isbn' => Isbn::normalize($this->input('isbn'))]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -30,8 +38,9 @@ class StoreBookEditionRequest extends FormRequest
             'isbn' => [
                 'nullable',
                 'string',
-                'max:20',
+                'max:13',
                 'unique:book_editions,isbn',
+                new ValidIsbn(),
             ],
 
             'edition_number' => [

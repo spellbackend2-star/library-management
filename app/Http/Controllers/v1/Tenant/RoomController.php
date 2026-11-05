@@ -38,6 +38,16 @@ class RoomController extends Controller
         );
     }
 
+    public function all(): JsonResponse
+    {
+        $rooms = $this->roomService->getAllWithoutPagination();
+
+        return $this->successResponse(
+            RoomResource::collection($rooms),
+            'Rooms retrieved successfully.'
+        );
+    }
+
     public function store(StoreRoomRequest $request): JsonResponse
     {
         $room = $this->roomService->create(

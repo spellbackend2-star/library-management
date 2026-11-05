@@ -27,6 +27,7 @@ class UpdateFloorRequest extends FormRequest
             'floor_number' => [
                 'sometimes',
                 'integer',
+                'min:1',
                 Rule::unique('floors', 'floor_number')->ignore($floorId),
             ],
 

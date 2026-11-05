@@ -6,7 +6,7 @@ use App\Models\Coupon;
 
 interface CouponInterface
 {
-    public function all();
+    public function all(array $filters = []): array;
 
     public function find(int $id): ?Coupon;
 

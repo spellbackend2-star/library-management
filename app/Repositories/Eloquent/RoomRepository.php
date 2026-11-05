@@ -17,13 +17,13 @@ class RoomRepository extends BaseRepository implements RoomInterface
 
     public function all()
     {
-        return Room::latest()->get();
+        return Room::with('floor')->latest()->get();
     }
 
     public function getAll(array $filters = []): array
     {
         $paginator = $this->applyPagination(
-            $this->applyFilters(Room::query(), $filters),
+            $this->applyFilters(Room::with('floor'), $filters),
             $filters
         );
 
@@ -35,12 +35,12 @@ class RoomRepository extends BaseRepository implements RoomInterface
 
     public function find(int $id): ?Room
     {
-        return Room::find($id);
+        return Room::with('floor')->find($id);
     }
 
     public function create(array $data): Room
     {
-        return Room::create($data);
+        return Room::create($data)->load('floor');
     }
 
     public function update(int $id, array $data): Room
@@ -49,7 +49,7 @@ class RoomRepository extends BaseRepository implements RoomInterface
 
         $room->update($data);
 
-        return $room->fresh();
+        return $room->fresh(['floor']);
     }
 
     public function delete(int $id): bool

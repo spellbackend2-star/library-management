@@ -4,9 +4,18 @@ namespace App\Http\Requests\BookEdition;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use App\Rules\ValidIsbn;
+use App\Support\Isbn;
 
 class UpdateBookEditionRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('isbn'))) {
+            $this->merge(['isbn' => Isbn::normalize($this->input('isbn'))]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -32,8 +41,9 @@ class UpdateBookEditionRequest extends FormRequest
             'isbn' => [
                 'nullable',
                 'string',
-                'max:20',
+                'max:13',
                 Rule::unique('book_editions', 'isbn')->ignore($editionId),
+                new ValidIsbn(),
             ],
 
             'edition_number' => [

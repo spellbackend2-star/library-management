@@ -16,6 +16,11 @@ class LockerService
         return $this->lockerRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination()
+    {
+        return $this->lockerRepository->all();
+    }
+
     public function getById(int $id): ?Locker
     {
         return $this->lockerRepository->find($id);

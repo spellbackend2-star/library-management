@@ -13,6 +13,8 @@ class BookingSeatResource extends JsonResource
             'id' => $this->id,
 
             'booking_id' => $this->booking_id,
+            'member_id' => $this->member_id, 
+            'member_name' => trim(($this->member?->first_name ?? '') . ' ' . ($this->member?->last_name ?? '')),
             'seat_id' => $this->seat_id,
             'start_at' => $this->start_at?->format('Y-m-d H:i:s'),
             'end_at' => $this->end_at?->format('Y-m-d H:i:s'),

@@ -9,6 +9,13 @@ use Illuminate\Validation\Rule;
 
 class UpdateCopyForBookRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('barcode'))) {
+            $this->merge(['barcode' => trim($this->input('barcode'))]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;

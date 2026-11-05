@@ -8,7 +8,10 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('bookings:release-expired')->everyMinute();
+Schedule::command('bookings:release-expired')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();
 
 Schedule::command('lms:check-overdue')
     ->everyMinute()
@@ -16,6 +19,11 @@ Schedule::command('lms:check-overdue')
     ->onOneServer();
 
 Schedule::command('central:expire-subscriptions')
+    ->everyMinute()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('tenants:process-expirations')
     ->everyMinute()
     ->withoutOverlapping()
     ->onOneServer();

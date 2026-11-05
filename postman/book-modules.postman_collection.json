@@ -324,7 +324,7 @@
               { "key": "Content-Type", "value": "application/json" }
             ],
             "url": { "raw": "{{base_url}}/api/copies", "host": ["{{base_url}}"], "path": ["api", "copies"] },
-            "body": { "mode": "raw", "raw": "{\n  \"book_id\": 1,\n  \"barcode\": \"COPY-001-1984\",\n  \"shelf_location\": \"A-12-03\",\n  \"condition\": \"good\",\n  \"status\": \"available\",\n  \"acquisition_date\": \"2026-01-15\"\n}" }
+            "body": { "mode": "raw", "raw": "{\n  \"edition_id\": 1,\n  \"barcode\": \"COPY-001-1984\",\n  \"shelf_location\": \"A-12-03\",\n  \"condition\": \"good\",\n  \"status\": \"available\",\n  \"acquisition_date\": \"2026-01-15\"\n}" }
           }
         },
         {

@@ -6,9 +6,39 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
+use App\Rules\ValidIsbn;
+use App\Support\Isbn;
 
 class UpdateBookRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $editions = $this->input('editions', []);
+        if (! is_array($editions)) {
+            return;
+        }
+
+        foreach ($editions as &$edition) {
+            if (! is_array($edition)) {
+                continue;
+            }
+            if (is_string($edition['isbn'] ?? null)) {
+                $edition['isbn'] = Isbn::normalize($edition['isbn']);
+            }
+            if (is_array($edition['copies'] ?? null)) {
+                foreach ($edition['copies'] as &$copy) {
+                    if (is_array($copy) && is_string($copy['barcode'] ?? null)) {
+                        $copy['barcode'] = trim($copy['barcode']);
+                    }
+                }
+                unset($copy);
+            }
+        }
+        unset($edition);
+
+        $this->merge(['editions' => $editions]);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -31,7 +61,7 @@ class UpdateBookRequest extends FormRequest
             */
 
             'title' => [
-                'required',
+                'sometimes',
                 'string',
                 'max:500',
             ],
@@ -66,7 +96,7 @@ class UpdateBookRequest extends FormRequest
             */
 
             'author_ids' => [
-                'required',
+                'sometimes',
                 'array',
                 'min:1',
             ],
@@ -84,7 +114,7 @@ class UpdateBookRequest extends FormRequest
             */
 
             'category_ids' => [
-                'required',
+                'sometimes',
                 'array',
                 'min:1',
             ],
@@ -129,7 +159,17 @@ class UpdateBookRequest extends FormRequest
             'editions.*.isbn' => [
                 'nullable',
                 'string',
-                'max:20',
+                'max:13',
+                'distinct',
+                Rule::forEach(function ($value, string $attribute) {
+                    $editionIdPath = preg_replace('/\.isbn$/', '.id', $attribute);
+                    $editionId = data_get($this->all(), $editionIdPath);
+
+                    return [
+                        Rule::unique('book_editions', 'isbn')->ignore($editionId),
+                        new ValidIsbn(),
+                    ];
+                }),
             ],
 
             'editions.*.edition_number' => [
@@ -176,6 +216,13 @@ class UpdateBookRequest extends FormRequest
                 'required',
                 'string',
                 'max:100',
+                'distinct',
+                Rule::forEach(function ($value, string $attribute) {
+                    $copyIdPath = preg_replace('/\.barcode$/', '.id', $attribute);
+                    $copyId = data_get($this->all(), $copyIdPath);
+
+                    return [Rule::unique('copies', 'barcode')->ignore($copyId)];
+                }),
             ],
 
             'editions.*.copies.*.shelf_location' => [

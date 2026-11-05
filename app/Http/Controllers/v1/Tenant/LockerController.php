@@ -41,6 +41,16 @@ class LockerController extends Controller
         );
     }
 
+    public function all(): JsonResponse
+    {
+        $lockers = $this->lockerService->getAllWithoutPagination();
+
+        return $this->successResponse(
+            LockerResource::collection($lockers),
+            'Lockers retrieved successfully.'
+        );
+    }
+
     public function store(StoreLockerRequest $request): JsonResponse
     {
         $locker = $this->lockerService->create(

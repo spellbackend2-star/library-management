@@ -11,9 +11,9 @@ class CouponService
         protected CouponInterface $couponRepository
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = []): array
     {
-        return $this->couponRepository->all();
+        return $this->couponRepository->all($filters);
     }
 
     public function getById(int $id): ?Coupon

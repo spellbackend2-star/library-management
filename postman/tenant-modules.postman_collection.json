@@ -7,6 +7,28 @@
 	},
 	"item": [
 		{
+			"name": "Profile",
+			"item": [
+				{
+					"name": "Get My Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/profile/me",
+							"host": ["{{base_url}}"],
+							"path": ["profile", "me"]
+						}
+					}
+				}
+			]
+		},
+		{
 			"name": "Borrows",
 			"item": [
 				{
@@ -669,6 +691,45 @@
 					}
 				}
 			]
+		},
+		{
+			"name": "Booking Seats",
+			"item": [
+				{
+					"name": "Get Booked Seats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/booking-seatsget",
+							"host": ["{{base_url}}"],
+							"path": ["booking-seatsget"]
+						}
+					}
+				},
+				{
+					"name": "Get Seat Booking by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/booking-seats/{{seat_booking_id}}",
+							"host": ["{{base_url}}"],
+							"path": ["booking-seats", "{{seat_booking_id}}"]
+						}
+					}
+				}
+			]
 		}
 	],
 	"variable": [
@@ -679,6 +740,10 @@
 		{
 			"key": "token",
 			"value": "YOUR_BEARER_TOKEN"
+		},
+		{
+			"key": "seat_booking_id",
+			"value": "1"
 		}
 	]
 }

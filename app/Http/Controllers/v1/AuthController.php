@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\v1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\v1\Tenant\TenantProfileResource;
 use App\Models\Staff;
 use App\Models\Tenant;
 use App\Models\User;
@@ -15,6 +16,17 @@ use Spatie\Permission\Models\Role;
 
 class AuthController extends Controller
 {
+    public function me(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        return response()->json((new TenantProfileResource($user))->resolve($request));
+    }
+
     public function login(Request $request, ServerRequestInterface $serverRequest)
     {
         $request->validate([
@@ -217,7 +229,8 @@ class AuthController extends Controller
 
         $data = $request->validate([
             'current_password' => ['required', 'string'],
-            'new_password' => ['required', 'string', 'min:8'],
+            'password' => ['required_without:new_password', 'string', 'min:8', 'confirmed'],
+            'new_password' => ['required_without:password', 'string', 'min:8'],
         ]);
 
         if (!Hash::check($data['current_password'], $user->password)) {
@@ -227,7 +240,7 @@ class AuthController extends Controller
         }
 
         $user->update([
-            'password' => bcrypt($data['new_password']),
+            'password' => bcrypt($data['password'] ?? $data['new_password']),
         ]);
 
         return response()->json([

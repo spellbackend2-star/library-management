@@ -5,9 +5,36 @@ namespace App\Http\Requests\Book;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Rules\ValidIsbn;
+use App\Support\Isbn;
 
 class StoreBookRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $editions = $this->input('editions', []);
+        if (! is_array($editions)) {
+            return;
+        }
+
+        foreach ($editions as &$edition) {
+            if (is_array($edition) && is_string($edition['isbn'] ?? null)) {
+                $edition['isbn'] = Isbn::normalize($edition['isbn']);
+            }
+            if (is_array($edition['copies'] ?? null)) {
+                foreach ($edition['copies'] as &$copy) {
+                    if (is_array($copy) && is_string($copy['barcode'] ?? null)) {
+                        $copy['barcode'] = trim($copy['barcode']);
+                    }
+                }
+                unset($copy);
+            }
+        }
+        unset($edition);
+
+        $this->merge(['editions' => $editions]);
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -113,7 +140,10 @@ class StoreBookRequest extends FormRequest
             'editions.*.isbn' => [
                 'nullable',
                 'string',
-                'max:20',
+                'max:13',
+                'distinct',
+                'unique:book_editions,isbn',
+                new ValidIsbn(),
             ],
 
             'editions.*.edition_number' => [

@@ -13,7 +13,11 @@ class LockerAssigmentsResource extends JsonResource
             'id' => $this->id,
 
             'locker_id' => $this->locker_id,
+            'locker_number' => $this->locker?->locker_number,
+            'locker_type' => $this->locker?->locker_type,
+            'locker_name' => $this->locker?->locker_number . ' - ' . $this->locker?->locker_type,
             'member_id' => $this->member_id,
+            'member_name' => trim(($this->member?->first_name ?? '') . ' ' . ($this->member?->last_name ?? '')),
             'assigned_date' => $this->assigned_date?->format('Y-m-d'),
             'expiry_date' => $this->expiry_date?->format('Y-m-d'),
             'returned_date' => $this->returned_date?->format('Y-m-d'),

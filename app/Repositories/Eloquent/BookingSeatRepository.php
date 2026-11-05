@@ -35,19 +35,19 @@ class BookingSeatRepository extends BaseRepository implements BookingSeatInterfa
 
     public function all()
     {
-        return BookingSeat::with(['booking', 'seat'])->latest()->get();
+        return BookingSeat::with(['booking', 'seat', 'member'])->latest()->get();
     }
 
     public function getAll(array $filters = []): array
     {
-        $query = BookingSeat::with(['booking', 'seat']);
+        $query = BookingSeat::with(['booking', 'seat', 'member']);
 
         return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?BookingSeat
     {
-        return BookingSeat::with(['booking', 'seat'])->find($id);
+        return BookingSeat::with(['booking', 'seat', 'member'])->find($id);
     }
 
     public function create(array $data): BookingSeat
@@ -61,7 +61,7 @@ class BookingSeatRepository extends BaseRepository implements BookingSeatInterfa
 
         $bookingSeat->update($data);
 
-        return $bookingSeat->fresh(['booking', 'seat']);
+        return $bookingSeat->fresh(['booking', 'seat', 'member']);
     }
 
     public function delete(int $id): bool
@@ -71,7 +71,7 @@ class BookingSeatRepository extends BaseRepository implements BookingSeatInterfa
 
     public function byBooking(int $bookingId, array $filters = []): array
     {
-        $query = BookingSeat::with(['seat'])
+        $query = BookingSeat::with(['seat', 'member'])
             ->where('booking_id', $bookingId);
 
         return $this->getPaginated($query, $filters);

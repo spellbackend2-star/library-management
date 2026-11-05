@@ -24,6 +24,7 @@ class StoreFloorRequest extends FormRequest
             'floor_number' => [
                 'required',
                 'integer',
+                'min:1',
                 'unique:floors,floor_number',
             ],
 

@@ -8,9 +8,9 @@ use App\Repositories\Interface\CouponInterface;
 
 class CouponRepository extends BaseRepository implements CouponInterface
 {
-    public function all()
+    public function all(array $filters = []): array
     {
-        return Coupon::latest()->get();
+        return $this->getPaginated(Coupon::query()->latest(), $filters);
     }
 
     public function find(int $id): ?Coupon

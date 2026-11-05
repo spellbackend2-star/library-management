@@ -7,7 +7,9 @@ use App\Models\Copy;
 use App\Repositories\Interface\BookInterface;
 use App\Repositories\Interface\BookEditionInterface;
 use App\Repositories\Interface\CopyInterface;
+use App\Models\Borrow;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class BookService
 {
@@ -131,13 +133,17 @@ class BookService
             |--------------------------------------------------------------------------
             */
 
-            $this->bookRepository->updateBook($book, [
-                'title' => $data['title'],
-                'subtitle' => $data['subtitle'] ?? null,
-                'language' => $data['language'] ?? null,
-                'description' => $data['description'] ?? null,
-                'cover_image_url' => $data['cover_image_url'] ?? null,
-            ]);
+            $bookFields = array_intersect_key($data, array_flip([
+                'title',
+                'subtitle',
+                'language',
+                'description',
+                'cover_image_url',
+            ]));
+
+            if ($bookFields !== []) {
+                $this->bookRepository->updateBook($book, $bookFields);
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -173,8 +179,6 @@ class BookService
 
             if (isset($data['editions'])) {
 
-                $keptEditionIds = [];
-
                 foreach ($data['editions'] as $editionData) {
 
                     /*
@@ -185,24 +189,25 @@ class BookService
 
                     if (isset($editionData['id'])) {
 
+                        $edition = $this->editionRepository->find($editionData['id']);
+
+                        if (! $edition || $edition->book_id !== $book->id) {
+                            throw \Illuminate\Validation\ValidationException::withMessages([
+                                'editions' => ['An edition does not belong to this book.'],
+                            ]);
+                        }
+
+                        $editionFields = array_intersect_key($editionData, array_flip([
+                            'publisher_id',
+                            'isbn',
+                            'edition_number',
+                            'publication_year',
+                            'format',
+                        ]));
+
                         $edition = $this->editionRepository->update(
                             $editionData['id'],
-                            [
-                                'publisher_id' =>
-                                    $editionData['publisher_id'],
-
-                                'isbn' =>
-                                    $editionData['isbn'] ?? null,
-
-                                'edition_number' =>
-                                    $editionData['edition_number'] ?? null,
-
-                                'publication_year' =>
-                                    $editionData['publication_year'] ?? null,
-
-                                'format' =>
-                                    $editionData['format'] ?? 'physical',
-                            ]
+                            $editionFields
                         );
 
                     /*
@@ -232,8 +237,6 @@ class BookService
                         ]);
                     }
 
-                    $keptEditionIds[] = $edition->id;
-
                     /*
                     |--------------------------------------------------------------------------
                     | Copies
@@ -241,8 +244,6 @@ class BookService
                     */
 
                     if (isset($editionData['copies'])) {
-
-                        $keptCopyIds = [];
 
                         foreach ($editionData['copies'] as $copyData) {
 
@@ -254,24 +255,25 @@ class BookService
 
                             if (isset($copyData['id'])) {
 
+                                $existingCopy = $this->copyRepository->find($copyData['id']);
+
+                                if (! $existingCopy || $existingCopy->edition_id !== $edition->id) {
+                                    throw \Illuminate\Validation\ValidationException::withMessages([
+                                        'editions' => ['A copy does not belong to the selected edition.'],
+                                    ]);
+                                }
+
+                                $copyFields = array_intersect_key($copyData, array_flip([
+                                    'barcode',
+                                    'shelf_location',
+                                    'condition',
+                                    'status',
+                                    'acquisition_date',
+                                ]));
+
                                 $copy = $this->copyRepository->update(
                                     $copyData['id'],
-                                    [
-                                        'barcode' =>
-                                            $copyData['barcode'],
-
-                                        'shelf_location' =>
-                                            $copyData['shelf_location'] ?? null,
-
-                                        'condition' =>
-                                            $copyData['condition'] ?? 'new',
-
-                                        'status' =>
-                                            $copyData['status'] ?? 'available',
-
-                                        'acquisition_date' =>
-                                            $copyData['acquisition_date'] ?? null,
-                                    ]
+                                    $copyFields
                                 );
 
                             /*
@@ -301,22 +303,9 @@ class BookService
                                 ]);
                             }
 
-                            $keptCopyIds[] = $copy->id;
                         }
-
-                        // Delete removed copies
-                        $this->copyRepository->deleteNotIn(
-                            $edition->id,
-                            $keptCopyIds
-                        );
                     }
                 }
-
-                // Delete removed editions
-                $this->editionRepository->deleteNotIn(
-                    $book->id,
-                    $keptEditionIds
-                );
             }
 
             /*
@@ -460,11 +449,20 @@ class BookService
      */
     public function delete(int $id): bool
     {
-        return DB::transaction(function () use ($id) {
+        $book = $this->bookRepository->findOrFail($id);
 
-            $book = $this->bookRepository->findWithRelations($id);
+        $hasActiveBorrows = Borrow::whereHas('copy.edition', function ($query) use ($book) {
+            $query->where('book_id', $book->id);
+        })
+            ->whereIn('status', ['active', 'overdue'])
+            ->exists();
 
-            return $this->bookRepository->delete($book);
-        });
+        if ($hasActiveBorrows) {
+            throw new ConflictHttpException(
+                'This book cannot be deleted while it has active or overdue borrows.'
+            );
+        }
+
+        return $this->bookRepository->delete($book);
     }
 }

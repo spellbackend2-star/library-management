@@ -16,6 +16,11 @@ class SeatCategoryService
         return $this->seatCategoryRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination()
+    {
+        return $this->seatCategoryRepository->all();
+    }
+
     public function getById(int $id): ?SeatCategory
     {
         return $this->seatCategoryRepository->find($id);

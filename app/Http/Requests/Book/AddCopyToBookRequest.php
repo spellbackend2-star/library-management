@@ -9,6 +9,23 @@ use Illuminate\Validation\Rule;
 
 class AddCopyToBookRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $copies = $this->input('copies', []);
+        if (! is_array($copies)) {
+            return;
+        }
+
+        foreach ($copies as &$copy) {
+            if (is_array($copy) && is_string($copy['barcode'] ?? null)) {
+                $copy['barcode'] = trim($copy['barcode']);
+            }
+        }
+        unset($copy);
+
+        $this->merge(['copies' => $copies]);
+    }
+
     public function authorize(): bool
     {
         return true;

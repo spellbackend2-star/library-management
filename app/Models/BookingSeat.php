@@ -29,6 +29,11 @@ class BookingSeat extends Model
         return $this->belongsTo(Booking::class);
     }
 
+    public function member(): BelongsTo
+    {
+        return $this->belongsTo(Member::class);
+    }
+
     public function seat(): BelongsTo
     {
         return $this->belongsTo(Seat::class);

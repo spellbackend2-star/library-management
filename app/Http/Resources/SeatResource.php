@@ -13,7 +13,9 @@ class SeatResource extends JsonResource
             'id' => $this->id,
 
             'room_id' => $this->room_id,
+            'room_name' => $this->room?->name,
             'category_id' => $this->category_id,
+            'category_name' => $this->category?->name,
             'seat_number' => $this->seat_number,
             'has_power_outlet' => $this->has_power_outlet,
             'is_accessible' => $this->is_accessible,

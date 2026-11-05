@@ -13,6 +13,7 @@ class LockerResource extends JsonResource
             'id' => $this->id,
 
             'floor_id' => $this->floor_id,
+            'floor_name' => $this->floor?->name,
             'locker_number' => $this->locker_number,
             'locker_type' => $this->locker_type,
             'location' => $this->location,

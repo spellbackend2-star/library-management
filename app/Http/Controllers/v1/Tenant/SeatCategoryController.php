@@ -39,6 +39,16 @@ class SeatCategoryController extends Controller
         );
     }
 
+    public function all(): JsonResponse
+    {
+        $categories = $this->seatCategoryService->getAllWithoutPagination();
+
+        return $this->successResponse(
+            SeatCategoryResource::collection($categories),
+            'Seat categories retrieved successfully.'
+        );
+    }
+
     public function store(StoreSeatCategoryRequest $request): JsonResponse
     {
         $category = $this->seatCategoryService->create(

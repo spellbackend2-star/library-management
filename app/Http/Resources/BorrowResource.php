@@ -13,7 +13,12 @@ class BorrowResource extends JsonResource
             'id' => $this->id,
 
             'copy_id' => $this->copy_id,
+            'copy_name' => $this->copy?->barcode,
+            'book_name' => $this->copy?->edition?->book?->title,
+
             'member_id' => $this->member_id,
+             'member_name' => trim(($this->member?->first_name ?? '') . ' ' . ($this->member?->last_name ?? '')),
+
             'checkout_date' => $this->checkout_date?->format('Y-m-d H:i:s'),
             'due_date' => $this->due_date?->format('Y-m-d'),
             'return_date' => $this->return_date?->format('Y-m-d H:i:s'),

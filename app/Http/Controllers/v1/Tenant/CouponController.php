@@ -8,18 +8,33 @@ use App\Http\Requests\Coupon\UpdateCouponRequest;
 use App\Http\Resources\CouponResource;
 use App\Services\CouponService;
 use App\Models\Coupon;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class CouponController extends Controller
 {
+    use ResponseMessage;
     public function __construct(
         protected CouponService $couponService
     ) {}
 
-    public function index()
+    public function index(Request $request)
     {
-        return CouponResource::collection(
-            $this->couponService->getAll()
+        $filters = $request->only([
+            'sort_by',
+            'sort_order',
+            'per_page',
+            'page',
+        ]);
+
+        $result = $this->couponService->getAll($filters);
+
+        return $this->successResponse(
+            CouponResource::collection($result['data']),
+            'Coupons retrieved successfully.',
+            200,
+            $result['meta']
         );
     }
 

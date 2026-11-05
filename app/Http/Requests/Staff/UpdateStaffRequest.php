@@ -9,7 +9,10 @@ class UpdateStaffRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        // Role changes can also be made through this endpoint, but retain the
+        // same permission required by the dedicated role assignment endpoint.
+        return ! $this->has('role')
+            || (bool) $this->user()?->can('staff.assign-role');
     }
 
     public function rules(): array
@@ -37,6 +40,12 @@ class UpdateStaffRequest extends FormRequest
                 'max:255',
                 Rule::unique('users', 'email')->ignore($staff->user_id),
                 Rule::unique('staff', 'email')->ignore($staffId),
+            ],
+
+            'password' => [
+                'sometimes',
+                'string',
+                'min:8',
             ],
 
             'phone' => [

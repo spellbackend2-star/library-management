@@ -8,6 +8,7 @@ use App\Services\BookingService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ReleaseExpiredBookings extends Command
 {
@@ -78,6 +79,12 @@ class ReleaseExpiredBookings extends Command
 
                     $released++;
                 }
+            } catch (\Throwable $e) {
+                $this->warn("Skipping tenant {$tenant->id} ({$tenant->company_name}): {$e->getMessage()}");
+                Log::warning('Expired booking release skipped tenant', [
+                    'tenant' => $tenant->id,
+                    'error' => $e->getMessage(),
+                ]);
             } finally {
                 if (tenancy()->initialized) {
                     tenancy()->end();

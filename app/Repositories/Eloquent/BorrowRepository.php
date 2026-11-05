@@ -10,17 +10,17 @@ class BorrowRepository extends BaseRepository implements BorrowInterface
 {
     public function all()
     {
-        return Borrow::latest()->get();
+        return Borrow::with(['copy.edition.book', 'member'])->latest()->get();
     }
 
     public function find(int $id): ?Borrow
     {
-        return Borrow::find($id);
+        return Borrow::with(['copy.edition.book', 'member'])->find($id);
     }
 
     public function create(array $data): Borrow
     {
-        return Borrow::create($data);
+        return Borrow::create($data)->load(['copy.edition.book', 'member']);
     }
 
     public function update(int $id, array $data): Borrow
@@ -29,7 +29,7 @@ class BorrowRepository extends BaseRepository implements BorrowInterface
 
         $borrow->update($data);
 
-        return $borrow->fresh();
+        return $borrow->fresh(['copy.edition.book', 'member']);
     }
 
     public function delete(int $id): bool
@@ -39,7 +39,7 @@ class BorrowRepository extends BaseRepository implements BorrowInterface
 
     public function byBooking(int $bookingId)
     {
-        return Borrow::with(['copy', 'member'])
+        return Borrow::with(['copy.edition.book', 'member'])
             ->where('booking_id', $bookingId)
             ->latest()
             ->get();

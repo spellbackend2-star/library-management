@@ -16,6 +16,11 @@ class RoomService
         return $this->roomRepository->getAll($filters);
     }
 
+    public function getAllWithoutPagination()
+    {
+        return $this->roomRepository->all();
+    }
+
     public function getById(int $id): ?Room
     {
         return $this->roomRepository->find($id);

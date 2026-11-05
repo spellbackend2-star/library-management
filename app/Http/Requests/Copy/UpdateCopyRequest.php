@@ -7,6 +7,13 @@ use Illuminate\Validation\Rule;
 
 class UpdateCopyRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('barcode'))) {
+            $this->merge(['barcode' => trim($this->input('barcode'))]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -17,10 +24,10 @@ class UpdateCopyRequest extends FormRequest
         $copyId = $this->route('copy');
 
         return [
-            'book_id' => [
+            'edition_id' => [
                 'sometimes',
                 'integer',
-                'exists:books,id',
+                'exists:book_editions,id',
             ],
 
             'barcode' => [

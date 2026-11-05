@@ -7,6 +7,13 @@ use Illuminate\Validation\Rule;
 
 class StoreCopyRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('barcode'))) {
+            $this->merge(['barcode' => trim($this->input('barcode'))]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;
@@ -15,10 +22,10 @@ class StoreCopyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'book_id' => [
+            'edition_id' => [
                 'required',
                 'integer',
-                'exists:books,id',
+                'exists:book_editions,id',
             ],
 
             'barcode' => [

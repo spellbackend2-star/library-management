@@ -65,12 +65,32 @@ class StaffService
     public function update(int $id, array $data): Staff
     {
         return DB::transaction(function () use ($id, $data) {
-            $staff = $this->staffRepository->update($id, $data);
+            $staffData = $data;
+            unset($staffData['password'], $staffData['role']);
 
-            if (isset($data['email']) && $staff->user) {
-                $staff->user->update([
-                    'email' => $data['email'],
-                ]);
+            $staff = $this->staffRepository->update($id, $staffData);
+
+            if ($staff->user) {
+                $userData = [];
+
+                if (isset($data['email'])) {
+                    $userData['email'] = $data['email'];
+                }
+
+                if (isset($data['password'])) {
+                    $userData['password'] = $data['password'];
+                }
+
+                if (isset($data['first_name']) || isset($data['last_name'])) {
+                    $userData['name'] = trim(
+                        ($data['first_name'] ?? $staff->first_name).' '.
+                        ($data['last_name'] ?? $staff->last_name)
+                    );
+                }
+
+                if ($userData !== []) {
+                    $staff->user->update($userData);
+                }
             }
 
             if (isset($data['role'])) {

@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'amount',
     'receipt_date',
     'member_id',
+    'staff_id',
 ])]
 class Receipt extends Model
 {

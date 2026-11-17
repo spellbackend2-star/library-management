@@ -17,6 +17,10 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
             'type' => 'exact',
             'column' => 'member_id',
         ],
+        'staff_id' => [
+            'type' => 'exact',
+            'column' => 'staff_id',
+        ],
         'status' => [
             'type' => 'in',
             'column' => 'status',
@@ -60,7 +64,7 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
 
     public function all()
     {
-        return Invoice::with(['member.package', 'payments'])->latest()->get();
+        return Invoice::with(['member.package', 'staff', 'payments'])->latest()->get();
     }
 
     public function getAll(array $filters = [])
@@ -79,7 +83,7 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
 
     public function find(int $id): ?Invoice
     {
-        return Invoice::with(['member.package', 'payments', 'fines'])->find($id);
+        return Invoice::with(['member.package', 'staff', 'payments', 'fines'])->find($id);
     }
 
     public function create(array $data): Invoice
@@ -130,6 +134,6 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
     protected function query()
     {
         return Invoice::query()
-            ->with(['member.package', 'payments', 'fines']);
+            ->with(['member.package', 'staff', 'payments', 'fines']);
     }
 }

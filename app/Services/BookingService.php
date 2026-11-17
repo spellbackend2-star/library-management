@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Booking;
 use App\Models\BookingSeat;
 use App\Models\Borrow;
+use App\Models\Setting;
 use App\Models\LockerAssignment;
 use App\Repositories\Interface\BookingInterface;
 use App\Repositories\Interface\BookingSeatInterface;
@@ -256,19 +257,32 @@ class BookingService
             );
         }
 
-        return DB::transaction(function () use ($data, $staff, $bookings) {
+        $ratePerBook = (float) (Setting::query()
+            ->where('group', 'booking')
+            ->where('key', 'staff_book_rate')
+            ->value('value') ?? 0);
+
+        if ($ratePerBook <= 0) {
+            throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                'Staff book rate is not configured. Set it in settings before booking.'
+            );
+        }
+
+        $totalAmount = round($ratePerBook * count($bookings), 2);
+
+        return DB::transaction(function () use ($data, $staff, $bookings, $ratePerBook, $totalAmount) {
             $booking = $this->bookingRepository->create([
                 'staff_borrower_id' => $staff->id,
                 'booked_by_user_id' => Auth::id(),
                 'booking_type' => 'book',
-                'status' => 'ACTIVE',
-                'payment_status' => 'PAID',
+                'status' => 'PENDING',
+                'payment_status' => 'UNPAID',
                 'booking_source' => 'COUNTER',
-                'amount' => 0,
-                'subtotal' => 0,
+                'amount' => $totalAmount,
+                'subtotal' => $totalAmount,
                 'discount_amount' => 0,
                 'convenience_fee' => 0,
-                'total_amount' => 0,
+                'total_amount' => $totalAmount,
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -294,8 +308,16 @@ class BookingService
                 $this->copyRepository->update($copy->id, ['status' => 'on_loan']);
             }
 
+            $invoice = app(InvoiceService::class)->createStaffBookInvoice(
+                staffId: $staff->id,
+                amount: $totalAmount,
+                notes: 'Staff book booking #'.$booking->id.'; '.$ratePerBook.' per book.',
+            );
+            $booking->update(['invoice_id' => $invoice->id]);
+
             return $booking->fresh([
                 'staffBorrower',
+                'invoice',
                 'borrows.copy.edition.book',
             ]);
         });

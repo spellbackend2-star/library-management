@@ -22,6 +22,7 @@ class InvoiceController extends Controller
         $filters = $request->only([
             'search',
             'member_id',
+            'staff_id',
             'status',
             'invoice_type',
             'min_total',
@@ -76,7 +77,6 @@ class InvoiceController extends Controller
             $data
         );
 
-        $result['return_url'] = $data['return_url'] ?? null;
         if (is_array($result) && ($result['status'] ?? null) === 'already_paid') {
             $payment = $result['payment'];
             $invoice = $payment->invoice;

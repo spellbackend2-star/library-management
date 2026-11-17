@@ -19,6 +19,7 @@ use App\Repositories\Eloquent\CentralSubscriptionPaymentRepository;
 use App\Repositories\Eloquent\CopyRepository;
 use App\Repositories\Eloquent\CouponRepository;
 use App\Repositories\Eloquent\FloorRepository;
+use App\Repositories\Eloquent\FineRepository;
 use App\Repositories\Eloquent\LockerAssignmentRepository;
 use App\Repositories\Eloquent\LockerRepository;
 use App\Repositories\Eloquent\MembershipTypeRepository;
@@ -51,6 +52,7 @@ use App\Repositories\Interface\CentralSubscriptionPaymentInterface;
 use App\Repositories\Interface\CopyInterface;
 use App\Repositories\Interface\CouponInterface;
 use App\Repositories\Interface\FloorInterface;
+use App\Repositories\Interface\FineInterface;
 use App\Repositories\Interface\LockerAssignmentInterface;
 use App\Repositories\Interface\LockerInterface;
 use App\Repositories\Interface\MemberInterface;
@@ -69,6 +71,8 @@ use App\Repositories\Interface\TenantInterface;
 use App\Repositories\Interface\InvoiceInterface;
 use App\Services\Central\CentralStaffService;
 use App\Services\Interface\CentralStaffServiceInterface;
+use App\Services\FineService;
+use App\Services\Interface\FineServiceInterface;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Passport\Passport;
 
@@ -150,6 +154,14 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             BorrowInterface::class,
             BorrowRepository::class
+        );
+        $this->app->bind(
+            FineInterface::class,
+            FineRepository::class
+        );
+        $this->app->bind(
+            FineServiceInterface::class,
+            FineService::class
         );
         $this->app->bind(
             LockerInterface::class,

@@ -13,6 +13,7 @@ class Fine extends Model
         'locker_assignment_id',
         'booking_seat_id',
         'member_id',
+        'staff_id',
         'created_by',
         'invoice_id',
         'amount',
@@ -50,6 +51,11 @@ class Fine extends Model
     public function member(): BelongsTo
     {
         return $this->belongsTo(Member::class);
+    }
+
+    public function staff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class);
     }
 
     public function invoice(): BelongsTo

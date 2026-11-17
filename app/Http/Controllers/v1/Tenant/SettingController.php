@@ -5,6 +5,8 @@ namespace App\Http\Controllers\v1\Tenant;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Setting\StoreSettingRequest;
 use App\Http\Requests\Setting\UpdateBookFineRateRequest;
+use App\Http\Requests\Setting\UpdateStaffBookRateRequest;
+use App\Http\Requests\Setting\UpdateStaffBookFineRateRequest;
 use App\Http\Requests\Setting\UpdateSettingRequest;
 use App\Http\Requests\Setting\NotificationSettingsRequest;
 use App\Http\Requests\Setting\SmtpSettingsRequest;
@@ -111,6 +113,78 @@ class SettingController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Book overdue fine rate updated successfully.',
+            'data' => ['rate_per_day' => $rate],
+        ]);
+    }
+
+    public function staffBookRate(): JsonResponse
+    {
+        if ($response = $this->ensureSettingsTableExists()) {
+            return $response;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Staff book rate retrieved successfully.',
+            'data' => [
+                'rate_per_book' => (float) $this->getStoredSetting('booking', 'staff_book_rate', 0),
+            ],
+        ]);
+    }
+
+    public function updateStaffBookRate(UpdateStaffBookRateRequest $request): JsonResponse
+    {
+        if ($response = $this->ensureSettingsTableExists()) {
+            return $response;
+        }
+
+        $rate = round((float) $request->validated('rate_per_book'), 2);
+        $this->writeSetting(
+            'booking',
+            'staff_book_rate',
+            number_format($rate, 2, '.', ''),
+            'Staff book checkout fee per copy.'
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Staff book rate updated successfully.',
+            'data' => ['rate_per_book' => $rate],
+        ]);
+    }
+
+    public function staffBookFineRate(): JsonResponse
+    {
+        if ($response = $this->ensureSettingsTableExists()) {
+            return $response;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Staff book overdue fine rate retrieved successfully.',
+            'data' => [
+                'rate_per_day' => (float) $this->getStoredSetting('fine', 'staff_book_overdue_rate', 5.00),
+            ],
+        ]);
+    }
+
+    public function updateStaffBookFineRate(UpdateStaffBookFineRateRequest $request): JsonResponse
+    {
+        if ($response = $this->ensureSettingsTableExists()) {
+            return $response;
+        }
+
+        $rate = round((float) $request->validated('rate_per_day'), 2);
+        $this->writeSetting(
+            'fine',
+            'staff_book_overdue_rate',
+            number_format($rate, 2, '.', ''),
+            'Staff book overdue fine rate per late day.'
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Staff book overdue fine rate updated successfully.',
             'data' => ['rate_per_day' => $rate],
         ]);
     }

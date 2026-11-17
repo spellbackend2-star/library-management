@@ -15,6 +15,7 @@ class PaymentResource extends JsonResource
             'invoice_id' => $this->invoice_id,
             'invoice_number' => $this->invoice?->invoice_number,
             'member_id' => $this->member_id,
+            'staff_id' => $this->staff_id ?? $this->invoice?->staff_id,
             'member_name' => $this->member
                 ? trim($this->member->first_name . ' ' . $this->member->last_name)
                 : null,

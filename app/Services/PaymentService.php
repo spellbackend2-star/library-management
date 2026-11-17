@@ -44,6 +44,7 @@ class PaymentService
             $payment = $this->paymentRepo->create([
                 'booking_id' => $booking->id,
                 'member_id' => $booking->member_id,
+                'staff_id' => $booking->staff_borrower_id,
 
                 'amount' => $booking->total_amount,
 
@@ -135,6 +136,7 @@ class PaymentService
             $payment = $this->paymentRepo->create([
                 'invoice_id' => $invoice->id,
                 'member_id' => $invoice->member_id,
+                'staff_id' => $invoice->staff_id,
                 'booking_id' => null,
 
                 'amount' => $amount,
@@ -271,6 +273,8 @@ public function completePayment(Payment $payment): Payment
                 'remaining_amount' => $remainingAmount,
                 'status' => $status,
             ]);
+
+            app(InvoiceService::class)->syncStaffBookBookingPayment($invoice, $payment->id);
 
             /*
              * Activate package and sync fines ONLY

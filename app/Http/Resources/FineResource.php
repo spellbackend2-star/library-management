@@ -13,6 +13,10 @@ class FineResource extends JsonResource
             'id' => $this->id,
             'member_id' => $this->member_id,
             'member_name' => trim(($this->member?->first_name ?? '') . ' ' . ($this->member?->last_name ?? '')),
+            'staff_id' => $this->staff_id,
+            'staff_name' => $this->staff
+                ? trim($this->staff->first_name.' '.$this->staff->last_name)
+                : null,
             'created_by' => $this->created_by,
             'created_by_name' => $this->creator?->name,
             'invoice_id' => $this->invoice_id,

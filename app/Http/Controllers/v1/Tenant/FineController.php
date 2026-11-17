@@ -4,111 +4,51 @@ namespace App\Http\Controllers\v1\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Fine\CancelFineRequest;
+use App\Http\Requests\Fine\FineIndexRequest;
 use App\Http\Requests\Fine\StoreManualFineRequest;
 use App\Http\Requests\Fine\UpdateFineAmountRequest;
 use App\Http\Resources\FineResource;
-use App\Models\Borrow;
-use App\Models\Fine;
-use App\Services\FineService;
+use App\Services\Interface\FineServiceInterface;
+use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class FineController extends Controller
 {
+    use ResponseMessage;
+
     public function __construct(
-        protected FineService $fineService
+        protected FineServiceInterface $fineService
     ) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(FineIndexRequest $request): JsonResponse
     {
-        $request->validate([
-            'page' => ['sometimes', 'integer', 'min:1'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
-        ]);
+        $result = $this->fineService->getAll($request->validated());
 
-        $query = Fine::query()->with([
-            'member',
-            'invoice',
-            'borrow.copy.edition.book',
-            'bookingSeat.seat',
-            'lockerAssignment.locker',
-            'creator',
-            'adjustments',
-        ]);
-
-        if ($request->filled('member_id')) {
-            $query->where('member_id', $request->integer('member_id'));
-        }
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->string('status'));
-        }
-
-        if ($request->filled('invoice_id')) {
-            $query->where('invoice_id', $request->integer('invoice_id'));
-        }
-
-        if ($request->boolean('all')) {
-            $fines = $query->get();
-            $meta = [
-                'total' => $fines->count(),
-                'current_page' => 1,
-                'per_page' => $fines->count(),
-                'last_page' => 1,
-                'first_page_url' => null,
-                'last_page_url' => null,
-                'next_page_url' => null,
-                'prev_page_url' => null,
-            ];
-        } else {
-            $paginator = $query
-                ->paginate((int) $request->input('per_page', 15))
-                ->withQueryString();
-            $fines = $paginator->getCollection();
-            $meta = [
-                'total' => $paginator->total(),
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'last_page' => $paginator->lastPage(),
-                'first_page_url' => $paginator->url(1),
-                'last_page_url' => $paginator->url($paginator->lastPage()),
-                'next_page_url' => $paginator->nextPageUrl(),
-                'prev_page_url' => $paginator->previousPageUrl(),
-            ];
-        }
-
-        return response()->json([
-            'success' => true,
-            'data' => FineResource::collection($fines)->resolve(),
-            'meta' => $meta,
-        ]);
+        return $this->successResponse(
+            FineResource::collection($result['data'])->resolve(),
+            'Fines retrieved successfully.',
+            200,
+            $result['meta'],
+        );
     }
 
     public function show(int $id): JsonResponse
     {
-        $fine = Fine::with([
-            'member',
-            'invoice',
-            'borrow.copy.edition.book',
-            'bookingSeat.seat',
-            'lockerAssignment.locker',
-            'creator',
-            'adjustments',
-        ])->find($id);
+        $fine = $this->fineService->find($id);
 
         if (! $fine) {
             return response()->json(['success' => false, 'message' => 'Fine not found.'], 404);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => new FineResource($fine),
-        ]);
+        return $this->successResponse(
+            new FineResource($fine),
+            'Fine retrieved successfully.',
+        );
     }
 
     public function createFineForBorrow(int $borrowId): JsonResponse
     {
-        $borrow = Borrow::with('member')->find($borrowId);
+        $borrow = $this->fineService->findBorrow($borrowId);
 
         if (! $borrow) {
             return response()->json(['success' => false, 'message' => 'Borrow not found.'], 404);
@@ -123,11 +63,11 @@ class FineController extends Controller
             ], 422);
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Fine created for borrow.',
-            'data' => new FineResource($fine->fresh()->load(['invoice'])),
-        ], 201);
+        return $this->successResponse(
+            new FineResource($fine->fresh()->load(['invoice'])),
+            'Fine created for borrow.',
+            201,
+        );
     }
 
     public function createManual(StoreManualFineRequest $request): JsonResponse
@@ -140,11 +80,11 @@ class FineController extends Controller
             createdBy: $request->user()?->id,
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Manual fine created successfully.',
-            'data' => new FineResource($fine),
-        ], 201);
+        return $this->successResponse(
+            new FineResource($fine),
+            'Manual fine created successfully.',
+            201,
+        );
     }
 
     public function updateAmount(UpdateFineAmountRequest $request, int $id): JsonResponse
@@ -160,11 +100,10 @@ class FineController extends Controller
             actorUserId: $request->user()?->id,
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Fine updated successfully.',
-            'data' => new FineResource($fine),
-        ]);
+        return $this->successResponse(
+            new FineResource($fine),
+            'Fine updated successfully.',
+        );
     }
 
     public function cancel(CancelFineRequest $request, int $id): JsonResponse
@@ -175,20 +114,19 @@ class FineController extends Controller
             note: $request->validated('note'),
         );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Fine cancelled successfully.',
-            'data' => new FineResource($fine),
-        ]);
+        return $this->successResponse(
+            new FineResource($fine),
+            'Fine cancelled successfully.',
+        );
     }
 
     public function destroy(int $id): JsonResponse
     {
         $this->fineService->deleteFine($id);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Fine deleted successfully.',
-        ]);
+        return $this->successResponse(
+            null,
+            'Fine deleted successfully.',
+        );
     }
 }

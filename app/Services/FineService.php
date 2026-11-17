@@ -8,12 +8,18 @@ use App\Models\FineAdjustment;
 use App\Models\Invoice;
 use App\Models\Member;
 use App\Models\Setting;
+use App\Repositories\Interface\FineInterface;
+use App\Services\Interface\FineServiceInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
-class FineService
+class FineService implements FineServiceInterface
 {
+    public function __construct(
+        protected FineInterface $fineRepository
+    ) {}
+
     public const INVOICE_TYPE_FINE = 'fine';
 
     public const REASON_OVERDUE = 'overdue';
@@ -23,6 +29,21 @@ class FineService
     public const REASON_LOST = 'lost';
 
     public const REASON_MANUAL = 'manual';
+
+    public function getAll(array $filters = []): array
+    {
+        return $this->fineRepository->getAll($filters);
+    }
+
+    public function find(int $id): ?Fine
+    {
+        return $this->fineRepository->find($id);
+    }
+
+    public function findBorrow(int $borrowId): ?Borrow
+    {
+        return $this->fineRepository->findBorrow($borrowId);
+    }
 
     public function createManualFine(
         int $memberId,
@@ -186,7 +207,7 @@ class FineService
         Borrow $borrow,
         ?string $returnDate = null
     ): ?Fine {
-        if ($borrow->status !== 'returned' || !$borrow->due_date || !$borrow->member_id) {
+        if ($borrow->status !== 'returned' || !$borrow->due_date || (!$borrow->member_id && !$borrow->staff_borrower_id)) {
             return null;
         }
 
@@ -201,10 +222,12 @@ class FineService
         }
 
         $member = $borrow->member;
-        $amount = $this->bookOverdueAmount($daysLate);
+        $staffId = $borrow->staff_borrower_id;
+        $amount = $this->bookOverdueAmount($daysLate, (bool) $staffId);
 
         return $this->createOverdueFine(
             member: $member,
+            staffId: $staffId,
             amount: $amount,
             daysLate: $daysLate,
             reason: self::REASON_OVERDUE,
@@ -219,7 +242,7 @@ class FineService
         Borrow $borrow,
         ?Carbon $asOfDate = null
     ): ?Fine {
-        if ($borrow->status !== 'overdue' || $borrow->return_date || !$borrow->due_date || !$borrow->member_id) {
+        if ($borrow->status !== 'overdue' || $borrow->return_date || !$borrow->due_date || (!$borrow->member_id && !$borrow->staff_borrower_id)) {
             return null;
         }
 
@@ -231,7 +254,8 @@ class FineService
             return null;
         }
 
-        $amount = $this->bookOverdueAmount($daysLate);
+        $staffId = $borrow->staff_borrower_id;
+        $amount = $this->bookOverdueAmount($daysLate, (bool) $staffId);
         $existingFine = Fine::query()
             ->where('borrow_id', $borrow->id)
             ->where('reason', self::REASON_OVERDUE)
@@ -249,6 +273,7 @@ class FineService
 
         return $this->createOverdueFine(
             member: $borrow->member,
+            staffId: $staffId,
             amount: $amount,
             daysLate: $daysLate,
             reason: self::REASON_OVERDUE,
@@ -269,17 +294,19 @@ class FineService
      */
     protected function createOverdueFine(
         ?Member $member,
+        ?int $staffId,
         float $amount,
         int $daysLate,
         string $reason,
         int $borrowId,
     ): ?Fine {
-        if (!$member) {
+        if (!$member && !$staffId) {
             return null;
         }
 
         return DB::transaction(function () use (
             $member,
+            $staffId,
             $amount,
             $reason,
             $borrowId,
@@ -301,7 +328,8 @@ class FineService
 
             if (!$fine) {
                 $fine = Fine::create([
-                    'member_id' => $member->id,
+                    'member_id' => $member?->id,
+                    'staff_id' => $staffId,
                     'borrow_id' => $borrowId,
                     'amount' => $newAmount,
                     'reason' => $reason,
@@ -348,19 +376,26 @@ class FineService
     }
 
     /**
-     * Find or create a fine-type invoice for a member and link the fine.
+     * Find or create a fine-type invoice for the fine's borrower and link it.
      */
     protected function linkFineToInvoice(Fine $fine): void
     {
-        $invoice = Invoice::query()
-            ->where('member_id', $fine->member_id)
+        $invoiceQuery = Invoice::query()
             ->where('invoice_type', self::INVOICE_TYPE_FINE)
-            ->where('status', '!=', 'paid')
-            ->first();
+            ->where('status', '!=', 'paid');
+
+        if ($fine->staff_id) {
+            $invoiceQuery->where('staff_id', $fine->staff_id);
+        } else {
+            $invoiceQuery->where('member_id', $fine->member_id);
+        }
+
+        $invoice = $invoiceQuery->first();
 
         if (! $invoice) {
             $invoice = Invoice::create([
                 'member_id' => $fine->member_id,
+                'staff_id' => $fine->staff_id,
                 'invoice_number' => $this->generateFineInvoiceNumber(),
                 'invoice_type' => self::INVOICE_TYPE_FINE,
                 'total_amount' => 0,
@@ -443,11 +478,13 @@ class FineService
      * Calculate book overdue fine.
      */
     protected function bookOverdueAmount(
-        int $daysLate
+        int $daysLate,
+        bool $staffBorrower = false,
     ): float {
+        $rateKey = $staffBorrower ? 'staff_book_overdue_rate' : 'book_overdue_rate';
         $perDay = (float) (Setting::query()
             ->where('group', 'fine')
-            ->where('key', 'book_overdue_rate')
+            ->where('key', $rateKey)
             ->value('value') ?? 5.00);
 
         return round(

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Coupon;
+use App\Models\Booking;
 use App\Models\Invoice;
 use App\Models\Member;
 use App\Models\Payment;
@@ -96,6 +97,43 @@ class InvoiceService
                 'notes' => $data['notes'] ?? null,
             ]);
         });
+    }
+
+    public function createStaffBookInvoice(int $staffId, float $amount, ?string $notes = null): Invoice
+    {
+        $amount = round($amount, 2);
+        if ($amount <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => ['The staff book invoice amount must be greater than zero.'],
+            ]);
+        }
+
+        return $this->invoiceRepository->create([
+            'staff_id' => $staffId,
+            'invoice_number' => $this->generateInvoiceNumber(),
+            'invoice_type' => 'staff_book',
+            'total_amount' => $amount,
+            'coupon_discount' => 0,
+            'paid_amount' => 0,
+            'remaining_amount' => $amount,
+            'status' => 'unpaid',
+            'due_date' => now()->addDays(7)->toDateString(),
+            'notes' => $notes,
+        ]);
+    }
+
+    public function syncStaffBookBookingPayment(Invoice $invoice, int $paymentId): void
+    {
+        if ($invoice->invoice_type !== 'staff_book' || $invoice->status !== 'paid') {
+            return;
+        }
+
+        Booking::query()->where('invoice_id', $invoice->id)->update([
+            'status' => 'CONFIRMED',
+            'payment_status' => 'PAID',
+            'payment_id' => $paymentId,
+            'confirmed_at' => now(),
+        ]);
     }
 
     private function applyCouponIfProvided(?int $couponId, float $totalAmount): float
@@ -222,6 +260,7 @@ class InvoiceService
             $payment = $this->paymentRepository->create([
                 'invoice_id' => $invoice->id,
                 'member_id' => $invoice->member_id,
+                'staff_id' => $invoice->staff_id,
                 'booking_id' => null,
                 'amount' => $amount,
                 'extra_discount' => $extraDiscount,
@@ -267,6 +306,8 @@ class InvoiceService
             ]);
 
             $invoice->refresh();
+
+            $this->syncStaffBookBookingPayment($invoice, $payment->id);
 
             if ($invoice->invoice_type === FineService::INVOICE_TYPE_FINE) {
                 app(FineService::class)->syncFineStatusOnInvoicePaid($invoice);

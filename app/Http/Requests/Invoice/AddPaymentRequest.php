@@ -48,7 +48,8 @@ class AddPaymentRequest extends FormRequest
                 'min:0',
             ],
             'return_url' => [
-                'required',
+                'nullable',
+                'required_if:payment_method,KHALTI,ESEWA',
                 'url',
             ],
         ];

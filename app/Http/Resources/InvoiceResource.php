@@ -12,6 +12,7 @@ class InvoiceResource extends JsonResource
         return [
             'id' => $this->id,
             'member_id' => $this->member_id,
+            'staff_id' => $this->staff_id,
             'invoice_number' => $this->invoice_number,
             'invoice_type' => $this->invoice_type,
 
@@ -37,6 +38,10 @@ class InvoiceResource extends JsonResource
                 'phone' => $this->member?->phone,
                 'package_name' => $this->member?->package?->name,
             ],
+            'staff' => $this->staff ? [
+                'id' => $this->staff->id,
+                'name' => trim($this->staff->first_name.' '.$this->staff->last_name),
+            ] : null,
 
             'payments' => PaymentResource::collection(
                 $this->whenLoaded('payments')

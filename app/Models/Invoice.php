@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 
 #[Fillable([
         'member_id',
+        'staff_id',
         'coupon_id',
         'invoice_number',
         'invoice_type',
@@ -37,6 +38,11 @@ class Invoice extends Model
     public function member(): BelongsTo
     {
         return $this->belongsTo(Member::class);
+    }
+
+    public function staff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class);
     }
 
     public function payments(): HasMany

@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
     'booking_id',
     'invoice_id',
     'member_id',
+    'staff_id',
     'amount',
     'extra_discount',
     'currency',
@@ -51,7 +52,7 @@ class Payment extends Model
             return null;
         }
 
-        $this->loadMissing('receipt');
+        $this->loadMissing(['receipt', 'invoice']);
 
         if ($this->receipt) {
             return $this->receipt;
@@ -64,6 +65,7 @@ class Payment extends Model
                 'amount' => $this->amount,
                 'receipt_date' => $this->paid_at ?? $this->payment_date ?? now(),
                 'member_id' => $this->member_id,
+                'staff_id' => $this->staff_id ?? $this->invoice?->staff_id,
             ],
         );
 
@@ -102,5 +104,10 @@ class Payment extends Model
     public function member(): BelongsTo
     {
         return $this->belongsTo(Member::class);
+    }
+
+    public function staff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class);
     }
 }

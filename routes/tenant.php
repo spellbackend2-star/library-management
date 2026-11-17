@@ -196,6 +196,16 @@ Route::prefix('api/v1')->group(function () {
             Route::post('settings/book-fine-rate', [SettingController::class, 'updateBookFineRate'])
                 ->middleware('can:settings.update');
 
+            Route::get('settings/staff-book-rate', [SettingController::class, 'staffBookRate'])
+                ->middleware('can:settings.view');
+            Route::put('settings/staff-book-rate', [SettingController::class, 'updateStaffBookRate'])
+                ->middleware('can:settings.update');
+
+            Route::get('settings/staff-book-fine-rate', [SettingController::class, 'staffBookFineRate'])
+                ->middleware('can:settings.view');
+            Route::put('settings/staff-book-fine-rate', [SettingController::class, 'updateStaffBookFineRate'])
+                ->middleware('can:settings.update');
+
             // Notification Settings
             Route::get('settings/notification', [SettingController::class, 'notification']);
             Route::put('settings/notification', [SettingController::class, 'updateNotification']);

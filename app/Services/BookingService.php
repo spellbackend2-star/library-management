@@ -240,15 +240,19 @@ class BookingService
     {
         $staff = \App\Models\Staff::query()
             ->whereKey($data['staff_id'])
-            ->where('user_id', Auth::id())
             ->where('is_active', true)
             ->first();
 
         if (! $staff) {
             throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException(
-                'The staff ID must belong to the authenticated staff account.'
+                'The selected staff borrower is inactive or was not found.'
             );
         }
+
+        $issuedByStaffId = \App\Models\Staff::query()
+            ->where('user_id', Auth::id())
+            ->where('is_active', true)
+            ->value('id');
 
         $bookings = $data['bookings'] ?? [];
         if (empty($bookings) || collect($bookings)->contains(fn ($item) => ($item['type'] ?? null) !== 'book')) {
@@ -270,7 +274,7 @@ class BookingService
 
         $totalAmount = round($ratePerBook * count($bookings), 2);
 
-        return DB::transaction(function () use ($data, $staff, $bookings, $ratePerBook, $totalAmount) {
+        return DB::transaction(function () use ($data, $staff, $issuedByStaffId, $bookings, $ratePerBook, $totalAmount) {
             $booking = $this->bookingRepository->create([
                 'staff_borrower_id' => $staff->id,
                 'booked_by_user_id' => Auth::id(),
@@ -298,7 +302,7 @@ class BookingService
                     'booking_id' => $booking->id,
                     'copy_id' => $copy->id,
                     'staff_borrower_id' => $staff->id,
-                    'staff_id' => $staff->id,
+                    'staff_id' => $issuedByStaffId,
                     'checkout_date' => Carbon::now(),
                     'due_date' => $data['due_date'],
                     'renewal_count' => 0,

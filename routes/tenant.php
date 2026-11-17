@@ -338,7 +338,8 @@ Route::prefix('api/v1')->group(function () {
             |--------------------------------------------------------------------------
             */
 
-            Route::post('admin/bookings', [BookingController::class, 'store']);
+            Route::post('admin/bookings', [BookingController::class, 'store'])
+                ->middleware('can:bookings.create');
 
             // Booking Seat Records
             Route::get(

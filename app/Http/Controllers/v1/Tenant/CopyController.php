@@ -34,17 +34,13 @@ class CopyController extends Controller
         return new CopyResource($copy);
     }
 
-    public function show(Request $request, int $copy)
+    public function show(int $copy): CopyResource
     {
-        $filters = $request->only(['per_page']);
-        $filters['id'] = $copy;
+        $copyData = $this->copyService->getById($copy);
 
-        $result = $this->copyService->getAll($filters);
+        abort_if(! $copyData, 404, 'Copy not found.');
 
-        abort_if(empty($result['data']), 404, 'Copy not found.');
-
-        return CopyResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+        return new CopyResource($copyData);
     }
 
     public function update(

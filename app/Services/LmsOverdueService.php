@@ -22,7 +22,7 @@ class LmsOverdueService
         $summary = [
             'tenants' => 0,
             'borrows_marked_overdue' => 0,
-            'fines_created' => 0,
+            'fines_updated' => 0,
             'seat_bookings_expired' => 0,
             'locker_assignments_expired' => 0,
         ];
@@ -72,7 +72,7 @@ class LmsOverdueService
     {
         return [
             'borrows_marked_overdue' => $this->processOverdueBorrows(),
-            'fines_created' => $this->createOverdueFines(),
+            'fines_updated' => $this->accrueBookFines(),
             'seat_bookings_expired' => $this->expireSeatBookings(),
             'locker_assignments_expired' => $this->expireLockerAssignments(),
         ];
@@ -81,8 +81,7 @@ class LmsOverdueService
     /**
      * Mark active borrows as overdue when their due date has passed.
      *
-     * No fine is created here.
-     * The final fine is calculated when the book is returned.
+     * Fine accrual is based on whole days past due.
      */
     protected function processOverdueBorrows(): int
     {
@@ -101,10 +100,33 @@ class LmsOverdueService
     }
 
     /**
+     * Create or update one book fine per overdue borrow using elapsed days.
+     */
+    protected function accrueBookFines(): int
+    {
+        $fineService = app(FineService::class);
+        $updated = 0;
+
+        Borrow::query()
+            ->where('status', 'overdue')
+            ->whereNull('return_date')
+            ->with('member')
+            ->orderBy('id')
+            ->chunkById(100, function ($borrows) use ($fineService, &$updated) {
+                foreach ($borrows as $borrow) {
+                    if ($fineService->accrueBookFineForOverdueBorrow($borrow)) {
+                        $updated++;
+                    }
+                }
+            });
+
+        return $updated;
+    }
+
+    /**
      * Mark expired seat bookings as completed.
      *
-     * Fine calculation is handled separately by FineService
-     * when the seat booking is actually completed/released.
+     * Seat booking expiry does not create a fine.
      */
     protected function expireSeatBookings(): int
     {
@@ -123,9 +145,7 @@ class LmsOverdueService
     /**
      * Mark active locker assignments as expired.
      *
-     * No fine is created here.
-     * FineService calculates the final locker overdue fine
-     * when the locker is actually returned.
+     * Locker expiry does not create a fine.
      */
     protected function expireLockerAssignments(): int
     {
@@ -143,59 +163,4 @@ class LmsOverdueService
         });
     }
 
-    /**
-     * Create overdue fines for borrows, seat bookings, and locker assignments
-     * that are past their due date and do not yet have a fine.
-     */
-    protected function createOverdueFines(): int
-    {
-        $created = 0;
-
-        $fineService = app(FineService::class);
-
-        // Book borrows that are overdue and not yet returned
-        $overdueBorrows = Borrow::query()
-            ->where('status', 'overdue')
-            ->whereNull('return_date')
-            ->with('member')
-            ->get();
-
-        foreach ($overdueBorrows as $borrow) {
-            $fine = $fineService->fineForBorrowOnReturn($borrow);
-
-            if ($fine) {
-                $created++;
-            }
-        }
-
-        // Seat bookings that expired and are now completed
-        $expiredSeats = BookingSeat::query()
-            ->where('status', 'completed')
-            ->with('member')
-            ->get();
-
-        foreach ($expiredSeats as $seat) {
-            $fine = $fineService->fineForBookingSeatOnComplete($seat);
-
-            if ($fine) {
-                $created++;
-            }
-        }
-
-        // Locker assignments that expired and were returned
-        $expiredLockers = LockerAssignment::query()
-            ->where('status', 'expired')
-            ->with('member')
-            ->get();
-
-        foreach ($expiredLockers as $assignment) {
-            $fine = $fineService->fineForLockerOnReturn($assignment);
-
-            if ($fine) {
-                $created++;
-            }
-        }
-
-        return $created;
-    }
 }

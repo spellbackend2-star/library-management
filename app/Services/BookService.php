@@ -191,7 +191,7 @@ class BookService
 
                         $edition = $this->editionRepository->find($editionData['id']);
 
-                        if (! $edition || $edition->book_id !== $book->id) {
+                        if (! $edition || (int) $edition->book_id !== (int) $book->id) {
                             throw \Illuminate\Validation\ValidationException::withMessages([
                                 'editions' => ['An edition does not belong to this book.'],
                             ]);
@@ -223,8 +223,7 @@ class BookService
                             'publisher_id' =>
                                 $editionData['publisher_id'],
 
-                            'isbn' =>
-                                $editionData['isbn'] ?? null,
+                            'isbn' => $editionData['isbn'] ?? null,
 
                             'edition_number' =>
                                 $editionData['edition_number'] ?? null,
@@ -247,19 +246,21 @@ class BookService
 
                         foreach ($editionData['copies'] as $copyData) {
 
+                            $copyId = $copyData['id'] ?? $copyData['copy_id'] ?? null;
+
                             /*
                             |--------------------------------------------------------------------------
                             | Existing Copy
                             |--------------------------------------------------------------------------
                             */
 
-                            if (isset($copyData['id'])) {
+                            if ($copyId !== null) {
 
-                                $existingCopy = $this->copyRepository->find($copyData['id']);
+                                $existingCopy = $this->copyRepository->find($copyId);
 
-                                if (! $existingCopy || $existingCopy->edition_id !== $edition->id) {
+                                if (! $existingCopy || (int) $existingCopy->edition_id !== (int) $edition->id) {
                                     throw \Illuminate\Validation\ValidationException::withMessages([
-                                        'editions' => ['A copy does not belong to the selected edition.'],
+                                        'editions' => ["Copy ID {$copyId} does not belong to edition ID {$edition->id}."],
                                     ]);
                                 }
 
@@ -272,7 +273,7 @@ class BookService
                                 ]));
 
                                 $copy = $this->copyRepository->update(
-                                    $copyData['id'],
+                                    $copyId,
                                     $copyFields
                                 );
 
@@ -334,7 +335,7 @@ class BookService
 
             $edition = $this->editionRepository->find($editionId);
 
-            if (!$edition || $edition->book_id !== $book->id) {
+            if (!$edition || (int) $edition->book_id !== (int) $book->id) {
                 throw new \Exception('Edition does not belong to this book.');
             }
 
@@ -379,7 +380,7 @@ class BookService
 
         $edition = $this->editionRepository->find($copy->edition_id);
 
-        if (!$edition || $edition->book_id !== $book->id) {
+        if (!$edition || (int) $edition->book_id !== (int) $book->id) {
             throw new \Exception('Copy does not belong to this book.');
         }
 
@@ -412,7 +413,7 @@ class BookService
 
             $edition = $this->editionRepository->find($copy->edition_id);
 
-            if (!$edition || $edition->book_id !== $book->id) {
+            if (!$edition || (int) $edition->book_id !== (int) $book->id) {
                 throw new \Exception('Copy does not belong to this book.');
             }
 
@@ -436,7 +437,7 @@ class BookService
 
             $edition = $this->editionRepository->find($copy->edition_id);
 
-            if (!$edition || $edition->book_id !== $book->id) {
+            if (!$edition || (int) $edition->book_id !== (int) $book->id) {
                 throw new \Exception('Copy does not belong to this book.');
             }
 

@@ -2,15 +2,15 @@
 
 namespace App\Services;
 
-use App\Models\BookingSeat;
 use App\Models\Borrow;
 use App\Models\Fine;
+use App\Models\FineAdjustment;
 use App\Models\Invoice;
-use App\Models\LockerAssignment;
 use App\Models\Member;
-use App\Models\Package;
+use App\Models\Setting;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class FineService
 {
@@ -18,13 +18,166 @@ class FineService
 
     public const REASON_OVERDUE = 'overdue';
 
-    public const REASON_SEAT_OVERDUE = 'seat_overdue';
-
-    public const REASON_LOCKER_OVERDUE = 'locker_overdue';
-
     public const REASON_DAMAGED = 'damaged';
 
     public const REASON_LOST = 'lost';
+
+    public const REASON_MANUAL = 'manual';
+
+    public function createManualFine(
+        int $memberId,
+        float $amount,
+        string $reason,
+        ?string $note,
+        ?int $createdBy
+    ): Fine {
+        return DB::transaction(function () use ($memberId, $amount, $reason, $note, $createdBy) {
+            $fine = Fine::create([
+                'member_id' => $memberId,
+                'created_by' => $createdBy,
+                'source_type' => 'manual',
+                'amount' => round($amount, 2),
+                'reason' => self::REASON_MANUAL,
+                'manual_reason' => $reason,
+                'notes' => $note,
+                'issued_date' => Carbon::now()->toDateString(),
+                'status' => 'unpaid',
+                'days_late' => 0,
+            ]);
+
+            FineAdjustment::create([
+                'fine_id' => $fine->id,
+                'actor_user_id' => $createdBy,
+                'action' => 'created',
+                'new_amount' => round($amount, 2),
+                'note' => $note,
+            ]);
+
+            $this->linkFineToInvoice($fine);
+
+            return $fine->fresh()->load(['member', 'invoice', 'adjustments']);
+        });
+    }
+
+    public function updateFineAmount(
+        int $fineId,
+        float $amount,
+        string $reason,
+        ?string $notes,
+        bool $notesProvided,
+        ?int $actorUserId
+    ): Fine {
+        return DB::transaction(function () use ($fineId, $amount, $reason, $notes, $notesProvided, $actorUserId) {
+            $fine = Fine::query()->lockForUpdate()->findOrFail($fineId);
+
+            if ($fine->status !== 'unpaid') {
+                throw new ConflictHttpException(
+                    'Only unpaid fines with no payment history can be edited. Record a new charge as a separate manual fine.'
+                );
+            }
+
+            $invoice = $fine->invoice_id
+                ? Invoice::query()->lockForUpdate()->find($fine->invoice_id)
+                : null;
+
+            $oldAmount = (float) $fine->amount;
+            $newAmount = round($amount, 2);
+
+            $updates = [
+                'amount' => $newAmount,
+                'manual_reason' => $reason,
+            ];
+            if ($notesProvided) {
+                $updates['notes'] = $notes;
+            }
+            $fine->update($updates);
+
+            if ($oldAmount !== $newAmount) {
+                FineAdjustment::create([
+                    'fine_id' => $fine->id,
+                    'actor_user_id' => $actorUserId,
+                    'action' => 'amount_changed',
+                    'old_amount' => $oldAmount,
+                    'new_amount' => $newAmount,
+                    'note' => $notes ?? ('Fine reason: '.$reason),
+                ]);
+            }
+
+            if ($invoice) {
+                $this->syncFineInvoiceAmounts($invoice);
+            }
+
+            return $fine->fresh()->load(['member', 'invoice', 'adjustments']);
+        });
+    }
+
+    public function cancelFine(int $fineId, ?int $actorUserId, string $note = 'Fine cancelled by admin.'): Fine
+    {
+        return DB::transaction(function () use ($fineId, $actorUserId, $note) {
+            $fine = Fine::query()->lockForUpdate()->findOrFail($fineId);
+
+            if ($fine->status === 'waived') {
+                return $fine->fresh()->load(['member', 'invoice', 'adjustments']);
+            }
+
+            if ($fine->status !== 'unpaid') {
+                throw new ConflictHttpException('Only unpaid fines can be cancelled.');
+            }
+
+            $invoice = $fine->invoice_id
+                ? Invoice::query()->lockForUpdate()->find($fine->invoice_id)
+                : null;
+
+            if ($invoice && ((float) $invoice->paid_amount > 0 || $invoice->status === 'paid')) {
+                throw new ConflictHttpException('A fine linked to a paid or partially paid invoice cannot be cancelled.');
+            }
+
+            $fine->update(['status' => 'waived']);
+            FineAdjustment::create([
+                'fine_id' => $fine->id,
+                'actor_user_id' => $actorUserId,
+                'action' => 'cancelled',
+                'old_amount' => $fine->amount,
+                'new_amount' => 0,
+                'note' => $note,
+            ]);
+
+            if ($invoice) {
+                $this->syncFineInvoiceAmounts($invoice);
+            }
+
+            return $fine->fresh()->load(['member', 'invoice', 'adjustments']);
+        });
+    }
+
+    /**
+     * Permanently remove an unpaid fine and its audit adjustments.
+     */
+    public function deleteFine(int $fineId): bool
+    {
+        return DB::transaction(function () use ($fineId) {
+            $fine = Fine::query()->lockForUpdate()->findOrFail($fineId);
+
+            $invoice = $fine->invoice_id
+                ? Invoice::query()->lockForUpdate()->find($fine->invoice_id)
+                : null;
+
+            if (in_array($fine->status, ['paid', 'partially_paid'], true)
+                || ($invoice && ((float) $invoice->paid_amount > 0 || $invoice->status === 'paid'))) {
+                throw new ConflictHttpException('A fine linked to a paid or partially paid invoice cannot be deleted.');
+            }
+
+            // Fine adjustments use a restrictive foreign key, so remove them explicitly.
+            $fine->adjustments()->delete();
+            $deleted = $fine->delete();
+
+            if ($deleted && $invoice) {
+                $this->syncFineInvoiceAmounts($invoice);
+            }
+
+            return (bool) $deleted;
+        });
+    }
 
     /**
      * Create an overdue fine when a book is returned.
@@ -33,27 +186,26 @@ class FineService
         Borrow $borrow,
         ?string $returnDate = null
     ): ?Fine {
-        if (!$borrow->due_date) {
+        if ($borrow->status !== 'returned' || !$borrow->due_date || !$borrow->member_id) {
             return null;
         }
 
-        $daysLate = max(
-            0,
-            (int) Carbon::parse($borrow->due_date)
-                ->startOfDay()
-                ->diffInDays(Carbon::now()->startOfDay())
-        );
+        $actualReturn = Carbon::parse(
+            $returnDate ?? $borrow->return_date ?? Carbon::now()->toDateString()
+        )->startOfDay();
+        $dueDate = Carbon::parse($borrow->due_date)->startOfDay();
+        $daysLate = $this->daysLate($dueDate, $actualReturn);
 
         if ($daysLate <= 0) {
             return null;
         }
 
+        $member = $borrow->member;
+        $amount = $this->bookOverdueAmount($daysLate);
+
         return $this->createOverdueFine(
-            member: $borrow->member,
-            amount: $this->bookOverdueAmount(
-                member: $borrow->member,
-                daysLate: $daysLate
-            ),
+            member: $member,
+            amount: $amount,
             daysLate: $daysLate,
             reason: self::REASON_OVERDUE,
             borrowId: $borrow->id,
@@ -61,81 +213,52 @@ class FineService
     }
 
     /**
-     * Create an overdue fine when a seat booking is completed.
+     * Accrue the book fine daily while an overdue borrow remains unreturned.
      */
-    public function fineForBookingSeatOnComplete(
-        BookingSeat $bookingSeat
+    public function accrueBookFineForOverdueBorrow(
+        Borrow $borrow,
+        ?Carbon $asOfDate = null
     ): ?Fine {
-        if (!$bookingSeat->end_at) {
+        if ($borrow->status !== 'overdue' || $borrow->return_date || !$borrow->due_date || !$borrow->member_id) {
             return null;
         }
 
-        $end = Carbon::parse($bookingSeat->end_at);
-        $now = Carbon::now();
-
-        if ($now->lessThanOrEqualTo($end)) {
-            return null;
-        }
-
-        $hoursLate = max(
-            1,
-            (int) ceil(
-                $end->diffInMinutes($now) / 60
-            )
-        );
-
-        return $this->createOverdueFine(
-            member: $bookingSeat->member,
-            amount: $this->seatOverdueAmount(
-                member: $bookingSeat->member,
-                hoursLate: $hoursLate
-            ),
-            daysLate: $hoursLate,
-            reason: self::REASON_SEAT_OVERDUE,
-            bookingSeatId: $bookingSeat->id,
-        );
-    }
-
-    /**
-     * Create an overdue fine when a locker is returned.
-     */
-    public function fineForLockerOnReturn(
-        LockerAssignment $assignment,
-        ?string $returnDate = null
-    ): ?Fine {
-        if (!$assignment->expiry_date) {
-            return null;
-        }
-
-        $actualReturn = $returnDate
-            ? Carbon::parse($returnDate)
-            : (
-                $assignment->returned_date
-                    ? Carbon::parse($assignment->returned_date)
-                    : Carbon::now()
-            );
-
-        $expiry = Carbon::parse($assignment->expiry_date)->endOfDay();
-
-        $daysLate = max(
-            0,
-            (int) $expiry->diffInDays($actualReturn)
-        );
+        $dueDate = Carbon::parse($borrow->due_date)->startOfDay();
+        $asOfDate = ($asOfDate ?? Carbon::today())->copy()->startOfDay();
+        $daysLate = $this->daysLate($dueDate, $asOfDate);
 
         if ($daysLate <= 0) {
             return null;
         }
 
+        $amount = $this->bookOverdueAmount($daysLate);
+        $existingFine = Fine::query()
+            ->where('borrow_id', $borrow->id)
+            ->where('reason', self::REASON_OVERDUE)
+            ->first();
+
+        if ($existingFine?->status === 'waived') {
+            return null;
+        }
+
+        if ($existingFine
+            && (int) $existingFine->days_late === $daysLate
+            && (float) $existingFine->amount === $amount) {
+            return null;
+        }
+
         return $this->createOverdueFine(
-            member: $assignment->member,
-            amount: $this->lockerOverdueAmount(
-                member: $assignment->member,
-                daysLate: $daysLate
-            ),
+            member: $borrow->member,
+            amount: $amount,
             daysLate: $daysLate,
-            reason: self::REASON_LOCKER_OVERDUE,
-            lockerAssignmentId: $assignment->id,
+            reason: self::REASON_OVERDUE,
+            borrowId: $borrow->id,
         );
+    }
+
+    protected function daysLate(Carbon $dueDate, Carbon $comparisonDate): int
+    {
+        return max(0, (int) $dueDate->diffInDays($comparisonDate));
     }
 
     /**
@@ -149,40 +272,10 @@ class FineService
         float $amount,
         int $daysLate,
         string $reason,
-        ?int $borrowId = null,
-        ?int $bookingSeatId = null,
-        ?int $lockerAssignmentId = null,
+        int $borrowId,
     ): ?Fine {
         if (!$member) {
             return null;
-        }
-
-        $query = Fine::query()
-            ->where('reason', $reason);
-
-        if ($borrowId !== null) {
-            $query->where('borrow_id', $borrowId);
-        }
-
-        if ($bookingSeatId !== null) {
-            $query->where('booking_seat_id', $bookingSeatId);
-        }
-
-        if ($lockerAssignmentId !== null) {
-            $query->where(
-                'locker_assignment_id',
-                $lockerAssignmentId
-            );
-        }
-
-        $existingFine = $query->first();
-
-        if ($existingFine) {
-            if (! $existingFine->invoice_id) {
-                $this->linkFineToInvoice($existingFine);
-            }
-
-            return $existingFine->fresh();
         }
 
         return DB::transaction(function () use (
@@ -190,33 +283,67 @@ class FineService
             $amount,
             $reason,
             $borrowId,
-            $bookingSeatId,
-            $lockerAssignmentId,
             $daysLate
         ) {
-            $fine = Fine::create([
-                'member_id' => $member->id,
+            $fine = Fine::query()
+                ->where('borrow_id', $borrowId)
+                ->where('reason', $reason)
+                ->lockForUpdate()
+                ->first();
 
-                'borrow_id' => $borrowId,
+            if ($fine?->status === 'waived') {
+                return $fine;
+            }
 
-                'booking_seat_id' => $bookingSeatId,
+            $newAmount = round($amount, 2);
+            $created = !$fine;
+            $changed = $created;
 
-                'locker_assignment_id' => $lockerAssignmentId,
+            if (!$fine) {
+                $fine = Fine::create([
+                    'member_id' => $member->id,
+                    'borrow_id' => $borrowId,
+                    'amount' => $newAmount,
+                    'reason' => $reason,
+                    'issued_date' => Carbon::now()->toDateString(),
+                    'status' => 'unpaid',
+                    'days_late' => $daysLate,
+                ]);
 
-                'amount' => round($amount, 2),
+                FineAdjustment::create([
+                    'fine_id' => $fine->id,
+                    'action' => 'created',
+                    'new_amount' => $newAmount,
+                    'note' => 'Book overdue fine accrued automatically.',
+                ]);
+            } elseif ((int) $fine->days_late !== $daysLate || (float) $fine->amount !== $newAmount) {
+                $oldAmount = (float) $fine->amount;
+                $fine->update([
+                    'amount' => $newAmount,
+                    'days_late' => $daysLate,
+                ]);
 
-                'reason' => $reason,
+                FineAdjustment::create([
+                    'fine_id' => $fine->id,
+                    'action' => 'amount_changed',
+                    'old_amount' => $oldAmount,
+                    'new_amount' => $newAmount,
+                    'note' => 'Book overdue fine recalculated from actual late days.',
+                ]);
+                $changed = true;
+            }
 
-                'issued_date' => Carbon::now()->toDateString(),
+            if (!$fine->invoice_id) {
+                $this->linkFineToInvoice($fine);
+            } elseif ($changed) {
+                $invoice = Invoice::query()->lockForUpdate()->find($fine->invoice_id);
+                if ($invoice) {
+                    $this->syncFineInvoiceAmounts($invoice);
+                    $this->syncFineStatusesForInvoice($invoice);
+                }
+            }
 
-                'status' => 'unpaid',
-
-                'days_late' => $daysLate,
-            ]);
-
-            $this->linkFineToInvoice($fine);
-
-            return $fine->fresh();
+            return $fine->fresh()->load(['invoice']);
         });
     }
 
@@ -262,6 +389,9 @@ class FineService
         $invoice->update([
             'total_amount' => round($total, 2),
             'remaining_amount' => round(max(0, $total - (float) $invoice->paid_amount), 2),
+            'status' => $total > 0 && (float) $invoice->paid_amount >= $total
+                ? 'paid'
+                : (((float) $invoice->paid_amount > 0) ? 'partially_paid' : 'unpaid'),
         ]);
     }
 
@@ -284,68 +414,41 @@ class FineService
      */
     public function syncFineStatusOnInvoicePaid(Invoice $invoice): void
     {
-        $invoice->loadMissing('fines');
-
-        $fines = $invoice->fines()
-            ->where('status', 'unpaid')
-            ->get();
-
-        if ($fines->isEmpty()) {
-            return;
-        }
-
-        $totalFine = (float) $fines->sum('amount');
-        $paidAmount = (float) $invoice->paid_amount;
-
-        if ($paidAmount >= $totalFine) {
-            $fines->each(function (Fine $fine) {
-                $fine->update([
-                    'status' => 'paid',
-                    'paid_date' => Carbon::now()->toDateString(),
-                ]);
-            });
-        } else {
-            $ratio = $totalFine > 0 ? $paidAmount / $totalFine : 0;
-
-            $fines->each(function (Fine $fine) use ($ratio) {
-                $paidForFine = round((float) $fine->amount * $ratio, 2);
-
-                if ($paidForFine >= (float) $fine->amount) {
-                    $fine->update([
-                        'status' => 'paid',
-                        'paid_date' => Carbon::now()->toDateString(),
-                    ]);
-                } elseif ($paidForFine > 0) {
-                    $fine->update(['status' => 'partially_paid']);
-                }
-            });
-        }
+        $this->syncFineStatusesForInvoice($invoice);
     }
 
-    /**
-     * Get the member's current package.
-     */
-    protected function package(Member $member): ?Package
+    protected function syncFineStatusesForInvoice(Invoice $invoice): void
     {
-        return $member->package;
+        $fines = $invoice->fines()->where('status', '!=', 'waived')->get();
+        $totalFine = (float) $fines->sum('amount');
+        $paidAmount = min((float) $invoice->paid_amount, $totalFine);
+        $ratio = $totalFine > 0 ? $paidAmount / $totalFine : 0;
+
+        foreach ($fines as $fine) {
+            $paidForFine = round((float) $fine->amount * $ratio, 2);
+            $status = $paidForFine >= (float) $fine->amount
+                ? 'paid'
+                : ($paidForFine > 0 ? 'partially_paid' : 'unpaid');
+
+            $fine->update([
+                'status' => $status,
+                'paid_date' => $status === 'paid'
+                    ? ($fine->paid_date ?? Carbon::now()->toDateString())
+                    : null,
+            ]);
+        }
     }
 
     /**
      * Calculate book overdue fine.
      */
     protected function bookOverdueAmount(
-        ?Member $member,
         int $daysLate
     ): float {
-        $perDay = 5.00;
-
-        $package = $member
-            ? $this->package($member)
-            : null;
-
-        if ($package?->overdue_fine_per_day !== null) {
-            $perDay = (float) $package->overdue_fine_per_day;
-        }
+        $perDay = (float) (Setting::query()
+            ->where('group', 'fine')
+            ->where('key', 'book_overdue_rate')
+            ->value('value') ?? 5.00);
 
         return round(
             $perDay * $daysLate,
@@ -353,49 +456,4 @@ class FineService
         );
     }
 
-    /**
-     * Calculate seat overdue fine.
-     */
-    protected function seatOverdueAmount(
-        ?Member $member,
-        int $hoursLate
-    ): float {
-        $perHour = 2.00;
-
-        $package = $member
-            ? $this->package($member)
-            : null;
-
-        if ($package?->seat_overdue_fine_per_hour !== null) {
-            $perHour = (float) $package->seat_overdue_fine_per_hour;
-        }
-
-        return round(
-            $perHour * $hoursLate,
-            2
-        );
-    }
-
-    /**
-     * Calculate locker overdue fine.
-     */
-    protected function lockerOverdueAmount(
-        ?Member $member,
-        int $daysLate
-    ): float {
-        $perDay = 3.00;
-
-        $package = $member
-            ? $this->package($member)
-            : null;
-
-        if ($package?->locker_overdue_fine_per_day !== null) {
-            $perDay = (float) $package->locker_overdue_fine_per_day;
-        }
-
-        return round(
-            $perDay * $daysLate,
-            2
-        );
-    }
 }

@@ -13,6 +13,13 @@ class Isbn
     {
         $isbn = self::normalize($isbn);
 
+        return self::isValid10($isbn) || self::isValid13($isbn);
+    }
+
+    public static function isValid10(string $isbn): bool
+    {
+        $isbn = self::normalize($isbn);
+
         if (preg_match('/^\d{9}[\dX]$/', $isbn) === 1) {
             $sum = 0;
             for ($index = 0; $index < 10; $index++) {
@@ -25,7 +32,14 @@ class Isbn
             return $sum % 11 === 0;
         }
 
-        if (preg_match('/^\d{13}$/', $isbn) === 1) {
+        return false;
+    }
+
+    public static function isValid13(string $isbn): bool
+    {
+        $isbn = self::normalize($isbn);
+
+        if (preg_match('/^(978|979)\d{10}$/', $isbn) === 1) {
             $sum = 0;
             for ($index = 0; $index < 13; $index++) {
                 $sum += (int) $isbn[$index] * ($index % 2 === 0 ? 1 : 3);

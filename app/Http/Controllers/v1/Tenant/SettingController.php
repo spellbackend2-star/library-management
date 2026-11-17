@@ -4,6 +4,7 @@ namespace App\Http\Controllers\v1\Tenant;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Setting\StoreSettingRequest;
+use App\Http\Requests\Setting\UpdateBookFineRateRequest;
 use App\Http\Requests\Setting\UpdateSettingRequest;
 use App\Http\Requests\Setting\NotificationSettingsRequest;
 use App\Http\Requests\Setting\SmtpSettingsRequest;
@@ -76,6 +77,42 @@ class SettingController extends Controller
         }
 
         return $setting->value;
+    }
+
+    public function bookFineRate(): JsonResponse
+    {
+        if ($response = $this->ensureSettingsTableExists()) {
+            return $response;
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Book overdue fine rate retrieved successfully.',
+            'data' => [
+                'rate_per_day' => (float) $this->getStoredSetting('fine', 'book_overdue_rate', 5.00),
+            ],
+        ]);
+    }
+
+    public function updateBookFineRate(UpdateBookFineRateRequest $request): JsonResponse
+    {
+        if ($response = $this->ensureSettingsTableExists()) {
+            return $response;
+        }
+
+        $rate = round((float) $request->validated('rate_per_day'), 2);
+        $this->writeSetting(
+            'fine',
+            'book_overdue_rate',
+            number_format($rate, 2, '.', ''),
+            'Global book overdue fine rate per extra day.'
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Book overdue fine rate updated successfully.',
+            'data' => ['rate_per_day' => $rate],
+        ]);
     }
 
     private function storeImageIfUploaded(Request $request, string $fieldName): ?string

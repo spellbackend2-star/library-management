@@ -30,7 +30,7 @@ class StoreBookEditionRequest extends FormRequest
             ],
 
             'publisher_id' => [
-                'nullable',
+                'required',
                 'integer',
                 'exists:publishers,id',
             ],
@@ -38,9 +38,9 @@ class StoreBookEditionRequest extends FormRequest
             'isbn' => [
                 'nullable',
                 'string',
-                'max:13',
-                'unique:book_editions,isbn',
+                'max:20',
                 new ValidIsbn(),
+                'unique:book_editions,isbn',
             ],
 
             'edition_number' => [
@@ -52,12 +52,13 @@ class StoreBookEditionRequest extends FormRequest
             'publication_year' => [
                 'nullable',
                 'integer',
+                'min:1000',
+                'max:9999',
             ],
 
             'format' => [
                 'nullable',
-                'string',
-                'max:20',
+                'in:physical,ebook,audiobook',
             ],
         ];
     }

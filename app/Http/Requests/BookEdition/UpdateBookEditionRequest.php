@@ -41,9 +41,9 @@ class UpdateBookEditionRequest extends FormRequest
             'isbn' => [
                 'nullable',
                 'string',
-                'max:13',
-                Rule::unique('book_editions', 'isbn')->ignore($editionId),
+                'max:20',
                 new ValidIsbn(),
+                Rule::unique('book_editions', 'isbn')->ignore($editionId),
             ],
 
             'edition_number' => [
@@ -55,12 +55,13 @@ class UpdateBookEditionRequest extends FormRequest
             'publication_year' => [
                 'nullable',
                 'integer',
+                'min:1000',
+                'max:9999',
             ],
 
             'format' => [
                 'nullable',
-                'string',
-                'max:20',
+                'in:physical,ebook,audiobook',
             ],
         ];
     }

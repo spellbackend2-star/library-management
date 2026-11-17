@@ -3,11 +3,12 @@
 namespace App\Http\Controllers\v1\Tenant;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Fine\CancelFineRequest;
+use App\Http\Requests\Fine\StoreManualFineRequest;
+use App\Http\Requests\Fine\UpdateFineAmountRequest;
 use App\Http\Resources\FineResource;
 use App\Models\Borrow;
-use App\Models\BookingSeat;
 use App\Models\Fine;
-use App\Models\LockerAssignment;
 use App\Services\FineService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,20 @@ class FineController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $query = Fine::query()->with(['member', 'invoice']);
+        $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $query = Fine::query()->with([
+            'member',
+            'invoice',
+            'borrow.copy.edition.book',
+            'bookingSeat.seat',
+            'lockerAssignment.locker',
+            'creator',
+            'adjustments',
+        ]);
 
         if ($request->filled('member_id')) {
             $query->where('member_id', $request->integer('member_id'));
@@ -34,19 +48,53 @@ class FineController extends Controller
             $query->where('invoice_id', $request->integer('invoice_id'));
         }
 
-        $fines = $request->boolean('all')
-            ? $query->get()
-            : $query->paginate((int) $request->input('per_page', 15));
+        if ($request->boolean('all')) {
+            $fines = $query->get();
+            $meta = [
+                'total' => $fines->count(),
+                'current_page' => 1,
+                'per_page' => $fines->count(),
+                'last_page' => 1,
+                'first_page_url' => null,
+                'last_page_url' => null,
+                'next_page_url' => null,
+                'prev_page_url' => null,
+            ];
+        } else {
+            $paginator = $query
+                ->paginate((int) $request->input('per_page', 15))
+                ->withQueryString();
+            $fines = $paginator->getCollection();
+            $meta = [
+                'total' => $paginator->total(),
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'last_page' => $paginator->lastPage(),
+                'first_page_url' => $paginator->url(1),
+                'last_page_url' => $paginator->url($paginator->lastPage()),
+                'next_page_url' => $paginator->nextPageUrl(),
+                'prev_page_url' => $paginator->previousPageUrl(),
+            ];
+        }
 
         return response()->json([
             'success' => true,
             'data' => FineResource::collection($fines)->resolve(),
+            'meta' => $meta,
         ]);
     }
 
     public function show(int $id): JsonResponse
     {
-        $fine = Fine::with(['member', 'invoice', 'borrow', 'bookingSeat', 'lockerAssignment'])->find($id);
+        $fine = Fine::with([
+            'member',
+            'invoice',
+            'borrow.copy.edition.book',
+            'bookingSeat.seat',
+            'lockerAssignment.locker',
+            'creator',
+            'adjustments',
+        ])->find($id);
 
         if (! $fine) {
             return response()->json(['success' => false, 'message' => 'Fine not found.'], 404);
@@ -71,7 +119,7 @@ class FineController extends Controller
         if (! $fine) {
             return response()->json([
                 'success' => false,
-                'message' => 'No overdue fine created (borrow not due or not late).',
+                'message' => 'No book overdue fine created (the book must be returned after its due date).',
             ], 422);
         }
 
@@ -82,63 +130,61 @@ class FineController extends Controller
         ], 201);
     }
 
-    public function createFineForBookingSeat(int $bookingSeatId): JsonResponse
+    public function createManual(StoreManualFineRequest $request): JsonResponse
     {
-        $bookingSeat = BookingSeat::with('member')->find($bookingSeatId);
-
-        if (! $bookingSeat) {
-            return response()->json(['success' => false, 'message' => 'Booking seat not found.'], 404);
-        }
-
-        $fine = $this->fineService->fineForBookingSeatOnComplete($bookingSeat);
-
-        if (! $fine) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No overdue fine created (seat booking not expired or not late).',
-            ], 422);
-        }
+        $fine = $this->fineService->createManualFine(
+            memberId: $request->integer('member_id'),
+            amount: (float) $request->validated('amount'),
+            reason: $request->validated('reason'),
+            note: $request->validated('note'),
+            createdBy: $request->user()?->id,
+        );
 
         return response()->json([
             'success' => true,
-            'message' => 'Fine created for seat booking.',
-            'data' => new FineResource($fine->fresh()->load(['invoice'])),
+            'message' => 'Manual fine created successfully.',
+            'data' => new FineResource($fine),
         ], 201);
     }
 
-    public function createFineForLocker(int $lockerAssignmentId): JsonResponse
+    public function updateAmount(UpdateFineAmountRequest $request, int $id): JsonResponse
     {
-        $assignment = LockerAssignment::with('member')->find($lockerAssignmentId);
-
-        if (! $assignment) {
-            return response()->json(['success' => false, 'message' => 'Locker assignment not found.'], 404);
-        }
-
-        $fine = $this->fineService->fineForLockerOnReturn($assignment);
-
-        if (! $fine) {
-            return response()->json([
-                'success' => false,
-                'message' => 'No overdue fine created (locker not expired or not late).',
-            ], 422);
-        }
+        $fine = $this->fineService->updateFineAmount(
+            fineId: $id,
+            amount: (float) $request->validated('amount'),
+            reason: $request->validated('reason'),
+            notes: $request->exists('notes')
+                ? $request->validated('notes')
+                : $request->validated('note'),
+            notesProvided: $request->exists('notes') || $request->exists('note'),
+            actorUserId: $request->user()?->id,
+        );
 
         return response()->json([
             'success' => true,
-            'message' => 'Fine created for locker assignment.',
-            'data' => new FineResource($fine->fresh()->load(['invoice'])),
-        ], 201);
+            'message' => 'Fine updated successfully.',
+            'data' => new FineResource($fine),
+        ]);
+    }
+
+    public function cancel(CancelFineRequest $request, int $id): JsonResponse
+    {
+        $fine = $this->fineService->cancelFine(
+            fineId: $id,
+            actorUserId: $request->user()?->id,
+            note: $request->validated('note'),
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Fine cancelled successfully.',
+            'data' => new FineResource($fine),
+        ]);
     }
 
     public function destroy(int $id): JsonResponse
     {
-        $fine = Fine::find($id);
-
-        if (! $fine) {
-            return response()->json(['success' => false, 'message' => 'Fine not found.'], 404);
-        }
-
-        $fine->delete();
+        $this->fineService->deleteFine($id);
 
         return response()->json([
             'success' => true,

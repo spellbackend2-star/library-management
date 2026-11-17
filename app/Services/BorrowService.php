@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Borrow;
+use App\Models\Copy;
 use App\Repositories\Interface\BorrowInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -14,9 +15,9 @@ class BorrowService
         protected FineService $fineService,
     ) {}
 
-    public function getAll()
+    public function getAll(array $filters = [])
     {
-        return $this->borrowRepository->all();
+        return $this->borrowRepository->all($filters);
     }
 
     public function getById(int $id): ?Borrow
@@ -39,10 +40,24 @@ class BorrowService
             }
 
             $newStatus = $data['status'] ?? $borrow->status;
+            $previousStatus = $borrow->status;
+
+            $copy = null;
+            if ($newStatus === 'returned' && $previousStatus !== 'returned') {
+                $copy = Copy::query()->lockForUpdate()->find($borrow->copy_id);
+            }
+
+            if ($newStatus === 'returned' && empty($data['return_date']) && empty($borrow->return_date)) {
+                $data['return_date'] = Carbon::now();
+            }
 
             $borrow = $this->borrowRepository->update($id, $data);
 
             $borrow->refresh();
+
+            if ($copy && $copy->status === 'on_loan') {
+                $copy->update(['status' => 'available']);
+            }
 
             /*
              * Create overdue fine only when the book is actually returned.
@@ -54,13 +69,9 @@ class BorrowService
              * It does NOT create a fine every day.
              */
             if ($newStatus === 'returned') {
-                $returnDate = $borrow->return_date
-                    ? Carbon::parse($borrow->return_date)->toDateString()
-                    : Carbon::now()->toDateString();
-
                 $this->fineService->fineForBorrowOnReturn(
                     borrow: $borrow,
-                    returnDate: $returnDate,
+                    returnDate: $borrow->return_date?->toDateString(),
                 );
             }
 

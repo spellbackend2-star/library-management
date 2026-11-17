@@ -32,7 +32,7 @@ class PaymentIndexRequest extends FormRequest
 
 
             'payment_method' => [
-                'required',
+                'nullable',
                 'string',
                 'regex:/^(CASH|KHALTI|ESEWA)$/i',
             ],

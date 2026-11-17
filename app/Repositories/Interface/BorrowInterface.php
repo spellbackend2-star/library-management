@@ -6,7 +6,7 @@ use App\Models\Borrow;
 
 interface BorrowInterface
 {
-    public function all();
+    public function all(array $filters = []);
 
     public function find(int $id): ?Borrow;
 

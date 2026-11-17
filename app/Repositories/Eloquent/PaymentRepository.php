@@ -10,7 +10,7 @@ class PaymentRepository extends BaseRepository implements PaymentRepositoryInter
 {
     public function getAll(array $filters = [])
     {
-        $query = Payment::with(['booking']);
+        $query = Payment::with(['booking', 'receipt', 'invoice', 'member']);
 
         if (!empty($filters['status'])) {
             $query->where('status', $filters['status']);
@@ -50,6 +50,10 @@ class PaymentRepository extends BaseRepository implements PaymentRepositoryInter
 
         $paginator = $this->applyPagination($query, $filters);
 
+        foreach ($paginator->getCollection() as $payment) {
+            $payment->ensureReceipt();
+        }
+
         return [
             'data' => $paginator->items(),
             'meta' => $this->paginationMeta($paginator),
@@ -58,7 +62,10 @@ class PaymentRepository extends BaseRepository implements PaymentRepositoryInter
 
     public function findById(int $id)
     {
-        return Payment::with(['booking'])->find($id);
+        $payment = Payment::with(['booking', 'receipt', 'invoice', 'member'])->find($id);
+        $payment?->ensureReceipt();
+
+        return $payment;
     }
 
     public function create(array $data)

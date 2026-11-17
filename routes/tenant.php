@@ -189,6 +189,13 @@ Route::prefix('api/v1')->group(function () {
             Route::get('settings/invoice', [SettingController::class, 'invoice']);
             Route::put('settings/invoice', [SettingController::class, 'updateInvoice']);
 
+            Route::get('settings/book-fine-rate', [SettingController::class, 'bookFineRate'])
+                ->middleware('can:settings.view');
+            Route::put('settings/book-fine-rate', [SettingController::class, 'updateBookFineRate'])
+                ->middleware('can:settings.update');
+            Route::post('settings/book-fine-rate', [SettingController::class, 'updateBookFineRate'])
+                ->middleware('can:settings.update');
+
             // Notification Settings
             Route::get('settings/notification', [SettingController::class, 'notification']);
             Route::put('settings/notification', [SettingController::class, 'updateNotification']);
@@ -296,23 +303,24 @@ Route::prefix('api/v1')->group(function () {
                 'index',
                 'show',
                 'destroy',
-            ]);
+            ])->middlewareFor('index', 'can:fines.view')
+                ->middlewareFor('show', 'can:fines.view')
+                ->middlewareFor('destroy', 'can:fines.delete');
+
+            Route::post('fines/manual', [FineController::class, 'createManual'])
+                ->middleware('can:fines.create');
+
+            Route::patch('fines/{id}/amount', [FineController::class, 'updateAmount'])
+                ->middleware('can:fines.update');
+
+            Route::post('fines/{id}/cancel', [FineController::class, 'cancel'])
+                ->middleware('can:fines.delete');
+
 
             Route::post(
                 'borrows/{borrow}/fine',
                 [FineController::class, 'createFineForBorrow']
             );
-
-            Route::post(
-                'booking-seats/{bookingSeat}/fine',
-                [FineController::class, 'createFineForBookingSeat']
-            );
-
-            Route::post(
-                'locker-assignments/{lockerAssignment}/fine',
-                [FineController::class, 'createFineForLocker']
-            );
-
 
             /*
             |--------------------------------------------------------------------------
@@ -320,7 +328,7 @@ Route::prefix('api/v1')->group(function () {
             |--------------------------------------------------------------------------
             */
 
-            Route::apiResource('bookings', BookingController::class);
+            Route::post('admin/bookings', [BookingController::class, 'store']);
 
             // Booking Seat Records
             Route::get(

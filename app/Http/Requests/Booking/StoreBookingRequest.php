@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Booking;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreBookingRequest extends FormRequest
 {
@@ -15,15 +16,24 @@ class StoreBookingRequest extends FormRequest
     {
         $rules = [
             'member_id' => [
-                'required',
+                'nullable',
+                Rule::requiredIf(fn () => ! $this->filled('staff_id')),
                 'integer',
                 'exists:members,id',
             ],
 
             'staff_id' => [
                 'nullable',
+                Rule::requiredIf(fn () => ! $this->filled('member_id')),
                 'integer',
                 'exists:staff,id',
+            ],
+
+            'due_date' => [
+                'nullable',
+                Rule::requiredIf(fn () => ! $this->filled('member_id')),
+                'date',
+                'after_or_equal:today',
             ],
 
             'amount' => [

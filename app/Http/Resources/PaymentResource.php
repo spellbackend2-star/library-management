@@ -11,7 +11,13 @@ class PaymentResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'receipt_number' => $this->receipt?->receipt_number,
             'invoice_id' => $this->invoice_id,
+            'invoice_number' => $this->invoice?->invoice_number,
+            'member_id' => $this->member_id,
+            'member_name' => $this->member
+                ? trim($this->member->first_name . ' ' . $this->member->last_name)
+                : null,
             'amount' => $this->amount,
             'extra_discount' => $this->extra_discount,
             'payment_method' => $this->payment_method,

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Fine extends Model
 {
@@ -12,9 +13,13 @@ class Fine extends Model
         'locker_assignment_id',
         'booking_seat_id',
         'member_id',
+        'created_by',
         'invoice_id',
         'amount',
         'reason',
+        'source_type',
+        'manual_reason',
+        'notes',
         'days_late',
         'issued_date',
         'paid_date',
@@ -50,5 +55,15 @@ class Fine extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function adjustments(): HasMany
+    {
+        return $this->hasMany(FineAdjustment::class)->orderBy('created_at');
     }
 }

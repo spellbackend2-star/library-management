@@ -35,11 +35,8 @@ class InvoiceResource extends JsonResource
                 ),
                 'email' => $this->member?->email,
                 'phone' => $this->member?->phone,
+                'package_name' => $this->member?->package?->name,
             ],
-
-            // 'package' => $this->member?->package
-            //     ? new PackageResource($this->member->package)
-            //     : null,
 
             'payments' => PaymentResource::collection(
                 $this->whenLoaded('payments')

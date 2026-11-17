@@ -47,6 +47,10 @@ class BookingService
 
     public function create(array $data): Booking
     {
+        if (empty($data['member_id'])) {
+            return $this->createStaffBookBooking($data);
+        }
+
         $member = $this->memberRepository->find($data['member_id']);
 
         if (!$member) {
@@ -229,6 +233,72 @@ class BookingService
             'borrows',
             'lockerAssignments',
         ]);
+    }
+
+    protected function createStaffBookBooking(array $data): Booking
+    {
+        $staff = \App\Models\Staff::query()
+            ->whereKey($data['staff_id'])
+            ->where('user_id', Auth::id())
+            ->where('is_active', true)
+            ->first();
+
+        if (! $staff) {
+            throw new \Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException(
+                'The staff ID must belong to the authenticated staff account.'
+            );
+        }
+
+        $bookings = $data['bookings'] ?? [];
+        if (empty($bookings) || collect($bookings)->contains(fn ($item) => ($item['type'] ?? null) !== 'book')) {
+            throw new \Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException(
+                'Staff bookings can contain book copies only.'
+            );
+        }
+
+        return DB::transaction(function () use ($data, $staff, $bookings) {
+            $booking = $this->bookingRepository->create([
+                'staff_borrower_id' => $staff->id,
+                'booked_by_user_id' => Auth::id(),
+                'booking_type' => 'book',
+                'status' => 'ACTIVE',
+                'payment_status' => 'PAID',
+                'booking_source' => 'COUNTER',
+                'amount' => 0,
+                'subtotal' => 0,
+                'discount_amount' => 0,
+                'convenience_fee' => 0,
+                'total_amount' => 0,
+                'notes' => $data['notes'] ?? null,
+            ]);
+
+            foreach ($bookings as $bookData) {
+                $copy = \App\Models\Copy::query()->lockForUpdate()->findOrFail($bookData['copy_id']);
+                if ($copy->status !== 'available') {
+                    throw new \Symfony\Component\HttpKernel\Exception\ConflictHttpException(
+                        'Book copy '.$copy->id.' is not available.'
+                    );
+                }
+
+                $this->borrowRepository->create([
+                    'booking_id' => $booking->id,
+                    'copy_id' => $copy->id,
+                    'staff_borrower_id' => $staff->id,
+                    'staff_id' => $staff->id,
+                    'checkout_date' => Carbon::now(),
+                    'due_date' => $data['due_date'],
+                    'renewal_count' => 0,
+                    'status' => 'active',
+                ]);
+
+                $this->copyRepository->update($copy->id, ['status' => 'on_loan']);
+            }
+
+            return $booking->fresh([
+                'staffBorrower',
+                'borrows.copy.edition.book',
+            ]);
+        });
     }
 
     protected function validateBooking(array $data, $package, int $memberId): void
@@ -596,9 +666,6 @@ class BookingService
             $updated = $this->bookingSeatRepository->update($seat->id, [
                 'status' => 'completed',
             ]);
-
-            $fine = app(\App\Services\FineService::class)
-                ->fineForBookingSeatOnComplete($updated);
 
             return $updated->fresh();
         });

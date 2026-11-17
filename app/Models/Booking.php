@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'member_id',
+    'staff_borrower_id',
     'package_id',
     'booking_type',
     'status',
@@ -50,6 +51,11 @@ class Booking extends Model
     public function member(): BelongsTo
     {
         return $this->belongsTo(Member::class);
+    }
+
+    public function staffBorrower(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'staff_borrower_id');
     }
 
     public function package(): BelongsTo

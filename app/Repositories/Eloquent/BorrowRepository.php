@@ -8,9 +8,15 @@ use App\Repositories\Interface\BorrowInterface;
 
 class BorrowRepository extends BaseRepository implements BorrowInterface
 {
-    public function all()
+    public function all(array $filters = [])
     {
-        return Borrow::with(['copy.edition.book', 'member'])->latest()->get();
+        $query = Borrow::with(['copy.edition.book', 'member'])->latest();
+        $paginator = $this->applyPagination($query, $filters);
+
+        return [
+            'data' => $paginator->items(),
+            'meta' => $this->paginationMeta($paginator),
+        ];
     }
 
     public function find(int $id): ?Borrow

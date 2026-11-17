@@ -5,7 +5,7 @@ namespace App\Http\Requests\Book;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use App\Rules\ValidIsbn;
+use Illuminate\Support\Facades\DB;
 use App\Support\Isbn;
 
 class StoreBookRequest extends FormRequest
@@ -18,8 +18,10 @@ class StoreBookRequest extends FormRequest
         }
 
         foreach ($editions as &$edition) {
-            if (is_array($edition) && is_string($edition['isbn'] ?? null)) {
-                $edition['isbn'] = Isbn::normalize($edition['isbn']);
+            if (is_array($edition)) {
+                if (is_string($edition['isbn'] ?? null)) {
+                    $edition['isbn'] = Isbn::normalize($edition['isbn']);
+                }
             }
             if (is_array($edition['copies'] ?? null)) {
                 foreach ($edition['copies'] as &$copy) {
@@ -38,6 +40,28 @@ class StoreBookRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            foreach ((array) $this->input('editions', []) as $index => $edition) {
+                if (! is_array($edition) || ! is_string($edition['isbn'] ?? null) || $edition['isbn'] === '') {
+                    continue;
+                }
+
+                if (! Isbn::isValid($edition['isbn'])) {
+                    $validator->errors()->add(
+                        "editions.{$index}.isbn",
+                        'The ISBN must be a valid 10-digit ISBN-10 or 13-digit ISBN-13 starting with 978 or 979, with a valid checksum.'
+                    );
+                }
+
+                if (DB::table('book_editions')->where('isbn', $edition['isbn'])->exists()) {
+                    $validator->errors()->add("editions.{$index}.isbn", 'The ISBN has already been taken.');
+                }
+            }
+        });
     }
 
     public function rules(): array
@@ -140,10 +164,8 @@ class StoreBookRequest extends FormRequest
             'editions.*.isbn' => [
                 'nullable',
                 'string',
-                'max:13',
+                'max:20',
                 'distinct',
-                'unique:book_editions,isbn',
-                new ValidIsbn(),
             ],
 
             'editions.*.edition_number' => [

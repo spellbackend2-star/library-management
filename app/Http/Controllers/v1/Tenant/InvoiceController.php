@@ -33,7 +33,19 @@ class InvoiceController extends Controller
             'sort_order',
         ]);
 
-        return $this->invoiceService->getAll($filters);
+        $result = $this->invoiceService->getAll($filters);
+        $result['data'] = array_map(function ($invoice) {
+            $data = $invoice->toArray();
+
+            if ($invoice->member) {
+                $data['member']['package_name'] = $invoice->member->package?->name;
+                unset($data['member']['package']);
+            }
+
+            return $data;
+        }, $result['data']);
+
+        return $result;
     }
 
     public function show(int $id)
@@ -138,9 +150,9 @@ class InvoiceController extends Controller
         ], 201);
     }
 
-    public function byMember(int $memberId)
+    public function byMember(string|int $memberId)
     {
-        $invoice = $this->invoiceService->findByMember($memberId);
+        $invoice = $this->invoiceService->findByMember((int) $memberId);
 
         if (! $invoice) {
             return response()->json(['message' => 'No unpaid invoice found for member.'], 404);
@@ -149,9 +161,9 @@ class InvoiceController extends Controller
         return new InvoiceResource($invoice);
     }
 
-    public function fineInvoice(int $memberId): JsonResponse
+    public function fineInvoice(string|int $memberId): JsonResponse
     {
-        $invoice = $this->invoiceService->fineInvoiceByMember($memberId);
+        $invoice = $this->invoiceService->fineInvoiceByMember((int) $memberId);
 
         if (! $invoice) {
             return response()->json([

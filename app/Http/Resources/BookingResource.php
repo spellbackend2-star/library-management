@@ -12,6 +12,7 @@ class BookingResource extends JsonResource
         $data = [
             'id' => $this->id,
             'member_id' => $this->member_id,
+            'staff_borrower_id' => $this->staff_borrower_id,
             'package_id' => $this->package_id,
             'invoice_id' => $this->invoice_id,
             'payment_id' => $this->payment_id,

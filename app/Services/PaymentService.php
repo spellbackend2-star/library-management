@@ -276,13 +276,12 @@ public function completePayment(Payment $payment): Payment
              * Activate package and sync fines ONLY
              * after the invoice is completely paid.
              */
-            if ($status === 'paid') {
-
-                app(InvoiceService::class)
-                    ->activateMemberPackage($invoice);
-
+            if ($invoice->invoice_type === FineService::INVOICE_TYPE_FINE) {
                 app(FineService::class)
                     ->syncFineStatusOnInvoicePaid($invoice);
+            } elseif ($status === 'paid') {
+                app(InvoiceService::class)
+                    ->activateMemberPackage($invoice);
             }
 
             return $payment->fresh(['invoice']);

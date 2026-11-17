@@ -18,6 +18,8 @@ class BorrowResource extends JsonResource
 
             'member_id' => $this->member_id,
              'member_name' => trim(($this->member?->first_name ?? '') . ' ' . ($this->member?->last_name ?? '')),
+            'staff_id' => $this->staff_id,
+            'staff_borrower_id' => $this->staff_borrower_id,
 
             'checkout_date' => $this->checkout_date?->format('Y-m-d H:i:s'),
             'due_date' => $this->due_date?->format('Y-m-d'),

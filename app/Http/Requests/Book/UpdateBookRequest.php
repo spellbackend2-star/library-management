@@ -6,7 +6,7 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Validation\Rule;
-use App\Rules\ValidIsbn;
+use Illuminate\Support\Facades\DB;
 use App\Support\Isbn;
 
 class UpdateBookRequest extends FormRequest
@@ -42,6 +42,92 @@ class UpdateBookRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    public function withValidator($validator): void
+    {
+        $validator->after(function ($validator) {
+            foreach ((array) $this->input('editions', []) as $index => $edition) {
+                if (! is_array($edition)) {
+                    continue;
+                }
+
+                if (! isset($edition['id']) && empty($edition['publisher_id'])) {
+                    $validator->errors()->add(
+                        "editions.{$index}.publisher_id",
+                        'Each new edition must have a publisher_id.'
+                    );
+                }
+
+                if (! is_string($edition['isbn'] ?? null) || $edition['isbn'] === '') {
+                    continue;
+                }
+
+                if (! Isbn::isValid($edition['isbn'])) {
+                    $validator->errors()->add(
+                        "editions.{$index}.isbn",
+                        'The ISBN must be a valid 10-digit ISBN-10 or 13-digit ISBN-13 starting with 978 or 979, with a valid checksum.'
+                    );
+                }
+
+                $query = DB::table('book_editions')->where('isbn', $edition['isbn']);
+                if (isset($edition['id'])) {
+                    $query->where('id', '!=', $edition['id']);
+                }
+
+                if ($query->exists()) {
+                    $validator->errors()->add("editions.{$index}.isbn", 'The ISBN has already been taken.');
+                }
+            }
+
+            foreach ((array) $this->input('editions', []) as $editionIndex => $edition) {
+                if (! is_array($edition) || ! is_array($edition['copies'] ?? null)) {
+                    continue;
+                }
+
+                foreach ($edition['copies'] as $copyIndex => $copy) {
+                    if (! is_array($copy)) {
+                        continue;
+                    }
+
+                    $copyId = $copy['id'] ?? $copy['copy_id'] ?? null;
+                    $hasCopyId = isset($copy['id']) || isset($copy['copy_id']);
+
+                    if (! $hasCopyId && (! is_string($copy['barcode'] ?? null) || trim($copy['barcode']) === '')) {
+                        $validator->errors()->add(
+                            "editions.{$editionIndex}.copies.{$copyIndex}.barcode",
+                            'Each new copy must have a barcode.'
+                        );
+                    }
+
+                    if (! is_string($copy['barcode'] ?? null) || $copy['barcode'] === '') {
+                        continue;
+                    }
+
+                    if (is_numeric($copyId)) {
+                        $currentBarcode = DB::table('copies')
+                            ->where('id', $copyId)
+                            ->value('barcode');
+
+                        if (is_string($currentBarcode) && trim($currentBarcode) === $copy['barcode']) {
+                            continue;
+                        }
+                    }
+
+                    $query = DB::table('copies')->where('barcode', $copy['barcode']);
+                    if (is_numeric($copyId)) {
+                        $query->where('id', '!=', $copyId);
+                    }
+
+                    if ($query->exists()) {
+                        $validator->errors()->add(
+                            "editions.{$editionIndex}.copies.{$copyIndex}.barcode",
+                            'The barcode '.$copy['barcode'].' has already been taken.'
+                        );
+                    }
+                }
+            }
+        });
     }
 
     public function rules(): array
@@ -151,7 +237,8 @@ class UpdateBookRequest extends FormRequest
             ],
 
             'editions.*.publisher_id' => [
-                'required',
+                'sometimes',
+                'nullable',
                 'integer',
                 'exists:publishers,id',
             ],
@@ -159,17 +246,8 @@ class UpdateBookRequest extends FormRequest
             'editions.*.isbn' => [
                 'nullable',
                 'string',
-                'max:13',
+                'max:20',
                 'distinct',
-                Rule::forEach(function ($value, string $attribute) {
-                    $editionIdPath = preg_replace('/\.isbn$/', '.id', $attribute);
-                    $editionId = data_get($this->all(), $editionIdPath);
-
-                    return [
-                        Rule::unique('book_editions', 'isbn')->ignore($editionId),
-                        new ValidIsbn(),
-                    ];
-                }),
             ],
 
             'editions.*.edition_number' => [
@@ -212,17 +290,17 @@ class UpdateBookRequest extends FormRequest
                 'exists:copies,id',
             ],
 
+            'editions.*.copies.*.copy_id' => [
+                'nullable',
+                'integer',
+                'exists:copies,id',
+            ],
+
             'editions.*.copies.*.barcode' => [
-                'required',
+                'sometimes',
                 'string',
                 'max:100',
                 'distinct',
-                Rule::forEach(function ($value, string $attribute) {
-                    $copyIdPath = preg_replace('/\.barcode$/', '.id', $attribute);
-                    $copyId = data_get($this->all(), $copyIdPath);
-
-                    return [Rule::unique('copies', 'barcode')->ignore($copyId)];
-                }),
             ],
 
             'editions.*.copies.*.shelf_location' => [
@@ -262,7 +340,7 @@ class UpdateBookRequest extends FormRequest
             'category_ids.*.exists' => 'One or more category_ids do not exist in the categories table.',
             'editions.*.publisher_id.required' => 'Each edition must have a publisher_id.',
             'editions.*.publisher_id.exists' => 'The selected publisher_id does not exist.',
-            'editions.*.copies.*.barcode.required' => 'Each copy must have a barcode.',
+            'editions.*.copies.*.barcode.required' => 'Each new copy must have a barcode.',
             'editions.*.copies.*.barcode.unique' => 'The barcode :input has already been taken.',
         ];
     }

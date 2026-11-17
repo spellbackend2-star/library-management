@@ -9,6 +9,7 @@ use App\Http\Resources\BorrowResource;
 use App\Models\Borrow;
 use App\Services\BorrowService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class BorrowController extends Controller
 {
@@ -16,11 +17,20 @@ class BorrowController extends Controller
         protected BorrowService $borrowService
     ) {}
 
-    public function index()
+    public function index(Request $request): JsonResponse
     {
-        return BorrowResource::collection(
-            $this->borrowService->getAll()
-        );
+        $filters = $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $result = $this->borrowService->getAll($filters);
+
+        return response()->json([
+            'success' => true,
+            'data' => BorrowResource::collection($result['data'])->resolve(),
+            'meta' => $result['meta'],
+        ]);
     }
 
     public function store(StoreBorrowRequest $request): BorrowResource

@@ -169,6 +169,10 @@ class InvoiceService
         }
 
         if ($invoice->status === 'paid') {
+            if ($invoice->invoice_type === FineService::INVOICE_TYPE_FINE) {
+                app(FineService::class)->syncFineStatusOnInvoicePaid($invoice->fresh());
+            }
+
             $lastPayment = Payment::where('invoice_id', $invoice->id)
                 ->orderByDesc('id')
                 ->first();
@@ -262,10 +266,12 @@ class InvoiceService
                 'status' => $newStatus,
             ]);
 
-            if ($newStatus === 'paid') {
-                $this->activateMemberPackage($invoice);
+            $invoice->refresh();
 
+            if ($invoice->invoice_type === FineService::INVOICE_TYPE_FINE) {
                 app(FineService::class)->syncFineStatusOnInvoicePaid($invoice);
+            } elseif ($newStatus === 'paid') {
+                $this->activateMemberPackage($invoice);
             }
 
             return $payment;

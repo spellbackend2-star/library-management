@@ -10,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'booking_id',
     'copy_id',
     'member_id',
+    'staff_id',
+    'staff_borrower_id',
     'checkout_date',
     'due_date',
     'return_date',
@@ -50,5 +52,10 @@ class Borrow extends Model
     public function staff(): BelongsTo
     {
         return $this->belongsTo(Staff::class);
+    }
+
+    public function staffBorrower(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'staff_borrower_id');
     }
 }

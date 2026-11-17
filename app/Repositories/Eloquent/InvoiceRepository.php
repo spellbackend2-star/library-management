@@ -60,7 +60,7 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
 
     public function all()
     {
-        return Invoice::with(['member', 'payments'])->latest()->get();
+        return Invoice::with(['member.package', 'payments'])->latest()->get();
     }
 
     public function getAll(array $filters = [])
@@ -79,7 +79,7 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
 
     public function find(int $id): ?Invoice
     {
-        return Invoice::with(['member', 'payments', 'fines'])->find($id);
+        return Invoice::with(['member.package', 'payments', 'fines'])->find($id);
     }
 
     public function create(array $data): Invoice
@@ -103,6 +103,7 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
     public function findByMember(int $memberId): ?Invoice
     {
         return Invoice::where('member_id', $memberId)
+            ->with('member.package')
             ->whereIn('status', ['unpaid', 'cancelled', 'refunded'])
             ->orderByDesc('id')
             ->first();
@@ -110,12 +111,12 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
 
     public function findByNumber(string $invoiceNumber): ?Invoice
     {
-        return Invoice::with(['member', 'payments', 'fines'])->where('invoice_number', $invoiceNumber)->first();
+        return Invoice::with(['member.package', 'payments', 'fines'])->where('invoice_number', $invoiceNumber)->first();
     }
 
     public function fineInvoiceByMember(int $memberId): ?Invoice
     {
-        return Invoice::with(['member', 'payments', 'fines'])
+        return Invoice::with(['member.package', 'payments', 'fines'])
             ->where('member_id', $memberId)
             ->where('invoice_type', 'fine')
             ->where('status', '!=', 'paid')
@@ -129,6 +130,6 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
     protected function query()
     {
         return Invoice::query()
-            ->with(['member', 'payments', 'fines']);
+            ->with(['member.package', 'payments', 'fines']);
     }
 }

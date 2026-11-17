@@ -3,12 +3,21 @@
 namespace App\Http\Requests\Member;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreMemberRequest extends FormRequest
 {
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'email' => is_string($this->email) ? strtolower(trim($this->email)) : $this->email,
+            'phone' => is_string($this->phone) ? trim($this->phone) : $this->phone,
+        ]);
     }
 
     public function rules(): array
@@ -35,12 +44,15 @@ class StoreMemberRequest extends FormRequest
                 'required',
                 'email',
                 'max:255',
+                Rule::unique('members', 'email'),
             ],
 
             'phone' => [
                 'required',
                 'string',
                 'max:30',
+                'regex:/^\\+?(?=(?:\\D*\\d){7,15}\\D*$)[0-9][0-9\\s().-]*$/',
+                Rule::unique('members', 'phone'),
             ],
 
             'address' => [
@@ -97,6 +109,9 @@ class StoreMemberRequest extends FormRequest
         return [
             'email.required' => 'The email field is required.',
             'email.email' => 'The email must be a valid email address.',
+            'email.unique' => 'A member with this email address already exists.',
+            'phone.regex' => 'Enter a valid phone number with 7 to 15 digits.',
+            'phone.unique' => 'A member with this phone number already exists.',
         ];
     }
 }

@@ -71,6 +71,7 @@ class RolePermissionSeeder extends Seeder
             'borrows.delete',
             'fines.view',
             'fines.create',
+            'fines.update',
             'fines.delete',
             'bookings.view',
             'bookings.create',

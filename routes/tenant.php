@@ -103,6 +103,10 @@ Route::prefix('api/v1')->group(function () {
             */
 
             Route::get('members/all', [MemberController::class, 'all']);
+            Route::patch('admin/members/{member}/suspend', [MemberController::class, 'suspend'])
+                ->middleware('role:admin,api');
+            Route::patch('admin/members/{member}/activate', [MemberController::class, 'activate'])
+                ->middleware('role:admin,api');
             Route::apiResource('members', MemberController::class);
 
 
@@ -340,6 +344,9 @@ Route::prefix('api/v1')->group(function () {
 
             Route::post('admin/bookings', [BookingController::class, 'store'])
                 ->middleware('can:bookings.create');
+
+            Route::post('staff/bookings', [BookingController::class, 'store'])
+                ->middleware('role:manager|librarian|clerk,api');
 
             // Booking Seat Records
             Route::get(

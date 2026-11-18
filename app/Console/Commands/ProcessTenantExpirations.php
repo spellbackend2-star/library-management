@@ -24,6 +24,7 @@ class ProcessTenantExpirations extends Command
         $summary = [
             'tenants' => 0,
             'members_expired' => 0,
+            'members_suspended' => 0,
             'invoices_overdue' => 0,
             'emails_sent' => 0,
             'failed' => 0,
@@ -49,10 +50,17 @@ class ProcessTenantExpirations extends Command
                 $summary['tenants']++;
 
                 $summary['members_expired'] += Member::query()
-                    ->where('status', 'active')
+                    ->whereIn('status', ['active', 'suspended'])
                     ->whereNotNull('membership_expiry')
                     ->whereDate('membership_expiry', '<', Carbon::today())
                     ->update(['status' => 'expired']);
+
+                $summary['members_suspended'] += Member::query()
+                    ->where('status', 'active')
+                    ->whereNotNull('paid_through')
+                    ->whereDate('paid_through', '<', Carbon::today())
+                    ->whereDate('membership_expiry', '>=', Carbon::today())
+                    ->update(['status' => 'suspended']);
 
                 $summary['invoices_overdue'] += Invoice::query()
                     ->whereIn('status', ['unpaid', 'partially_paid'])
@@ -98,9 +106,10 @@ class ProcessTenantExpirations extends Command
         }
 
         $this->info(sprintf(
-            'Tenant expiry processing complete. Tenants=%d members_expired=%d invoices_overdue=%d emails_sent=%d failed=%d',
+            'Tenant expiry processing complete. Tenants=%d members_expired=%d members_suspended=%d invoices_overdue=%d emails_sent=%d failed=%d',
             $summary['tenants'],
             $summary['members_expired'],
+            $summary['members_suspended'],
             $summary['invoices_overdue'],
             $summary['emails_sent'],
             $summary['failed'],

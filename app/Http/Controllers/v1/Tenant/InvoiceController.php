@@ -131,7 +131,8 @@ class InvoiceController extends Controller
         }
 
         $payment = $result;
-        $invoice = $payment->invoice;
+        // Payment creation may have loaded the invoice before its totals were updated.
+        $invoice = $payment->invoice()->firstOrFail();
 
         return response()->json([
             'success' => true,

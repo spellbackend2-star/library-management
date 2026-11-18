@@ -27,6 +27,7 @@ class MemberResource extends JsonResource
             'date_of_birth' => $this->date_of_birth?->format('Y-m-d'),
             'membership_start' => $this->membership_start?->format('Y-m-d'),
             'membership_expiry' => $this->membership_expiry?->format('Y-m-d'),
+            'paid_through' => $this->paid_through?->format('Y-m-d'),
             'status' => $this->status,
             'gender' => $this->gender,
 

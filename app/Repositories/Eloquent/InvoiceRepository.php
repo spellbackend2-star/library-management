@@ -108,7 +108,7 @@ class InvoiceRepository extends BaseRepository implements InvoiceInterface
     {
         return Invoice::where('member_id', $memberId)
             ->with('member.package')
-            ->whereIn('status', ['unpaid', 'cancelled', 'refunded'])
+            ->whereIn('status', ['unpaid', 'partially_paid', 'overdue'])
             ->orderByDesc('id')
             ->first();
     }

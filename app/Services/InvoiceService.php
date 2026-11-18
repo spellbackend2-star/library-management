@@ -13,6 +13,7 @@ use App\Repositories\Interface\PaymentRepositoryInterface;
 use App\Services\FineService;
 use App\Services\Payments\EsewaService;
 use App\Services\Payments\KhaltiService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -311,19 +312,23 @@ class InvoiceService
 
             if ($invoice->invoice_type === FineService::INVOICE_TYPE_FINE) {
                 app(FineService::class)->syncFineStatusOnInvoicePaid($invoice);
-            } elseif ($newStatus === 'paid') {
-                $this->activateMemberPackage($invoice);
+            } else {
+                $this->syncMemberPackageFromInvoice($invoice);
             }
 
             return $payment;
         });
     }
 
-    public function activateMemberPackage(Invoice $invoice): void
+    public function syncMemberPackageFromInvoice(Invoice $invoice): void
     {
-        $member = $invoice->member;
+        if (! $invoice->member_id) {
+            return;
+        }
 
-        if (! $member) {
+        $member = Member::with('package')->find($invoice->member_id);
+
+        if (! $member || $member->status === 'cancelled') {
             return;
         }
 
@@ -333,7 +338,30 @@ class InvoiceService
             return;
         }
 
-        $start = now();
+        $today = Carbon::today();
+        $sameCycle = (int) $member->membership_invoice_id === (int) $invoice->id
+            && $member->membership_start
+            && $member->membership_expiry
+            && $member->membership_expiry->gte($today);
+
+        if ($sameCycle) {
+            $start = $member->membership_start->copy()->startOfDay();
+            $grantedDays = (int) $member->membership_paid_days;
+            $paidThrough = $member->paid_through;
+        } elseif (
+            $member->paid_through
+            && $member->paid_through->gte($today)
+            && $member->membership_expiry
+            && $member->membership_expiry->gte($today)
+        ) {
+            $start = $member->paid_through->copy()->addDay()->startOfDay();
+            $grantedDays = 0;
+            $paidThrough = $member->paid_through;
+        } else {
+            $start = $today->copy();
+            $grantedDays = 0;
+            $paidThrough = null;
+        }
 
         $expiry = match ($package->duration_unit) {
             'day' => $start->copy()->addDays((int) $package->duration),
@@ -341,10 +369,39 @@ class InvoiceService
             default => $start->copy()->addMonths((int) $package->duration),
         };
 
+        $fullDurationDays = max(1, $start->diffInDays($expiry));
+        $fractionPaid = $invoice->status === 'paid'
+            ? 1.0
+            : min(1.0, max(0.0, (float) $invoice->paid_amount / max(0.01, (float) $package->price)));
+        $paidDays = (int) ceil($fullDurationDays * $fractionPaid);
+        $additionalDays = max(0, $paidDays - $grantedDays);
+
+        if ($additionalDays > 0) {
+            $daysStart = $paidThrough && $paidThrough->gte($today)
+                ? $paidThrough->copy()->addDay()
+                : $today->copy();
+            $paidThrough = $daysStart->addDays($additionalDays - 1);
+        }
+
+        if ($paidDays >= $fullDurationDays) {
+            $paidThrough = $expiry->copy();
+        }
+
+        if ($paidThrough && $paidThrough->gt($expiry)) {
+            $paidThrough = $expiry->copy();
+        }
+
+        $status = $expiry->lt($today)
+            ? 'expired'
+            : ((! $paidThrough || $paidThrough->lt($today)) ? 'suspended' : 'active');
+
         $member->update([
-            'status' => 'active',
+            'status' => $status,
             'membership_start' => $start->toDateString(),
             'membership_expiry' => $expiry->toDateString(),
+            'paid_through' => $paidThrough?->toDateString(),
+            'membership_invoice_id' => $invoice->id,
+            'membership_paid_days' => $paidDays,
         ]);
     }
 

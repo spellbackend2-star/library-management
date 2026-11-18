@@ -18,6 +18,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'date_of_birth',
     'membership_start',
     'membership_expiry',
+    'paid_through',
+    'membership_invoice_id',
+    'membership_paid_days',
     'status',
     'gender',
 ])]
@@ -27,6 +30,7 @@ class Member extends Model
         'date_of_birth' => 'date',
         'membership_start' => 'date',
         'membership_expiry' => 'date',
+        'paid_through' => 'date',
     ];
 
     public function package(): BelongsTo

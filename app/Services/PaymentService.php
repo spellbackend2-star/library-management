@@ -277,15 +277,14 @@ public function completePayment(Payment $payment): Payment
             app(InvoiceService::class)->syncStaffBookBookingPayment($invoice, $payment->id);
 
             /*
-             * Activate package and sync fines ONLY
-             * after the invoice is completely paid.
+             * Recalculate member access from package payment progress.
              */
             if ($invoice->invoice_type === FineService::INVOICE_TYPE_FINE) {
                 app(FineService::class)
                     ->syncFineStatusOnInvoicePaid($invoice);
-            } elseif ($status === 'paid') {
+            } else {
                 app(InvoiceService::class)
-                    ->activateMemberPackage($invoice);
+                    ->syncMemberPackageFromInvoice($invoice);
             }
 
             return $payment->fresh(['invoice']);

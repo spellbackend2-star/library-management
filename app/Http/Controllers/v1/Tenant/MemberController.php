@@ -10,8 +10,10 @@ use App\Http\Resources\MemberResource;
 use App\Services\InvoiceService;
 use App\Services\MemberService;
 use App\Traits\ResponseMessage;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class MemberController extends Controller
@@ -62,11 +64,20 @@ class MemberController extends Controller
 
                 unset($data['with_invoice']);
 
+                if ($withInvoice) {
+                    // A new member stays suspended until the invoice is fully paid.
+                    $data['status'] = 'suspended';
+                }
+
                 $member = $this->memberService->create(
                     $data
                 );
 
                 if (! $withInvoice) {
+                    $member->update([
+                        'paid_through' => $member->membership_expiry,
+                    ]);
+
                     return [$member, null];
                 }
 
@@ -143,9 +154,93 @@ class MemberController extends Controller
         );
     }
 
+    public function suspend(int $member): JsonResponse
+    {
+        $memberData = $this->memberService->getById($member);
+
+        if (! $memberData) {
+            return $this->errorResponse('Member not found.', 404);
+        }
+
+        if ($memberData->status !== 'active') {
+            return $this->errorResponse('Only active members can be suspended.', 422);
+        }
+
+        if (
+            ! $memberData->membership_expiry
+            || $memberData->membership_expiry->lt(Carbon::today())
+        ) {
+            return $this->errorResponse(
+                'A valid membership expiry date (today or later) is required to suspend this member.',
+                422
+            );
+        }
+
+        $memberData = $this->memberService->suspend($member);
+
+        return $this->successResponse(
+            new MemberResource($memberData),
+            'Member suspended successfully.'
+        );
+    }
+
+    public function activate(int $member): JsonResponse
+    {
+        $memberData = $this->memberService->getById($member);
+
+        if (! $memberData) {
+            return $this->errorResponse('Member not found.', 404);
+        }
+
+        if ($memberData->status !== 'suspended') {
+            return $this->errorResponse('Only suspended members can be activated.', 422);
+        }
+
+        if (
+            ! $memberData->membership_expiry
+            || $memberData->membership_expiry->lt(Carbon::today())
+        ) {
+            return $this->errorResponse(
+                'This membership has expired. Renew the membership before activating the member.',
+                422
+            );
+        }
+
+        if (
+            ! $memberData->paid_through
+            || $memberData->paid_through->lt(Carbon::today())
+        ) {
+            return $this->errorResponse(
+                'This member has no paid membership days remaining. Record a payment before activating them.',
+                422
+            );
+        }
+
+        $memberData = $this->memberService->activate($member);
+
+        return $this->successResponse(
+            new MemberResource($memberData),
+            'Member activated successfully.'
+        );
+    }
+
     public function destroy(int $member): JsonResponse
     {
-        $this->memberService->delete($member);
+        try {
+            $this->memberService->delete($member);
+        } catch (QueryException $exception) {
+            if (
+                $exception->getCode() === '23000'
+                && (int) ($exception->errorInfo[1] ?? 0) === 1451
+            ) {
+                return $this->errorResponse(
+                    'This member cannot be deleted because invoices or other records are linked to them. Keep the member record and change their status to suspended or cancelled instead.',
+                    409
+                );
+            }
+
+            throw $exception;
+        }
 
         return $this->successResponse(
             null,

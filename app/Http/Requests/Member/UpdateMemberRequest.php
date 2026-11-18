@@ -37,10 +37,10 @@ class UpdateMemberRequest extends FormRequest
 
 
             'email' => [
-                'required',
+                'sometimes',
                 'email',
                 'max:255',
-                Rule::unique('members', 'email')->ignore($member->id),
+                Rule::unique('members', 'email')->ignore($memberId),
             ],
             'phone' => [
                 'nullable',

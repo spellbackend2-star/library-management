@@ -94,8 +94,8 @@ class MemberController extends Controller
                 unset($data['with_invoice']);
 
                 if ($withInvoice) {
-                    // A new member stays suspended until the invoice is fully paid.
-                    $data['status'] = 'suspended';
+                    // A new member stays inactive until an invoice payment is recorded.
+                    $data['status'] = 'inactive';
                 }
 
                 $member = $this->memberService->create(

@@ -18,6 +18,9 @@ class MemberResource extends JsonResource
                 'package',
                 fn () => new PackageResource($this->package)
             ),
+            'invoices' => InvoiceResource::collection(
+                $this->whenLoaded('invoices')
+            ),
 
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,

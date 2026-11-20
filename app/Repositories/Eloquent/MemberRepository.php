@@ -9,6 +9,15 @@ use Illuminate\Database\Eloquent\Builder;
 
 class MemberRepository extends BaseRepository implements MemberInterface
 {
+    private const RESOURCE_RELATIONS = [
+        'package',
+        'invoices.member.package',
+        'invoices.staff',
+        'invoices.payments.receipt',
+        'invoices.payments.invoice',
+        'invoices.payments.member',
+    ];
+
     protected array $allowedSorts = [
         'id',
         'first_name',
@@ -27,7 +36,7 @@ class MemberRepository extends BaseRepository implements MemberInterface
     public function all(array $filters = [])
     {
         $query = Member::query()
-            ->with('package');
+            ->with(self::RESOURCE_RELATIONS);
 
         $this->applyListFilters($query, $filters);
 
@@ -37,7 +46,7 @@ class MemberRepository extends BaseRepository implements MemberInterface
     public function getAll(array $filters = [])
     {
         $query = Member::query()
-            ->with('package');
+            ->with(self::RESOURCE_RELATIONS);
 
         $this->applyListFilters($query, $filters);
 
@@ -177,7 +186,7 @@ class MemberRepository extends BaseRepository implements MemberInterface
 
     public function find(int $id): ?Member
     {
-        return Member::with('package')
+        return Member::with(self::RESOURCE_RELATIONS)
             ->find($id);
     }
 

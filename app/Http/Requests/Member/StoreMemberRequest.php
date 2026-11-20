@@ -79,7 +79,7 @@ class StoreMemberRequest extends FormRequest
 
             'status' => [
                 'nullable',
-                'in:active,suspended,expired,cancelled',
+                'in:active,inactive,suspended,expired,cancelled',
             ],
 
             'gender' => [

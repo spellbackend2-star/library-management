@@ -72,7 +72,7 @@ class UpdateMemberRequest extends FormRequest
 
             'status' => [
                 'sometimes',
-                'in:active,suspended,expired,cancelled',
+                'in:active,inactive,suspended,expired,cancelled',
             ],
 
             'gender' => [

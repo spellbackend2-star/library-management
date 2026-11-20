@@ -121,18 +121,30 @@ class BookController extends Controller
 
     public function listCopies(Request $request, int $book): JsonResponse
     {
+        $filters = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'barcode' => ['sometimes', 'nullable', 'string', 'max:100'],
+        ]);
+
         try {
             $result = $this->bookService->listCopies(
                 $book,
-                $request->only(['per_page'])
+                $filters
             );
         } catch (\Exception $e) {
             abort(404, $e->getMessage());
         }
 
+        $barcodeSearch = isset($filters['barcode']) && $filters['barcode'] !== '';
+        $message = ! $barcodeSearch
+            ? 'Copies retrieved successfully.'
+            : ($result['meta']['total'] > 0
+                ? 'Copy found successfully.'
+                : 'No copy found for this barcode in this book.');
+
         return $this->successResponse(
             CopyResource::collection($result['data']),
-            'Copies retrieved successfully.',
+            $message,
             200,
             $result['meta']
         );

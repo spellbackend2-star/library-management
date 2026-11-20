@@ -18,6 +18,14 @@ class LockerResource extends JsonResource
             'locker_type' => $this->locker_type,
             'location' => $this->location,
             'status' => $this->status,
+            'member_id' => $this->when(
+                $this->status === 'assigned',
+                $this->activeAssignment?->member_id
+            ),
+            'member_name' => $this->when(
+                $this->status === 'assigned',
+                trim(($this->activeAssignment?->member?->first_name ?? '') . ' ' . ($this->activeAssignment?->member?->last_name ?? '')) ?: null
+            ),
 
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

@@ -30,4 +30,9 @@ class Copy extends Model
     {
         return $this->hasMany(Borrow::class);
     }
+
+    public function currentBorrows(): HasMany
+    {
+        return $this->borrows()->whereIn('status', ['active', 'overdue']);
+    }
 }

@@ -9,6 +9,16 @@ use Illuminate\Support\Facades\DB;
 
 class BookRepository extends BaseRepository implements BookInterface
 {
+    private const BOOK_RELATIONS = [
+        'authors',
+        'categories',
+        'editions.book',
+        'editions.publisher',
+        'editions.copies.edition.book',
+        'editions.copies.currentBorrows.member',
+        'editions.copies.currentBorrows.staffBorrower',
+    ];
+
     protected array $allowedSorts = [
         'id',
         'title',
@@ -51,26 +61,14 @@ class BookRepository extends BaseRepository implements BookInterface
 
     public function all()
     {
-        return Book::with([
-            'authors',
-            'categories',
-            'editions.book',
-            'editions.publisher',
-            'editions.copies.edition.book',
-        ])
+        return Book::with(self::BOOK_RELATIONS)
             ->latest()
             ->get();
     }
 
     public function getAll(array $filters = []): array
     {
-        $query = Book::query()->with([
-            'authors',
-            'categories',
-            'editions.book',
-            'editions.publisher',
-            'editions.copies.edition.book',
-        ]);
+        $query = Book::query()->with(self::BOOK_RELATIONS);
 
         // Filter by status (availability based on copies) - custom logic not covered by BaseRepository
         if (isset($filters['status']) && $filters['status'] !== '') {
@@ -103,13 +101,7 @@ class BookRepository extends BaseRepository implements BookInterface
 
     public function findWithRelations(int $id): Book
     {
-        return Book::with([
-            'authors',
-            'categories',
-            'editions.book',
-            'editions.publisher',
-            'editions.copies.edition.book',
-        ])->findOrFail($id);
+        return Book::with(self::BOOK_RELATIONS)->findOrFail($id);
     }
 
     public function create(array $data): Book
@@ -178,12 +170,6 @@ class BookRepository extends BaseRepository implements BookInterface
 
     public function loadRelations(Book $book): Book
     {
-        return $book->load([
-            'authors',
-            'categories',
-            'editions.book',
-            'editions.publisher',
-            'editions.copies.edition.book',
-        ]);
+        return $book->load(self::BOOK_RELATIONS);
     }
 }

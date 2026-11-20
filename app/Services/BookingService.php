@@ -20,6 +20,7 @@ use App\Repositories\Interface\LockerInterface;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 class BookingService
 {
@@ -60,14 +61,19 @@ class BookingService
 
         $package = $member->package;
 
-        if (!$package || !$package->is_active) {
-            throw new \Exception('Member does not have an active package.');
+        if (
+            ! $package
+            || $member->status !== 'active'
+            || ! $member->membership_expiry
+            || $member->membership_expiry->lt(Carbon::today())
+        ) {
+            throw new \Exception('Member does not have an active membership.');
         }
 
         $unpaidInvoice = app(\App\Services\InvoiceService::class)
             ->findByMember($member->id);
 
-        if ($unpaidInvoice) {
+        if ($unpaidInvoice && (float) $unpaidInvoice->paid_amount <= 0) {
             throw new \Exception(
                 'Member has an unpaid invoice #'.$unpaidInvoice->invoice_number.'. Please complete payment before booking.'
             );
@@ -77,7 +83,13 @@ class BookingService
         $paymentId = null;
 
         $currentInvoice = \App\Models\Invoice::where('member_id', $member->id)
-            ->whereIn('status', ['partially_paid', 'paid'])
+            ->where(function ($query) {
+                $query->whereIn('status', ['partially_paid', 'paid'])
+                    ->orWhere(function ($overdueQuery) {
+                        $overdueQuery->where('status', 'overdue')
+                            ->where('paid_amount', '>', 0);
+                    });
+            })
             ->orderByDesc('id')
             ->first();
 
@@ -112,10 +124,35 @@ class BookingService
             throw new \Exception('No bookings provided.');
         }
 
-        foreach ($bookings as $bookingData) {
+        foreach ($bookings as $index => &$bookingData) {
             $bookingData['staff_id'] = $staffId;
+
+            if (in_array($bookingData['type'], ['seat', 'locker'], true)) {
+                $durationHours = (float) ($bookingData['type'] === 'seat'
+                    ? $package->max_seat_hours_per_day
+                    : $package->max_locker_hours_per_day);
+
+                if ($durationHours <= 0) {
+                    $durationName = $bookingData['type'] === 'seat'
+                        ? 'max_seat_hours_per_day'
+                        : 'max_locker_hours_per_day';
+
+                    throw ValidationException::withMessages([
+                        "bookings.{$index}.start_at" => [
+                            "The member's package must define a positive {$durationName} to book this resource.",
+                        ],
+                    ]);
+                }
+
+                $durationMinutes = (int) round($durationHours * 60);
+                $bookingData['end_at'] = Carbon::parse($bookingData['start_at'])
+                    ->addMinutes($durationMinutes)
+                    ->format('Y-m-d H:i:s');
+            }
+
             $this->validateBooking($bookingData, $package, $data['member_id']);
         }
+        unset($bookingData);
 
         $finalAmount = isset($data['amount']) && $data['amount'] !== null
             ? (float) $data['amount']
@@ -338,7 +375,7 @@ class BookingService
 
             $start = Carbon::parse($data['start_at']);
             $end = Carbon::parse($data['end_at']);
-            $hours = $start->diffInHours($end);
+            $hours = $start->diffInMinutes($end) / 60;
 
             if ($hours > (float) $package->max_seat_hours_per_day) {
                 throw new \Exception('Exceeds maximum allowed seat hours per day.');
@@ -416,7 +453,7 @@ class BookingService
 
         $start = Carbon::parse($data['start_at']);
         $end = Carbon::parse($data['end_at']);
-        $hours = $start->diffInHours($end);
+        $hours = $start->diffInMinutes($end) / 60;
 
         if ($hours > (float) $package->max_seat_hours_per_day) {
             throw new \Exception('Exceeds maximum allowed seat hours per day.');

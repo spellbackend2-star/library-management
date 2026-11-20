@@ -20,8 +20,8 @@ class LockerAssignment extends Model
     protected function casts(): array
     {
         return [
-            'assigned_date' => 'date',
-            'expiry_date' => 'date',
+            'assigned_date' => 'datetime',
+            'expiry_date' => 'datetime',
             'returned_date' => 'date',
         ];
     }

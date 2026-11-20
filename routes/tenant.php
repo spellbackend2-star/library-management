@@ -455,6 +455,7 @@ Route::prefix('api/v1')->group(function () {
             Route::apiResource('seat-categories', SeatCategoryController::class);
 
             // Seats
+            Route::get('seats/all', [SeatController::class, 'all']);
             Route::apiResource('seats', SeatController::class);
 
             // Lockers

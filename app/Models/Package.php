@@ -5,10 +5,12 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Package extends Model
 {
     use HasFactory;
+    use SoftDeletes;
 
     protected $fillable = [
         'name',
@@ -27,6 +29,7 @@ class Package extends Model
         'seat_overdue_fine_per_hour',
         'locker_overdue_fine_per_day',
         'is_active',
+        'retired_at',
     ];
 
     protected $casts = [
@@ -35,13 +38,14 @@ class Package extends Model
         'max_book_loans' => 'integer',
         'max_borrow_days' => 'integer',
         'seat_access_allowed' => 'boolean',
-        'max_seat_hours_per_day' => 'integer',
+        'max_seat_hours_per_day' => 'decimal:2',
         'locker_allowed' => 'boolean',
-        'max_locker_hours_per_day' => 'integer',
+        'max_locker_hours_per_day' => 'decimal:2',
         'overdue_fine_per_day' => 'decimal:2',
         'seat_overdue_fine_per_hour' => 'decimal:2',
         'locker_overdue_fine_per_day' => 'decimal:2',
         'is_active' => 'boolean',
+        'retired_at' => 'date',
     ];
 
     /**
@@ -50,5 +54,10 @@ class Package extends Model
     public function members(): HasMany
     {
         return $this->hasMany(Member::class);
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
     }
 }

@@ -19,7 +19,9 @@ class StorePackageRequest extends FormRequest
                 'required',
                 'string',
                 'max:100',
-                'unique:packages,name',
+                Rule::unique('packages', 'name')
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at'),
             ],
 
             'description' => [

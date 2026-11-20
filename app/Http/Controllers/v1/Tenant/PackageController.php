@@ -84,11 +84,13 @@ class PackageController extends Controller
 
     public function destroy(Package $package): JsonResponse
     {
-        $this->packageService->delete($package->id);
+        $deleted = $this->packageService->delete($package->id);
 
         return $this->successResponse(
             null,
-            'Package deleted successfully.'
+            $deleted
+                ? 'Package deleted successfully.'
+                : 'Package deactivated and will be deleted after all memberships expire.'
         );
     }
 }

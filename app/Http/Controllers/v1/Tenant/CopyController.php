@@ -18,11 +18,24 @@ class CopyController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only(['per_page']);
+        $filters = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'barcode' => ['sometimes', 'nullable', 'string', 'max:100'],
+        ]);
         $result = $this->copyService->getAll($filters);
+        $barcodeSearch = isset($filters['barcode']) && $filters['barcode'] !== '';
+        $message = ! $barcodeSearch
+            ? 'Copies retrieved successfully.'
+            : ($result['meta']['total'] > 0
+                ? 'Copy found successfully.'
+                : 'No copy found for this barcode.');
 
         return CopyResource::collection($result['data'])
-            ->additional(['meta' => $result['meta']]);
+            ->additional([
+                'success' => true,
+                'message' => $message,
+                'meta' => $result['meta'],
+            ]);
     }
 
     public function store(StoreCopyRequest $request): CopyResource

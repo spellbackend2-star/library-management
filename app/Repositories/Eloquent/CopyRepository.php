@@ -8,21 +8,31 @@ use App\Repositories\Interface\CopyInterface;
 
 class CopyRepository extends BaseRepository implements CopyInterface
 {
+    private const COPY_RELATIONS = [
+        'edition.book',
+        'currentBorrows.member',
+        'currentBorrows.staffBorrower',
+    ];
+
     protected array $allowedFilters = [
         'id' => [
             'type' => 'exact',
             'column' => 'id',
         ],
+        'barcode' => [
+            'type' => 'exact',
+            'column' => 'barcode',
+        ],
     ];
 
     public function all()
     {
-        return Copy::with(['edition.book'])->latest()->get();
+        return Copy::with(self::COPY_RELATIONS)->latest()->get();
     }
 
     public function getAll(array $filters = []): array
     {
-        $query = Copy::with(['edition.book']);
+        $query = Copy::with(self::COPY_RELATIONS);
 
         $paginator = $this->applyPagination(
             $this->applyFilters($query, $filters),
@@ -37,13 +47,16 @@ class CopyRepository extends BaseRepository implements CopyInterface
 
     public function getForBook(int $bookId, array $filters = []): array
     {
-        $query = Copy::with(['edition'])
+        $query = Copy::with(self::COPY_RELATIONS)
             ->whereHas('edition', function ($query) use ($bookId) {
                 $query->where('book_id', $bookId);
             })
             ->latest();
 
-        $paginator = $this->applyPagination($query, $filters);
+        $paginator = $this->applyPagination(
+            $this->applyFilters($query, $filters),
+            $filters
+        );
 
         return [
             'data' => $paginator->items(),
@@ -53,7 +66,7 @@ class CopyRepository extends BaseRepository implements CopyInterface
 
     public function find(int $id): ?Copy
     {
-        return Copy::with(['edition.book'])->find($id);
+        return Copy::with(self::COPY_RELATIONS)->find($id);
     }
 
     public function create(array $data): Copy
@@ -67,7 +80,7 @@ class CopyRepository extends BaseRepository implements CopyInterface
 
         $copy->update($data);
 
-        return $copy->fresh();
+        return $copy->fresh(self::COPY_RELATIONS);
     }
 
     public function delete(int $id): bool

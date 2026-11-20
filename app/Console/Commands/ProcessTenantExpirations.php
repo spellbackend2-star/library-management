@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Fine;
 use App\Models\Invoice;
 use App\Models\Member;
+use App\Models\Package;
 use App\Models\Setting;
 use App\Models\Tenant;
 use Illuminate\Console\Command;
@@ -25,6 +26,7 @@ class ProcessTenantExpirations extends Command
             'tenants' => 0,
             'members_expired' => 0,
             'members_suspended' => 0,
+            'packages_soft_deleted' => 0,
             'invoices_overdue' => 0,
             'emails_sent' => 0,
             'failed' => 0,
@@ -61,6 +63,23 @@ class ProcessTenantExpirations extends Command
                     ->whereDate('paid_through', '<', Carbon::today())
                     ->whereDate('membership_expiry', '>=', Carbon::today())
                     ->update(['status' => 'suspended']);
+
+                $today = Carbon::today();
+                Package::query()
+                    ->whereNotNull('retired_at')
+                    ->whereDoesntHave('members', function ($query) use ($today): void {
+                        $query->where(function ($members) use ($today): void {
+                            $members->whereNull('membership_expiry')
+                                ->orWhereDate('membership_expiry', '>=', $today);
+                        });
+                    })
+                    ->chunkById(100, function ($packages) use (&$summary): void {
+                        foreach ($packages as $package) {
+                            if ($package->delete()) {
+                                $summary['packages_soft_deleted']++;
+                            }
+                        }
+                    });
 
                 $summary['invoices_overdue'] += Invoice::query()
                     ->whereIn('status', ['unpaid', 'partially_paid'])
@@ -106,10 +125,11 @@ class ProcessTenantExpirations extends Command
         }
 
         $this->info(sprintf(
-            'Tenant expiry processing complete. Tenants=%d members_expired=%d members_suspended=%d invoices_overdue=%d emails_sent=%d failed=%d',
+            'Tenant expiry processing complete. Tenants=%d members_expired=%d members_suspended=%d packages_soft_deleted=%d invoices_overdue=%d emails_sent=%d failed=%d',
             $summary['tenants'],
             $summary['members_expired'],
             $summary['members_suspended'],
+            $summary['packages_soft_deleted'],
             $summary['invoices_overdue'],
             $summary['emails_sent'],
             $summary['failed'],

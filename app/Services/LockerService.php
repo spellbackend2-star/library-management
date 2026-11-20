@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Locker;
 use App\Repositories\Interface\LockerInterface;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class LockerService
 {
@@ -38,6 +39,27 @@ class LockerService
 
     public function delete(int $id): bool
     {
+        $locker = $this->lockerRepository->find($id);
+
+        if (!$locker) {
+            abort(404, 'Locker not found.');
+        }
+
+        if (
+            $locker->status === 'assigned'
+            || $locker->assignments()->where('status', 'active')->exists()
+        ) {
+            throw new ConflictHttpException(
+                'This locker cannot be deleted while it is assigned. Return or release the locker first.'
+            );
+        }
+
+        if ($locker->assignments()->exists()) {
+            throw new ConflictHttpException(
+                'This locker cannot be deleted because locker assignment records are linked to it.'
+            );
+        }
+
         return $this->lockerRepository->delete($id);
     }
 }

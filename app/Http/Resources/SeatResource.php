@@ -20,6 +20,10 @@ class SeatResource extends JsonResource
             'has_power_outlet' => $this->has_power_outlet,
             'is_accessible' => $this->is_accessible,
             'status' => $this->status,
+            'member_id' => $this->latestBookingSeat?->member_id,
+            'member_name' => $this->latestBookingSeat?->member
+                ? trim($this->latestBookingSeat->member->first_name . ' ' . $this->latestBookingSeat->member->last_name)
+                : null,
 
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

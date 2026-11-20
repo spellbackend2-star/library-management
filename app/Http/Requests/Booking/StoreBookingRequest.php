@@ -77,12 +77,6 @@ class StoreBookingRequest extends FormRequest
                 'date',
             ],
 
-            'bookings.*.end_at' => [
-                'required_if:bookings.*.type,seat,locker',
-                'date',
-                'after:bookings.*.start_at',
-            ],
-
             'bookings.*.amount' => [
                 'nullable',
                 'numeric',

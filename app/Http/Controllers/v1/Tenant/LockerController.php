@@ -10,6 +10,7 @@ use App\Services\LockerService;
 use App\Traits\ResponseMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
 
 class LockerController extends Controller
 {
@@ -93,7 +94,11 @@ class LockerController extends Controller
 
     public function destroy(int $locker): JsonResponse
     {
-        $this->lockerService->delete($locker);
+        try {
+            $this->lockerService->delete($locker);
+        } catch (ConflictHttpException $exception) {
+            return $this->errorResponse($exception->getMessage(), 409);
+        }
 
         return $this->successResponse(
             null,

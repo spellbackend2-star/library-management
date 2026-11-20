@@ -25,6 +25,7 @@ class PackageResource extends JsonResource
             'locker_type' => $this->locker_type,
             'max_locker_hours_per_day' => $this->max_locker_hours_per_day,
             'is_active' => $this->is_active,
+            'retired_at' => $this->retired_at?->format('Y-m-d'),
 
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

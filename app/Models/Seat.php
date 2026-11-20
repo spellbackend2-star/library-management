@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'room_id',
@@ -45,5 +46,12 @@ class Seat extends Model
     public function bookingSeats(): HasMany
     {
         return $this->hasMany(BookingSeat::class);
+    }
+
+    public function latestBookingSeat(): HasOne
+    {
+        return $this->hasOne(BookingSeat::class)
+            ->whereIn('status', ['booked', 'active'])
+            ->latestOfMany();
     }
 }

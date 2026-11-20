@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'floor_id',
@@ -24,5 +25,12 @@ class Locker extends Model
     public function assignments(): HasMany
     {
         return $this->hasMany(LockerAssignment::class);
+    }
+
+    public function activeAssignment(): HasOne
+    {
+        return $this->hasOne(LockerAssignment::class)
+            ->where('status', 'active')
+            ->latestOfMany();
     }
 }

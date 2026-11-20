@@ -15,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class MemberController extends Controller
 {
@@ -27,9 +28,29 @@ class MemberController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $result = $this->memberService->getAll(
-            $request->all()
-        );
+        $request->validate([
+            'has_paid_invoice' => [
+                'sometimes',
+                'nullable',
+                Rule::in(['0', '1', 'true', 'false']),
+            ],
+        ]);
+
+        $filters = $request->all();
+
+        if (
+            isset($filters['has_paid_invoice'])
+            && $filters['has_paid_invoice'] !== ''
+        ) {
+            $members = $this->memberService->getAllWithoutPagination($filters);
+
+            return $this->successResponse(
+                MemberResource::collection($members),
+                'Members retrieved successfully.'
+            );
+        }
+
+        $result = $this->memberService->getAll($filters);
 
         return response()->json([
             'success' => true,
@@ -43,6 +64,14 @@ class MemberController extends Controller
 
     public function all(Request $request): JsonResponse
     {
+        $request->validate([
+            'has_paid_invoice' => [
+                'sometimes',
+                'nullable',
+                Rule::in(['0', '1', 'true', 'false']),
+            ],
+        ]);
+
         $members = $this->memberService->getAllWithoutPagination(
             $request->all()
         );

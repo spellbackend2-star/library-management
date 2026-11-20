@@ -45,19 +45,19 @@ class SeatRepository extends BaseRepository implements SeatInterface
 
     public function all()
     {
-        return Seat::with(['room', 'category'])->latest()->get();
+        return Seat::with(['room', 'category', 'latestBookingSeat.member'])->latest()->get();
     }
 
     public function getAll(array $filters = []): array
     {
-        $query = Seat::with(['room', 'category']);
+        $query = Seat::with(['room', 'category', 'latestBookingSeat.member']);
 
         return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?Seat
     {
-        return Seat::with(['room', 'category'])->find($id);
+        return Seat::with(['room', 'category', 'latestBookingSeat.member'])->find($id);
     }
 
     public function create(array $data): Seat
@@ -71,7 +71,7 @@ class SeatRepository extends BaseRepository implements SeatInterface
 
         $seat->update($data);
 
-        return $seat->fresh();
+        return $seat->fresh(['room', 'category', 'latestBookingSeat.member']);
     }
 
     public function delete(int $id): bool

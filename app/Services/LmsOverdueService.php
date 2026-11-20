@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\BookingSeat;
 use App\Models\Borrow;
+use App\Models\Locker;
 use App\Models\LockerAssignment;
+use App\Models\Seat;
 use App\Models\Tenant;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -132,14 +134,27 @@ class LmsOverdueService
     {
         $now = Carbon::now();
 
-        return BookingSeat::query()
-            ->whereIn('status', ['booked', 'active'])
-            ->whereNotNull('end_at')
-            ->where('end_at', '<', $now)
-            ->update([
-                'status' => 'completed',
-                'updated_at' => $now,
-            ]);
+        return DB::transaction(function () use ($now) {
+            $expiredCount = BookingSeat::query()
+                ->whereIn('status', ['booked', 'active'])
+                ->whereNotNull('end_at')
+                ->where('end_at', '<', $now)
+                ->update([
+                    'status' => 'completed',
+                    'updated_at' => $now,
+                ]);
+
+            Seat::query()
+                ->where('status', 'occupied')
+                ->whereDoesntHave('bookingSeats', function ($bookingQuery) use ($now) {
+                    $bookingQuery
+                        ->whereIn('status', ['booked', 'active'])
+                        ->where('end_at', '>', $now);
+                })
+                ->update(['status' => 'available']);
+
+            return $expiredCount;
+        });
     }
 
     /**
@@ -149,17 +164,28 @@ class LmsOverdueService
      */
     protected function expireLockerAssignments(): int
     {
-        $today = Carbon::today()->toDateString();
+        $now = Carbon::now();
 
-        return DB::transaction(function () use ($today) {
-            return LockerAssignment::query()
+        return DB::transaction(function () use ($now) {
+            $expiredCount = LockerAssignment::query()
                 ->where('status', 'active')
                 ->whereNotNull('expiry_date')
-                ->whereDate('expiry_date', '<', $today)
+                ->where('expiry_date', '<', $now)
                 ->update([
                     'status' => 'expired',
-                    'updated_at' => Carbon::now(),
+                    'updated_at' => $now,
                 ]);
+
+            Locker::query()
+                ->where('status', 'assigned')
+                ->whereDoesntHave('assignments', function ($assignmentQuery) use ($now) {
+                    $assignmentQuery
+                        ->where('status', 'active')
+                        ->where('expiry_date', '>', $now);
+                })
+                ->update(['status' => 'available']);
+
+            return $expiredCount;
         });
     }
 

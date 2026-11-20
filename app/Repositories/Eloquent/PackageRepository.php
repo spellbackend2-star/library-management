@@ -21,7 +21,10 @@ class PackageRepository extends BaseRepository implements PackageInterface
 
     public function all()
     {
-        return Package::latest()->get();
+        return Package::query()
+            ->where('is_active', true)
+            ->latest()
+            ->get();
     }
 
     public function getAll(array $filters = [])

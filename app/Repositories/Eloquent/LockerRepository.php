@@ -38,19 +38,19 @@ class LockerRepository extends BaseRepository implements LockerInterface
 
     public function all()
     {
-        return Locker::latest()->get();
+        return Locker::with(['floor', 'activeAssignment.member'])->latest()->get();
     }
 
     public function getAll(array $filters = []): array
     {
-        $query = Locker::query();
+        $query = Locker::with(['floor', 'activeAssignment.member']);
 
         return $this->getPaginated($query, $filters);
     }
 
     public function find(int $id): ?Locker
     {
-        return Locker::find($id);
+        return Locker::with(['floor', 'activeAssignment.member'])->find($id);
     }
 
     public function create(array $data): Locker
@@ -64,7 +64,7 @@ class LockerRepository extends BaseRepository implements LockerInterface
 
         $locker->update($data);
 
-        return $locker->fresh();
+        return $locker->fresh(['floor', 'activeAssignment.member']);
     }
 
     public function delete(int $id): bool

@@ -6,7 +6,7 @@ use App\Models\Member;
 
 interface MemberInterface
 {
-    public function all();
+    public function all(array $filters = []);
 
     public function getAll(array $filters = []);
 

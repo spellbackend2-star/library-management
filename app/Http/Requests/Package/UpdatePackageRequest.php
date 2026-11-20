@@ -21,7 +21,10 @@ class UpdatePackageRequest extends FormRequest
                 'sometimes',
                 'string',
                 'max:100',
-                Rule::unique('packages', 'name')->ignore($packageId),
+                Rule::unique('packages', 'name')
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at')
+                    ->ignore($packageId),
             ],
 
             'description' => [

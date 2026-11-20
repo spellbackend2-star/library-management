@@ -321,6 +321,8 @@ class BookService
                 'editions.book',
                 'editions.publisher',
                 'editions.copies.edition.book',
+                'editions.copies.currentBorrows.member',
+                'editions.copies.currentBorrows.staffBorrower',
             ]);
         });
     }
@@ -359,6 +361,8 @@ class BookService
                     'categories',
                     'editions.publisher',
                     'editions.copies',
+                    'editions.copies.currentBorrows.member',
+                    'editions.copies.currentBorrows.staffBorrower',
                 ]),
                 'created_copies' => $created,
             ];

@@ -5,6 +5,7 @@ namespace App\Repositories\Eloquent;
 use App\Models\Member;
 use App\Repositories\BaseRepository;
 use App\Repositories\Interface\MemberInterface;
+use Illuminate\Database\Eloquent\Builder;
 
 class MemberRepository extends BaseRepository implements MemberInterface
 {
@@ -23,11 +24,14 @@ class MemberRepository extends BaseRepository implements MemberInterface
         'updated_at',
     ];
 
-    public function all()
+    public function all(array $filters = [])
     {
-        return Member::with('package')
-            ->latest()
-            ->get();
+        $query = Member::query()
+            ->with('package');
+
+        $this->applyListFilters($query, $filters);
+
+        return $query->latest()->get();
     }
 
     public function getAll(array $filters = [])
@@ -35,6 +39,21 @@ class MemberRepository extends BaseRepository implements MemberInterface
         $query = Member::query()
             ->with('package');
 
+        $this->applyListFilters($query, $filters);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sorting + Pagination
+        |--------------------------------------------------------------------------
+        */
+        return $this->getPaginated(
+            $query,
+            $filters
+        );
+    }
+
+    private function applyListFilters(Builder $query, array $filters): void
+    {
         /*
         |--------------------------------------------------------------------------
         | Search
@@ -120,15 +139,40 @@ class MemberRepository extends BaseRepository implements MemberInterface
             );
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | Sorting + Pagination
-        |--------------------------------------------------------------------------
-        */
-        return $this->getPaginated(
-            $query,
-            $filters
+        $this->applyPaidInvoiceFilter($query, $filters);
+    }
+
+    private function applyPaidInvoiceFilter(Builder $query, array $filters): void
+    {
+        if (
+            ! array_key_exists('has_paid_invoice', $filters)
+            || $filters['has_paid_invoice'] === null
+            || $filters['has_paid_invoice'] === ''
+        ) {
+            return;
+        }
+
+        $hasPaidInvoice = filter_var(
+            $filters['has_paid_invoice'],
+            FILTER_VALIDATE_BOOLEAN,
+            FILTER_NULL_ON_FAILURE
         );
+
+        if ($hasPaidInvoice === null) {
+            return;
+        }
+
+        if ($hasPaidInvoice) {
+            $query->whereHas('invoices', function ($invoiceQuery) {
+                $invoiceQuery->where('paid_amount', '>', 0);
+            });
+
+            return;
+        }
+
+        $query->whereDoesntHave('invoices', function ($invoiceQuery) {
+            $invoiceQuery->where('paid_amount', '>', 0);
+        });
     }
 
     public function find(int $id): ?Member

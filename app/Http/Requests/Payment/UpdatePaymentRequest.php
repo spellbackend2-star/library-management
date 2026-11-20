@@ -6,6 +6,15 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class UpdatePaymentRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->input('payment_method'))) {
+            $this->merge([
+                'payment_method' => strtoupper(trim($this->input('payment_method'))),
+            ]);
+        }
+    }
+
     public function authorize(): bool
     {
         return true;

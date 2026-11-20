@@ -106,6 +106,34 @@ class UpdatePackageRequest extends FormRequest
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
+            if ($this->exists('max_book_loans') || $this->exists('max_borrow_days')) {
+                $package = $this->route('package');
+                $currentMaxBookLoans = is_object($package)
+                    ? $package->max_book_loans
+                    : \App\Models\Package::find($package)?->max_book_loans;
+                $currentMaxBorrowDays = is_object($package)
+                    ? $package->max_borrow_days
+                    : \App\Models\Package::find($package)?->max_borrow_days;
+
+                $maxBookLoans = $this->exists('max_book_loans')
+                    ? $this->input('max_book_loans')
+                    : $currentMaxBookLoans;
+                $maxBorrowDays = $this->exists('max_borrow_days')
+                    ? $this->input('max_borrow_days')
+                    : $currentMaxBorrowDays;
+
+                if (
+                    is_numeric($maxBookLoans)
+                    && (int) $maxBookLoans > 0
+                    && (! is_numeric($maxBorrowDays) || (int) $maxBorrowDays <= 0)
+                ) {
+                    $validator->errors()->add(
+                        'max_borrow_days',
+                        'The max borrow days must be greater than 0 when book loans are enabled.'
+                    );
+                }
+            }
+
             $seatAccessAllowed = $this->boolean('seat_access_allowed');
             $seatHours = $this->input('max_seat_hours_per_day');
 

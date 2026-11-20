@@ -103,6 +103,20 @@ class StorePackageRequest extends FormRequest
     public function withValidator($validator)
     {
         $validator->after(function ($validator) {
+            $maxBookLoans = $this->input('max_book_loans');
+            $maxBorrowDays = $this->input('max_borrow_days');
+
+            if (
+                is_numeric($maxBookLoans)
+                && (int) $maxBookLoans > 0
+                && (! is_numeric($maxBorrowDays) || (int) $maxBorrowDays <= 0)
+            ) {
+                $validator->errors()->add(
+                    'max_borrow_days',
+                    'The max borrow days must be greater than 0 when book loans are enabled.'
+                );
+            }
+
             $seatAccessAllowed = $this->boolean('seat_access_allowed');
             $seatHours = $this->input('max_seat_hours_per_day');
 

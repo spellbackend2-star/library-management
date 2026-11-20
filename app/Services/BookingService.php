@@ -124,6 +124,9 @@ class BookingService
             throw new \Exception('No bookings provided.');
         }
 
+        $bookings = $this->expandDailyResourceBookings($bookings, $member);
+        $resourceBookingMinutesByDate = [];
+
         foreach ($bookings as $index => &$bookingData) {
             $bookingData['staff_id'] = $staffId;
 
@@ -145,9 +148,51 @@ class BookingService
                 }
 
                 $durationMinutes = (int) round($durationHours * 60);
-                $bookingData['end_at'] = Carbon::parse($bookingData['start_at'])
-                    ->addMinutes($durationMinutes)
-                    ->format('Y-m-d H:i:s');
+                $startAt = Carbon::parse($bookingData['start_at']);
+                $endAt = $startAt->copy()->addMinutes($durationMinutes);
+
+                if (in_array($bookingData['type'], ['seat', 'locker'], true)) {
+                    $membershipStart = $member->membership_start?->copy()->startOfDay();
+                    $membershipExpiry = $member->membership_expiry?->copy()->endOfDay();
+
+                    if (
+                        ($membershipStart && $startAt->lt($membershipStart))
+                        || ($membershipExpiry && $endAt->gt($membershipExpiry))
+                    ) {
+                        throw ValidationException::withMessages([
+                            "bookings.{$index}.start_at" => [
+                                'Bookings must fit within the member membership dates.',
+                            ],
+                        ]);
+                    }
+
+                    if ($endAt->toDateString() !== $startAt->toDateString()) {
+                        throw ValidationException::withMessages([
+                            "bookings.{$index}.start_at" => [
+                                'A seat or locker booking must end on the same calendar day it starts.',
+                            ],
+                        ]);
+                    }
+
+                    $dateKey = $bookingData['type'].':'.$startAt->toDateString();
+                    $maxDailyMinutes = $durationMinutes;
+                    $previouslyBookedMinutes = $resourceBookingMinutesByDate[$dateKey]
+                        ?? ($bookingData['type'] === 'seat'
+                            ? $this->getSeatBookedMinutesForDate($data['member_id'], $startAt)
+                            : $this->getLockerBookedMinutesForDate($data['member_id'], $startAt));
+
+                    if ($previouslyBookedMinutes + $durationMinutes > $maxDailyMinutes) {
+                        throw ValidationException::withMessages([
+                            "bookings.{$index}.start_at" => [
+                                "The member's package allows a maximum of {$durationHours} {$bookingData['type']} hours per day, and that limit has been reached.",
+                            ],
+                        ]);
+                    }
+
+                    $resourceBookingMinutesByDate[$dateKey] = $previouslyBookedMinutes + $durationMinutes;
+                }
+
+                $bookingData['end_at'] = $endAt->format('Y-m-d H:i:s');
             }
 
             $this->validateBooking($bookingData, $package, $data['member_id']);
@@ -273,6 +318,95 @@ class BookingService
         ]);
     }
 
+    protected function getLockerBookedMinutesForDate(int $memberId, Carbon $date): int
+    {
+        $dayStart = $date->copy()->startOfDay();
+        $nextDay = $dayStart->copy()->addDay();
+
+        return LockerAssignment::query()
+            ->where('member_id', $memberId)
+            ->where('status', '!=', 'cancelled')
+            ->where('assigned_date', '<', $nextDay)
+            ->where('expiry_date', '>', $dayStart)
+            ->get(['assigned_date', 'expiry_date'])
+            ->sum(function (LockerAssignment $assignment) use ($dayStart, $nextDay): int {
+                $assignmentStart = $assignment->assigned_date;
+                $assignmentEnd = $assignment->expiry_date;
+                $countStart = $assignmentStart->gt($dayStart)
+                    ? $assignmentStart
+                    : $dayStart;
+                $countEnd = $assignmentEnd->lt($nextDay)
+                    ? $assignmentEnd
+                    : $nextDay;
+
+                return max(0, (int) $countStart->diffInMinutes($countEnd));
+            });
+    }
+
+    protected function getSeatBookedMinutesForDate(int $memberId, Carbon $date): int
+    {
+        $dayStart = $date->copy()->startOfDay();
+        $nextDay = $dayStart->copy()->addDay();
+
+        return BookingSeat::query()
+            ->where('member_id', $memberId)
+            ->where('status', '!=', 'cancelled')
+            ->where('start_at', '<', $nextDay)
+            ->where('end_at', '>', $dayStart)
+            ->get(['start_at', 'end_at'])
+            ->sum(function (BookingSeat $booking) use ($dayStart, $nextDay): int {
+                $bookingStart = $booking->start_at;
+                $bookingEnd = $booking->end_at;
+                $countStart = $bookingStart->gt($dayStart) ? $bookingStart : $dayStart;
+                $countEnd = $bookingEnd->lt($nextDay) ? $bookingEnd : $nextDay;
+
+                return max(0, (int) $countStart->diffInMinutes($countEnd));
+            });
+    }
+
+    protected function expandDailyResourceBookings(array $bookings, $member): array
+    {
+        $expandedBookings = [];
+        $bookingUntil = $member->paid_through ?: $member->membership_expiry;
+        $lastDate = Carbon::parse($bookingUntil)->startOfDay();
+
+        foreach ($bookings as $index => $bookingData) {
+            if (!in_array($bookingData['type'] ?? null, ['seat', 'locker'], true)) {
+                $expandedBookings[] = $bookingData;
+                continue;
+            }
+
+            $firstStart = Carbon::parse($bookingData['start_at']);
+            $firstDate = $firstStart->copy()->startOfDay();
+
+            if ($firstStart->lt(Carbon::now())) {
+                throw ValidationException::withMessages([
+                    "bookings.{$index}.start_at" => [
+                        'The booking start time must be in the future.',
+                    ],
+                ]);
+            }
+
+            if ($firstDate->gt($lastDate)) {
+                throw ValidationException::withMessages([
+                    "bookings.{$index}.start_at" => [
+                        'The booking start date is after the member paid membership period.',
+                    ],
+                ]);
+            }
+
+            for ($date = $firstDate->copy(); $date->lte($lastDate); $date->addDay()) {
+                $dailyBooking = $bookingData;
+                $dailyBooking['start_at'] = $date->copy()
+                    ->setTime($firstStart->hour, $firstStart->minute, $firstStart->second)
+                    ->format('Y-m-d H:i:s');
+                $expandedBookings[] = $dailyBooking;
+            }
+        }
+
+        return $expandedBookings;
+    }
+
     protected function createStaffBookBooking(array $data): Booking
     {
         $staff = \App\Models\Staff::query()
@@ -387,6 +521,10 @@ class BookingService
                 throw new \Exception('Seat not found.');
             }
 
+            if (in_array($seat->status, ['maintenance', 'out_of_service'], true)) {
+                throw new \Exception('Seat is not available for booking.');
+            }
+
             $overlap = BookingSeat::where('seat_id', $data['seat_id'])
                 ->where('status', '!=', 'cancelled')
                 ->where('start_at', '<', $data['end_at'])
@@ -433,12 +571,22 @@ class BookingService
                 throw new \Exception('Locker not found.');
             }
 
+            if (in_array($locker->status, ['maintenance', 'out_of_service'], true)) {
+                throw new \Exception('Locker is not available for booking.');
+            }
+
+            if ($package->locker_type && $locker->locker_type !== $package->locker_type) {
+                throw new \Exception('Locker type does not match the member package.');
+            }
+
             $existingAssignment = LockerAssignment::where('locker_id', $data['locker_id'])
-                ->where('status', 'active')
+                ->where('status', '!=', 'cancelled')
+                ->where('assigned_date', '<', $data['end_at'])
+                ->where('expiry_date', '>', $data['start_at'])
                 ->exists();
 
             if ($existingAssignment) {
-                throw new \Exception('Locker is already assigned.');
+                throw new \Exception('Locker is already booked for the selected time.');
             }
         } else {
             throw new \Exception('Invalid booking type: ' . $type);
@@ -484,8 +632,16 @@ class BookingService
             'status' => 'booked',
         ]);
 
+        $now = Carbon::now();
+        $hasCurrentBooking = BookingSeat::query()
+            ->where('seat_id', $seat->id)
+            ->whereIn('status', ['booked', 'active'])
+            ->where('start_at', '<=', $now)
+            ->where('end_at', '>', $now)
+            ->exists();
+
         $this->seatRepository->update($seat->id, [
-            'status' => 'occupied',
+            'status' => $hasCurrentBooking ? 'occupied' : 'available',
         ]);
     }
 
@@ -549,11 +705,13 @@ class BookingService
         }
 
         $existingAssignment = LockerAssignment::where('locker_id', $data['locker_id'])
-            ->where('status', 'active')
+            ->where('status', '!=', 'cancelled')
+            ->where('assigned_date', '<', $data['end_at'])
+            ->where('expiry_date', '>', $data['start_at'])
             ->exists();
 
         if ($existingAssignment) {
-            throw new \Exception('Locker is already assigned.');
+            throw new \Exception('Locker is already booked for the selected time.');
         }
 
         $this->lockerAssigmentsRepository->create([
@@ -565,8 +723,16 @@ class BookingService
             'status' => 'active',
         ]);
 
+        $now = Carbon::now();
+        $hasCurrentAssignment = LockerAssignment::query()
+            ->where('locker_id', $locker->id)
+            ->where('status', 'active')
+            ->where('assigned_date', '<=', $now)
+            ->where('expiry_date', '>', $now)
+            ->exists();
+
         $this->lockerRepository->update($locker->id, [
-            'status' => 'assigned',
+            'status' => $hasCurrentAssignment ? 'assigned' : 'available',
         ]);
     }
 

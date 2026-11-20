@@ -48,10 +48,12 @@ class Seat extends Model
         return $this->hasMany(BookingSeat::class);
     }
 
-    public function latestBookingSeat(): HasOne
+    public function currentBookingSeat(): HasOne
     {
         return $this->hasOne(BookingSeat::class)
             ->whereIn('status', ['booked', 'active'])
+            ->where('start_at', '<=', now())
+            ->where('end_at', '>', now())
             ->latestOfMany();
     }
 }

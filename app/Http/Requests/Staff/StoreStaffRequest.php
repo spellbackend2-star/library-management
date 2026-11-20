@@ -37,7 +37,7 @@ class StoreStaffRequest extends FormRequest
             'phone' => [
                 'nullable',
                 'string',
-                'max:30',
+                'digits:10',
             ],
 
             'password' => [

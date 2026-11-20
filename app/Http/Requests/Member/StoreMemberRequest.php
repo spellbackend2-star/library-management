@@ -50,8 +50,7 @@ class StoreMemberRequest extends FormRequest
             'phone' => [
                 'required',
                 'string',
-                'max:30',
-                'regex:/^\\+?(?=(?:\\D*\\d){7,15}\\D*$)[0-9][0-9\\s().-]*$/',
+                'digits:10',
                 Rule::unique('members', 'phone'),
             ],
 
@@ -110,7 +109,7 @@ class StoreMemberRequest extends FormRequest
             'email.required' => 'The email field is required.',
             'email.email' => 'The email must be a valid email address.',
             'email.unique' => 'A member with this email address already exists.',
-            'phone.regex' => 'Enter a valid phone number with 7 to 15 digits.',
+            'phone.digits' => 'The phone number must be exactly 10 digits.',
             'phone.unique' => 'A member with this phone number already exists.',
         ];
     }

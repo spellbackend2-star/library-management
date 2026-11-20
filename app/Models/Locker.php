@@ -31,6 +31,8 @@ class Locker extends Model
     {
         return $this->hasOne(LockerAssignment::class)
             ->where('status', 'active')
+            ->where('assigned_date', '<=', now())
+            ->where('expiry_date', '>', now())
             ->latestOfMany();
     }
 }

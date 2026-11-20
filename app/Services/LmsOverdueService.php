@@ -138,17 +138,28 @@ class LmsOverdueService
             $expiredCount = BookingSeat::query()
                 ->whereIn('status', ['booked', 'active'])
                 ->whereNotNull('end_at')
-                ->where('end_at', '<', $now)
+                ->where('end_at', '<=', $now)
                 ->update([
                     'status' => 'completed',
                     'updated_at' => $now,
                 ]);
 
             Seat::query()
-                ->where('status', 'occupied')
+                ->whereIn('status', ['available', 'occupied'])
+                ->whereHas('bookingSeats', function ($bookingQuery) use ($now) {
+                    $bookingQuery
+                        ->whereIn('status', ['booked', 'active'])
+                        ->where('start_at', '<=', $now)
+                        ->where('end_at', '>', $now);
+                })
+                ->update(['status' => 'occupied']);
+
+            Seat::query()
+                ->whereIn('status', ['available', 'occupied'])
                 ->whereDoesntHave('bookingSeats', function ($bookingQuery) use ($now) {
                     $bookingQuery
                         ->whereIn('status', ['booked', 'active'])
+                        ->where('start_at', '<=', $now)
                         ->where('end_at', '>', $now);
                 })
                 ->update(['status' => 'available']);
@@ -170,17 +181,28 @@ class LmsOverdueService
             $expiredCount = LockerAssignment::query()
                 ->where('status', 'active')
                 ->whereNotNull('expiry_date')
-                ->where('expiry_date', '<', $now)
+                ->where('expiry_date', '<=', $now)
                 ->update([
                     'status' => 'expired',
                     'updated_at' => $now,
                 ]);
 
             Locker::query()
-                ->where('status', 'assigned')
+                ->whereIn('status', ['available', 'assigned'])
+                ->whereHas('assignments', function ($assignmentQuery) use ($now) {
+                    $assignmentQuery
+                        ->where('status', 'active')
+                        ->where('assigned_date', '<=', $now)
+                        ->where('expiry_date', '>', $now);
+                })
+                ->update(['status' => 'assigned']);
+
+            Locker::query()
+                ->whereIn('status', ['available', 'assigned'])
                 ->whereDoesntHave('assignments', function ($assignmentQuery) use ($now) {
                     $assignmentQuery
                         ->where('status', 'active')
+                        ->where('assigned_date', '<=', $now)
                         ->where('expiry_date', '>', $now);
                 })
                 ->update(['status' => 'available']);
